@@ -1,4 +1,5 @@
 #!/bin/bash
+# ~/issue/run.sql
 
 # Function to print the current timestamp
 print_timestamp() {
@@ -9,7 +10,7 @@ print_timestamp() {
 echo "Start: $(print_timestamp) - Running csql command"
 
 # Run the csql command
-csql -u dba demodb -S -i ~/issue/err.sql
+csql -u dba demodb -S -i ~/issue/run.sql
 
 # Check if the csql command was successful
 if [[ $? -eq 0 ]]; then

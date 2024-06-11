@@ -18,8 +18,6 @@ else
     return 1
 fi
 
-return 1
-
 # Return to the previous directory
 popd > /dev/null
 

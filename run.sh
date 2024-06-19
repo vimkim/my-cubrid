@@ -1,5 +1,6 @@
 #!/bin/bash
-# ~/issue/run.sql
+
+cd $ISSUE_DIR
 
 # Function to print the current timestamp
 print_timestamp() {

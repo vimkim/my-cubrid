@@ -1,1 +1,1 @@
-uftrace dump --chrome > uftrace-dump-chrome.json
+uftrace dump --chrome

@@ -1,1 +1,1 @@
-uftrace dump --flame-graph > uftrace-dump-flame-graph.txt
+uftrace dump --flame-graph > uftrace-dump-flame.json

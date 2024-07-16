@@ -8,6 +8,7 @@ alias cud='cu_dir'
 alias cu_build='. ~/my-cubrid/build.sh'
 alias cub='cu_build'
 
+
 alias cu_rmdb='. ~/my-cubrid/remove-db.sh'
 
 alias cu_createdb='. ~/my-cubrid/create-db.sh'
@@ -47,3 +48,4 @@ alias cu_trace_success='. ~/my-cubrid/trace-success.sh'
 alias cu_trace_fail='. ~/my-cubrid/trace-fail.sh'
 alias cu_trace_both='. ~/my-cubrid/trace-both.sh'
 
+alias cu_format='~/my-cubrid/style/codestyle.sh'

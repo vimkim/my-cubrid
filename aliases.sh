@@ -11,7 +11,7 @@ alias cub='cu_build'
 
 alias cu_rmdb='. ~/my-cubrid/remove-db.sh'
 
-alias cu_createdb='. ~/my-cubrid/create-db.sh'
+alias cu_createdb='~/my-cubrid/create-db.sh'
 
 alias cu_prepare='. ~/my-cubrid/prepare.sh'
 alias cu_prepare_edit='$EDITOR ~/my-cubrid/prepare.sh'

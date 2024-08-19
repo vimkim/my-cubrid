@@ -5,9 +5,9 @@ alias socuali='source ~/my-cubrid/aliases.sh'
 alias cu_dir='cd $ISSUE_DIR'
 alias cud='cu_dir'
 
-alias cu_build='. ~/my-cubrid/build.sh'
+# alias cu_build='. ~/my-cubrid/build.sh'
+alias cu_build='cmake --preset profile && cmake --build --preset profile --target install'
 alias cub='cu_build'
-
 
 alias cu_rmdb='. ~/my-cubrid/remove-db.sh'
 

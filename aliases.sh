@@ -12,6 +12,7 @@ alias cub='cu_build'
 alias cu_rmdb='. ~/my-cubrid/remove-db.sh'
 
 alias cu_createdb='~/my-cubrid/create-db.sh'
+alias cuc='cu_createdb'
 
 alias cu_prepare='. ~/my-cubrid/prepare.sh'
 alias cu_prepare_edit='$EDITOR ~/my-cubrid/prepare.sh'
@@ -49,6 +50,9 @@ alias cu_trace_fail='. ~/my-cubrid/trace-fail.sh'
 alias cu_trace_both='. ~/my-cubrid/trace-both.sh'
 
 alias cu_format='~/my-cubrid/style/codestyle.sh'
+
+alias cpenv='cp ~/my-cubrid/.envrc .'
+
 # CTP
 
 function ctp_update_answer {

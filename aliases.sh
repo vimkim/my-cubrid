@@ -49,3 +49,36 @@ alias cu_trace_fail='. ~/my-cubrid/trace-fail.sh'
 alias cu_trace_both='. ~/my-cubrid/trace-both.sh'
 
 alias cu_format='~/my-cubrid/style/codestyle.sh'
+# CTP
+
+function ctp_update_answer {
+  local filename="$1"
+  local new_ans_path=$(realpath "$filename")
+
+  # Ensure the file is indeed in a 'cases' directory
+  if [[ "$new_ans_path" != */cases/* ]]; then
+    echo "Error: The file is not in a 'cases' directory."
+    return 1
+  fi
+
+  local old_path=$(echo "$new_ans_path" | sed 's|/cases/|/answers/|' | sed 's|\.result$|\.answer|')
+
+  echo "Renaming $new_ans_path to $old_path"
+  cp "$new_ans_path" "$old_path"
+}
+
+function ctp_diff {
+  local filename="$1"
+  local new_ans_path=$(realpath "$filename")
+
+  # Ensure the file is indeed in a 'cases' directory
+  if [[ "$new_ans_path" != */cases/* ]]; then
+    echo "Error: The file is not in a 'cases' directory."
+    return 1
+  fi
+
+  local old_path=$(echo "$new_ans_path" | sed 's|/cases/|/answers/|' | sed 's|\.result$|\.answer|')
+
+  echo "Comparing $new_ans_path to $old_path"
+  diff "$old_path" "$new_ans_path"
+}

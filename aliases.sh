@@ -1,3 +1,5 @@
+export PATH=$HOME/CTP/bin:$HOME/CTP/common/script:$PATH
+
 alias cualias='$EDITOR ~/my-cubrid/aliases.sh'
 alias cuali='$EDITOR ~/my-cubrid/aliases.sh'
 alias socuali='source ~/my-cubrid/aliases.sh'
@@ -65,10 +67,16 @@ function ctp_update_answer {
     return 1
   fi
 
+  # before
+  ctp_diff "$filename"
+
   local old_path=$(echo "$new_ans_path" | sed 's|/cases/|/answers/|' | sed 's|\.result$|\.answer|')
 
   echo "Renaming $new_ans_path to $old_path"
   cp "$new_ans_path" "$old_path"
+
+  # after
+  ctp_diff "$filename"
 }
 
 function ctp_diff {
@@ -85,4 +93,11 @@ function ctp_diff {
 
   echo "Comparing $new_ans_path to $old_path"
   diff "$old_path" "$new_ans_path"
+}
+
+function ctp_diff_all {
+
+  for file in $(fd -I -e result); do
+    ctp_diff "$file"
+  done
 }

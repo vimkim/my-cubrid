@@ -1,0 +1,25 @@
+# .envrc
+
+# Conditional configuration based on a custom mode
+if [[ "$ENV_MODE" == "release" ]]; then
+  export CUBRID="$(pwd)/install.out/release"
+  export CUBRID_DATABASES="$(pwd)/databases.out/release"
+  export PATH="$CUBRID/bin:$PATH"
+  export LD_LIBRARY_PATH="$CUBRID/cci/lib:$CUBRID/lib:$LD_LIBRARY_PATH"
+
+elif [[ "$ENV_MODE" == "debug" ]]; then
+  export CUBRID="$(pwd)/install.out/debug"
+  export CUBRID_DATABASES="$(pwd)/databases.out/debug"
+  export PATH="$CUBRID/bin:$PATH"
+  export LD_LIBRARY_PATH="$CUBRID/cci/lib:$CUBRID/lib:$LD_LIBRARY_PATH"
+
+elif [[ "$ENV_MODE" == "profile" ]]; then
+  export CUBRID="$(pwd)/install.out/profile"
+  export CUBRID_DATABASES="$(pwd)/databases.out/profile"
+  export PATH="$CUBRID/bin:$PATH"
+  export LD_LIBRARY_PATH="$CUBRID/cci/lib:$CUBRID/lib:$LD_LIBRARY_PATH"
+fi
+
+echo "Environment mode: $ENV_MODE"
+echo "CUBRID: $CUBRID"
+echo "CUBRID_DATABASES: $CUBRID_DATABASES"

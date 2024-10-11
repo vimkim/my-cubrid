@@ -51,7 +51,7 @@ alias cu_trace_both='. ~/my-cubrid/trace-both.sh'
 
 alias cu_format='~/my-cubrid/style/codestyle.sh'
 
-alias cpenv='cp ~/my-cubrid/.envrc .'
+alias cpenv='cp ~/my-cubrid/.envrc-template .'
 
 # CTP
 

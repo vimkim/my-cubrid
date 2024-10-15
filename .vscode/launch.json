@@ -1,302 +1,298 @@
 {
-	// IntelliSense를 사용하여 가능한 특성에 대해 알아보세요.
-	// 기존 특성에 대한 설명을 보려면 가리킵니다.
-	// 자세한 내용을 보려면 https://go.microsoft.com/fwlink/?linkid=830387을(를) 방문하세요.
-	"version": "0.2.0",
-	"configurations": [
-		{
-			"name": "(gdb) csql 연결",
-			"type": "cppdbg",
-			"request": "attach",
-			"program": "${env:CUBRID}/bin/csql",
-			//"processId": "${command:pickProcess}",
-			"processId": "${input:findCsql}",
-			"MIMode": "gdb",
-			"setupCommands": [
-				{
-					"description": "gdb에 자동 서식 지정 사용",
-					"text": "-enable-pretty-printing",
-					"ignoreFailures": true
-				}
-			],
-			"logging": {
-				"engineLogging": "warning"
-			},
-		},
-		{
-			"name": "(gdb) cub_cas 연결",
-			"type": "cppdbg",
-			"request": "attach",
-			"program": "${env:CUBRID}/bin/cub_cas",
-			"processId": "${command:pickProcess}",
-			"MIMode": "gdb",
-			"setupCommands": [
-				{
-					"description": "gdb에 자동 서식 지정 사용",
-					"text": "-enable-pretty-printing",
-					"ignoreFailures": true
-				}
-			]
-		},
-		{
-			"name": "(gdb) cub_server 연결",
-			"type": "cppdbg",
-			"request": "attach",
-			"program": "${env:CUBRID}/bin/cub_server",
-			"processId": "${command:pickProcess}",
-			"MIMode": "gdb",
-			"setupCommands": [
-				{
-					"description": "gdb에 자동 서식 지정 사용",
-					"text": "-enable-pretty-printing",
-					"ignoreFailures": true
-				}
-			]
-		},
-		{
-			"name": "(gdb) cubrid 시작",
-			"type": "cppdbg",
-			"request": "launch",
-			"program": "${env:CUBRID}/bin/cubrid",
-			"args": [
-				"createdb",
-				"-F",
-				"${env:CUBRID_DATABASES}/demodb",
-				"-L",
-				"${env:CUBRID_DATABASES}/demodb/log",
-				"--db-volume-size=64M",
-				"--log-volume-size=64M",
-				"demodb",
-				"ko_KR.utf8"
-			],
-			"stopAtEntry": false,
-			"cwd": "${workspaceFolder}",
-			"environment": [],
-			"externalConsole": false,
-			"MIMode": "gdb",
-			"setupCommands": [
-				{
-					"description": "gdb에 자동 서식 지정 사용",
-					"text": "-enable-pretty-printing",
-					"ignoreFailures": true
-				}
-			]
-		},
-		{
-			"name": "(gdb) loaddb schema 시작",
-			"type": "cppdbg",
-			"request": "launch",
-			"program": "${env:CUBRID}/bin/cubrid",
-			"args": [
-				"loaddb",
-				"-u",
-				"dba",
-				"-s",
-				"${env:HOME}/loaddb/demo/demodb_schema",
-				"-v",
-				"demodb"
-			],
-			"stopAtEntry": false,
-			"cwd": "${workspaceFolder}",
-			"environment": [],
-			"externalConsole": false,
-			"MIMode": "gdb",
-			"setupCommands": [
-				{
-					"description": "gdb에 자동 서식 지정 사용",
-					"text": "-enable-pretty-printing",
-					"ignoreFailures": true
-				}
-			]
-		},
-		{
-			"name": "(gdb) loaddb object 시작",
-			"type": "cppdbg",
-			"request": "launch",
-			"program": "${env:CUBRID}/bin/cubrid",
-			"args": [
-				"loaddb",
-				"-u",
-				"dba",
-				"-d",
-				"${env:HOME}/loaddb/demo/demodb_objects",
-				"demodb"
-			],
-			"stopAtEntry": false,
-			"cwd": "${workspaceFolder}",
-			"environment": [],
-			"externalConsole": false,
-			"MIMode": "gdb",
-			"setupCommands": [
-				{
-					"description": "gdb에 자동 서식 지정 사용",
-					"text": "-enable-pretty-printing",
-					"ignoreFailures": true
-				}
-			]
-		},
-		{
-			"name": "(gdb) mdb loaddb schema 시작",
-			"type": "cppdbg",
-			"request": "launch",
-			"program": "${env:CUBRID}/bin/cubrid",
-			"args": [
-				"loaddb",
-				"-u",
-				"dba",
-				"-s",
-				"${env:HOME}/loaddb/mdb_schema",
-				"-v",
-				"demodb"
-			],
-			"stopAtEntry": false,
-			"cwd": "${workspaceFolder}",
-			"environment": [],
-			"externalConsole": false,
-			"MIMode": "gdb",
-			"setupCommands": [
-				{
-					"description": "gdb에 자동 서식 지정 사용",
-					"text": "-enable-pretty-printing",
-					"ignoreFailures": true
-				}
-			]
-		},
-		{
-			"name": "(gdb) mdb loaddb object 시작",
-			"type": "cppdbg",
-			"request": "launch",
-			"program": "${env:CUBRID}/bin/cubrid",
-			"args": [
-				"loaddb",
-				"-u",
-				"dba",
-				"-d",
-				"${env:HOME}/loaddb/mdb_objects",
-				"demodb"
-			],
-			"stopAtEntry": false,
-			"cwd": "${workspaceFolder}",
-			"environment": [],
-			"externalConsole": false,
-			"MIMode": "gdb",
-			"setupCommands": [
-				{
-					"description": "gdb에 자동 서식 지정 사용",
-					"text": "-enable-pretty-printing",
-					"ignoreFailures": true
-				}
-			]
-		},
-		{
-			"name": "(gdb) csql 시작",
-			"type": "cppdbg",
-			"request": "launch",
-			"program": "${env:CUBRID}/bin/csql",
-			"args": [
-				"-u",
-				"dba",
-				"demodb"
-			],
-			"stopAtEntry": false,
-			"cwd": "${workspaceFolder}",
-			"environment": [],
-			"externalConsole": false,
-			"MIMode": "gdb",
-			"setupCommands": [
-				{
-					"description": "gdb에 자동 서식 지정 사용",
-					"text": "-enable-pretty-printing",
-					"ignoreFailures": true
-				}
-			]
-		},
-		{
-			"name": "(gdb) csql -S 시작",
-			"type": "cppdbg",
-			"request": "launch",
-			"program": "${env:CUBRID}/bin/csql",
-			"args": [
-				"-u",
-				"dba",
-				"demodb",
-				"-S"
-			],
-			"stopAtEntry": false,
-			"cwd": "${workspaceFolder}",
-			"environment": [],
-			"externalConsole": false,
-			"MIMode": "gdb",
-			"setupCommands": [
-				{
-					"description": "gdb에 자동 서식 지정 사용",
-					"text": "-enable-pretty-printing",
-					"ignoreFailures": true
-				}
-			]
-		},
-		{
-			"name": "(gdb) cubrid_replay 시작",
-			"type": "cppdbg",
-			"request": "launch",
-			"program": "${env:CUBRID}/bin/cubrid_replay",
-			"args": [
-				"-I",
-				"localhost",
-				"-P",
-				"33000",
-				"-d",
-				"demodb",
-				"-u",
-				"public",
-				"${env:HOME}/work/20231127/log/broker/sql_log/broker1_1.sql.log",
-				"${env:HOME}/work/20231127/log/broker/result.out"
-			],
-			"stopAtEntry": false,
-			"cwd": "${workspaceFolder}",
-			"environment": [],
-			"externalConsole": false,
-			"MIMode": "gdb",
-			"setupCommands": [
-				{
-					"description": "gdb에 자동 서식 지정 사용",
-					"text": "-enable-pretty-printing",
-					"ignoreFailures": true
-				}
-			]
-		},
-		{
-			"name": "(gdb) cub_server with core file",
-			"type": "cppdbg",
-			"request": "launch",
-			"program": "${env:CUBRID}/bin/cub_server",
-			"args": [],
-			"stopAtEntry": false,
-			"cwd": "${workspaceFolder}",
-			"environment": [],
-			"externalConsole": false,
-			"MIMode": "gdb",
-			"setupCommands": [
-				{
-					"description": "gdb에 자동 서식 지정 사용",
-					"text": "-enable-pretty-printing",
-					"ignoreFailures": true
-				}
-			],
-			// "coreDumpPath": "${env:HOME}/github/cubrid-testcases-private/random_query_generator/_03_mvcc/vacuum/dead_data_01/dead_data_01_dml_ddl/core.221537"
-			"coreDumpPath": "${env:HOME}/work/20231127/core.97749"
-		}
-	],
-	"inputs": [
-		{
-			"id": "findCsql",
-			"type": "command",
-			"command": "shellCommand.execute",
-			"args": {
-				"command": "pgrep csql",
-				"description": "From: https://stackoverflow.com/questions/65723608/vs-code-debugging-is-it-possible-to-supply-process-id-pgrep-x-myprog-for",
-				"useFirstResult": true,
-			},
-		}
-	],
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "name": "(gdb) csql 연결",
+      "type": "cppdbg",
+      "request": "attach",
+      "program": "${env:CUBRID}/bin/csql",
+      "processId": "${command:pickProcess}",
+      // "processId": "${input:findCsql}",
+      "MIMode": "gdb",
+      "setupCommands": [
+        {
+          "description": "gdb에 자동 서식 지정 사용",
+          "text": "-enable-pretty-printing",
+          "ignoreFailures": true
+        }
+      ],
+      "logging": {
+        "engineLogging": "warning"
+      }
+    },
+    {
+      "name": "(gdb) cub_cas 연결",
+      "type": "cppdbg",
+      "request": "attach",
+      "program": "${env:CUBRID}/bin/cub_cas",
+      "processId": "${command:pickProcess}",
+      "MIMode": "gdb",
+      "setupCommands": [
+        {
+          "description": "gdb에 자동 서식 지정 사용",
+          "text": "-enable-pretty-printing",
+          "ignoreFailures": true
+        }
+      ]
+    },
+    {
+      "name": "(gdb) cub_server 연결",
+      "type": "cppdbg",
+      "request": "attach",
+      "program": "${env:CUBRID}/bin/cub_server",
+      "processId": "${command:pickProcess}",
+      "MIMode": "gdb",
+      "setupCommands": [
+        {
+          "description": "gdb에 자동 서식 지정 사용",
+          "text": "-enable-pretty-printing",
+          "ignoreFailures": true
+        }
+      ]
+    },
+    {
+      "name": "(gdb) cubrid 시작",
+      "type": "cppdbg",
+      "request": "launch",
+      "program": "${env:CUBRID}/bin/cubrid",
+      "args": [
+        "createdb",
+        "-F",
+        "${env:CUBRID_DATABASES}/demodb",
+        "-L",
+        "${env:CUBRID_DATABASES}/demodb/log",
+        "--db-volume-size=64M",
+        "--log-volume-size=64M",
+        "demodb",
+        "ko_KR.utf8"
+      ],
+      "stopAtEntry": false,
+      "cwd": "${workspaceFolder}",
+      "environment": [],
+      "externalConsole": false,
+      "MIMode": "gdb",
+      "setupCommands": [
+        {
+          "description": "gdb에 자동 서식 지정 사용",
+          "text": "-enable-pretty-printing",
+          "ignoreFailures": true
+        }
+      ]
+    },
+    {
+      "name": "(gdb) loaddb schema 시작",
+      "type": "cppdbg",
+      "request": "launch",
+      "program": "${env:CUBRID}/bin/cubrid",
+      "args": [
+        "loaddb",
+        "-u",
+        "dba",
+        "-s",
+        "${env:HOME}/loaddb/demo/demodb_schema",
+        "-v",
+        "demodb"
+      ],
+      "stopAtEntry": false,
+      "cwd": "${workspaceFolder}",
+      "environment": [],
+      "externalConsole": false,
+      "MIMode": "gdb",
+      "setupCommands": [
+        {
+          "description": "gdb에 자동 서식 지정 사용",
+          "text": "-enable-pretty-printing",
+          "ignoreFailures": true
+        }
+      ]
+    },
+    {
+      "name": "(gdb) loaddb object 시작",
+      "type": "cppdbg",
+      "request": "launch",
+      "program": "${env:CUBRID}/bin/cubrid",
+      "args": [
+        "loaddb",
+        "-u",
+        "dba",
+        "-d",
+        "${env:HOME}/loaddb/demo/demodb_objects",
+        "demodb"
+      ],
+      "stopAtEntry": false,
+      "cwd": "${workspaceFolder}",
+      "environment": [],
+      "externalConsole": false,
+      "MIMode": "gdb",
+      "setupCommands": [
+        {
+          "description": "gdb에 자동 서식 지정 사용",
+          "text": "-enable-pretty-printing",
+          "ignoreFailures": true
+        }
+      ]
+    },
+    {
+      "name": "(gdb) mdb loaddb schema 시작",
+      "type": "cppdbg",
+      "request": "launch",
+      "program": "${env:CUBRID}/bin/cubrid",
+      "args": [
+        "loaddb",
+        "-u",
+        "dba",
+        "-s",
+        "${env:HOME}/loaddb/mdb_schema",
+        "-v",
+        "demodb"
+      ],
+      "stopAtEntry": false,
+      "cwd": "${workspaceFolder}",
+      "environment": [],
+      "externalConsole": false,
+      "MIMode": "gdb",
+      "setupCommands": [
+        {
+          "description": "gdb에 자동 서식 지정 사용",
+          "text": "-enable-pretty-printing",
+          "ignoreFailures": true
+        }
+      ]
+    },
+    {
+      "name": "(gdb) mdb loaddb object 시작",
+      "type": "cppdbg",
+      "request": "launch",
+      "program": "${env:CUBRID}/bin/cubrid",
+      "args": [
+        "loaddb",
+        "-u",
+        "dba",
+        "-d",
+        "${env:HOME}/loaddb/mdb_objects",
+        "demodb"
+      ],
+      "stopAtEntry": false,
+      "cwd": "${workspaceFolder}",
+      "environment": [],
+      "externalConsole": false,
+      "MIMode": "gdb",
+      "setupCommands": [
+        {
+          "description": "gdb에 자동 서식 지정 사용",
+          "text": "-enable-pretty-printing",
+          "ignoreFailures": true
+        }
+      ]
+    },
+    {
+      "name": "(gdb) csql 시작",
+      "type": "cppdbg",
+      "request": "launch",
+      "program": "${env:CUBRID}/bin/csql",
+      "args": [
+        "-u",
+        "dba",
+        "demodb"
+      ],
+      "stopAtEntry": false,
+      "cwd": "${workspaceFolder}",
+      "environment": [],
+      "externalConsole": false,
+      "MIMode": "gdb",
+      "setupCommands": [
+        {
+          "description": "gdb에 자동 서식 지정 사용",
+          "text": "-enable-pretty-printing",
+          "ignoreFailures": true
+        }
+      ]
+    },
+    {
+      "name": "(gdb) csql -S 시작",
+      "type": "cppdbg",
+      "request": "launch",
+      "program": "${env:CUBRID}/bin/csql",
+      "args": [
+        "-u",
+        "dba",
+        "demodb",
+        "-S"
+      ],
+      "stopAtEntry": false,
+      "cwd": "${workspaceFolder}",
+      "environment": [],
+      "externalConsole": false,
+      "MIMode": "gdb",
+      "setupCommands": [
+        {
+          "description": "gdb에 자동 서식 지정 사용",
+          "text": "-enable-pretty-printing",
+          "ignoreFailures": true
+        }
+      ]
+    },
+    {
+      "name": "(gdb) cubrid_replay 시작",
+      "type": "cppdbg",
+      "request": "launch",
+      "program": "${env:CUBRID}/bin/cubrid_replay",
+      "args": [
+        "-I",
+        "localhost",
+        "-P",
+        "33000",
+        "-d",
+        "demodb",
+        "-u",
+        "public",
+        "${env:HOME}/work/20231127/log/broker/sql_log/broker1_1.sql.log",
+        "${env:HOME}/work/20231127/log/broker/result.out"
+      ],
+      "stopAtEntry": false,
+      "cwd": "${workspaceFolder}",
+      "environment": [],
+      "externalConsole": false,
+      "MIMode": "gdb",
+      "setupCommands": [
+        {
+          "description": "gdb에 자동 서식 지정 사용",
+          "text": "-enable-pretty-printing",
+          "ignoreFailures": true
+        }
+      ]
+    },
+    {
+      "name": "(gdb) cub_server with core file",
+      "type": "cppdbg",
+      "request": "launch",
+      "program": "${env:CUBRID}/bin/cub_server",
+      "args": [],
+      "stopAtEntry": false,
+      "cwd": "${workspaceFolder}",
+      "environment": [],
+      "externalConsole": false,
+      "MIMode": "gdb",
+      "setupCommands": [
+        {
+          "description": "gdb에 자동 서식 지정 사용",
+          "text": "-enable-pretty-printing",
+          "ignoreFailures": true
+        }
+      ],
+      "coreDumpPath": "${env:HOME}/work/20231127/core.97749"
+    }
+  ],
+  "inputs": [
+    {
+      "id": "findCsql",
+      "type": "command",
+      "command": "shellCommand.execute",
+      "args": {
+        "command": "pgrep csql",
+        "description": "From: https://stackoverflow.com/questions/65723608/vs-code-debugging-is-it-possible-to-supply-process-id-pgrep-x-myprog-for",
+        "useFirstResult": true
+      }
+    }
+  ]
 }

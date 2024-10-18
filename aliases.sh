@@ -57,6 +57,7 @@ alias cu_format='~/my-cubrid/style/codestyle.sh'
 
 alias cpenv='cp ~/my-cubrid/.envrc-template ./.envrc'
 alias cpvscode="cp $MY_CUBRID/.vscode/launch.json ./.vscode/launch.json"
+alias cppreset="cp $MY_CUBRID/CMakeUserPresets.json ./CMakeUserPresets.json"
 
 # CTP
 

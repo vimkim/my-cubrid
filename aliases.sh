@@ -1,5 +1,7 @@
 export PATH=$HOME/CTP/bin:$HOME/CTP/common/script:$PATH
 
+export MY_CUBRID="$HOME/my-cubrid"
+
 alias cualias='$EDITOR ~/my-cubrid/aliases.sh'
 alias cuali='$EDITOR ~/my-cubrid/aliases.sh'
 alias socuali='source ~/my-cubrid/aliases.sh'
@@ -53,7 +55,8 @@ alias cu_trace_both='. ~/my-cubrid/trace-both.sh'
 
 alias cu_format='~/my-cubrid/style/codestyle.sh'
 
-alias cpenv='cp ~/my-cubrid/.envrc-template .'
+alias cpenv='cp ~/my-cubrid/.envrc-template ./.envrc'
+alias cpvscode="cp $MY_CUBRID/.vscode/launch.json ./.vscode/launch.json"
 
 # CTP
 

@@ -23,7 +23,7 @@
       "binaryDir": "${sourceDir}/build_preset_myprofile",
       "cacheVariables": {
         "CMAKE_EXPORT_COMPILE_COMMANDS": "ON",
-        "CMAKE_BUILD_TYPE": "Debug",
+        "CMAKE_BUILD_TYPE": "Profile",
         "WITH_CCI": "true",
         "CMAKE_INSTALL_PREFIX": "install.out/myprofile"
       }

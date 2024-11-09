@@ -11,6 +11,11 @@ export CUBRID_DATABASES="$(pwd)/databases.out/$ENV_MODE"
 export PATH="$CUBRID/bin:$PATH" 
 export LD_LIBRARY_PATH="$CUBRID/cci/lib:$CUBRID/lib:$LD_LIBRARY_PATH"
 
+# bison 3.0.5
+export BISON_PATH="$HOME/mybin/bison-3.0.5/bison-install"
+export PATH="$BISON_PATH/bin:$PATH"
+export LD_LIBRARY_PATH="$BISON_PATH/lib:$LD_LIBRARY_PATH"
+
 echo "Environment mode: $ENV_MODE"
 echo "CUBRID: $CUBRID"
 echo "CUBRID_DATABASES: $CUBRID_DATABASES"

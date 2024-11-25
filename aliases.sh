@@ -56,8 +56,13 @@ alias cu_trace_both='. ~/my-cubrid/trace-both.sh'
 alias cu_format='~/my-cubrid/style/codestyle.sh'
 
 alias cpenv='cp ~/my-cubrid/.envrc-template ./.envrc'
-alias cpvscode="cp $MY_CUBRID/.vscode/launch.json ./.vscode/launch.json"
-alias cppreset="cp $MY_CUBRID/CMakeUserPresets.json ./CMakeUserPresets.json"
+alias cpvscode='cp $MY_CUBRID/.vscode/launch.json ./.vscode/launch.json'
+alias lnvscode='ln -s $MY_CUBRID/.vscode/launch.json ./.vscode/launch.json'
+alias cppreset='cp $MY_CUBRID/CMakeUserPresets.json ./CMakeUserPresets.json'
+alias lnpreset='ln -s $MY_CUBRID/CMakeUserPresets.json ./CMakeUserPresets.json'
+
+alias cubrid_initialize='cpenv && mkdir -p .vscode && lnvscode && lnpreset'
+alias cubi='cubrid_initialize'
 
 # CTP
 

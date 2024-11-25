@@ -2,6 +2,32 @@
   "version": "0.2.0",
   "configurations": [
     {
+      "name": "gdbserver, csql",
+      "type": "cppdbg",
+      "request": "launch",
+      "program": "csql",
+      "miDebuggerServerAddress": "localhost:9999",
+      "miDebuggerPath": "gdb",
+      "stopAtEntry": true,
+      "cwd": ".",
+      "setupCommands": [
+        {
+          "description": "Enable pretty printing",
+          "text": "-enable-pretty-printing",
+          "ignoreFailures": true
+        }
+      ]
+    },
+    {
+      "type": "cppdbg",
+      "request": "launch",
+      "name": "core, csql",
+      "program": "${env:CUBRID}/bin/csql",
+      "coreDumpPath": "${workspaceFolder}/${input:coreFileName}",
+      "cwd": "${workspaceFolder}",
+      "MIMode": "gdb"
+    },
+    {
       "name": "(gdb) csql 연결",
       "type": "cppdbg",
       "request": "attach",
@@ -190,11 +216,7 @@
       "type": "cppdbg",
       "request": "launch",
       "program": "${env:CUBRID}/bin/csql",
-      "args": [
-        "-u",
-        "dba",
-        "demodb"
-      ],
+      "args": ["-u", "dba", "demodb"],
       "stopAtEntry": false,
       "cwd": "${workspaceFolder}",
       "environment": [],
@@ -213,12 +235,7 @@
       "type": "cppdbg",
       "request": "launch",
       "program": "${env:CUBRID}/bin/csql",
-      "args": [
-        "-u",
-        "dba",
-        "demodb",
-        "-S"
-      ],
+      "args": ["-u", "dba", "demodb", "-S"],
       "stopAtEntry": false,
       "cwd": "${workspaceFolder}",
       "environment": [],
@@ -293,6 +310,11 @@
         "description": "From: https://stackoverflow.com/questions/65723608/vs-code-debugging-is-it-possible-to-supply-process-id-pgrep-x-myprog-for",
         "useFirstResult": true
       }
+    },
+    {
+      "id": "coreFileName",
+      "type": "promptString",
+      "description": "Enter core file path"
     }
   ]
 }

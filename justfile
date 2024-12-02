@@ -1,11 +1,11 @@
 default:
-    @just --choose
+  @just --choose
 
 alias b := build
 alias c := configure
 alias bd := build-debug
 alias bp := build-profile
-
+alias rs := csql-standalone
 
 # Echo
 echo-hello:
@@ -14,29 +14,42 @@ echo-hello:
 # CMake
 
 configure:
-	cmake --preset $PRESET_MODE
+  cmake --preset $PRESET_MODE
 
 build:
-	cmake --build --preset $PRESET_MODE --target install
+  cmake --build --preset $PRESET_MODE --target install
 
 build-debug:
-	cmake --build --preset mydebug --target install
+  cmake --build --preset mydebug --target install
 
 build-profile:
-	cmake --build --preset myprofile --target install
+  cmake --build --preset myprofile --target install
 
 
 # CSQL
 
-run-csql:
-	csql -u dba demodb
+csql:
+  csql -u dba demodb
 
-run-csql-standalone:
-	csql -u dba demodb -S
+csql-standalone:
+  csql -u dba demodb -S
 
 cgdb-csql:
-	cgdb --args csql -u dba demodb
+  cgdb --args csql -u dba demodb
 
 cgdb-csql-standalone:
-	cgdb --args csql -u dba demodb -S
+  cgdb --args csql -u dba demodb -S
+
+core csql CORE:
+  cgdb csql core {{CORE}}
+
+
+# gdbserver
+
+gdbserver:
+  gdbserver :9999 csql -u dba demodb -S
+
+gdbserver-i:
+  gdbserver :9999 csql -u dba demodb -S -i run.sql
+
 

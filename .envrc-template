@@ -1,13 +1,13 @@
 # .envrc
 
-# Check if ENV_MODE is set; if not, print a warning and set a default value
-if [ -z "$ENV_MODE" ]; then
-    echo "Warning: ENV_MODE is not set. Setting ENV_MODE to 'default'."
-    export ENV_MODE="default"
+# Check if PRESET_MODE is set; if not, print a warning and set a default value
+if [ -z "$PRESET_MODE" ]; then
+    echo "Warning: PRESET_MODE is not set. Setting PRESET_MODE to 'default'."
+    export PRESET_MODE="default"
 fi
 
-export CUBRID="$(pwd)/install.out/$ENV_MODE"
-export CUBRID_DATABASES="$(pwd)/databases.out/$ENV_MODE" 
+export CUBRID="$(pwd)/install.out/$PRESET_MODE"
+export CUBRID_DATABASES="$(pwd)/databases.out/$PRESET_MODE" 
 export PATH="$CUBRID/bin:$PATH" 
 export LD_LIBRARY_PATH="$CUBRID/cci/lib:$CUBRID/lib:$LD_LIBRARY_PATH"
 
@@ -16,7 +16,8 @@ export BISON_PATH="$HOME/mybin/bison-3.0.5/bison-install"
 export PATH="$BISON_PATH/bin:$PATH"
 export LD_LIBRARY_PATH="$BISON_PATH/lib:$LD_LIBRARY_PATH"
 
-echo "Environment mode: $ENV_MODE"
+
+echo "Environment mode: $PRESET_MODE"
 echo "CUBRID: $CUBRID"
 echo "CUBRID_DATABASES: $CUBRID_DATABASES"
 

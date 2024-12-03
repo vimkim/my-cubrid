@@ -5,7 +5,8 @@ alias b := build
 alias c := configure
 alias bd := build-debug
 alias bp := build-profile
-alias rs := csql-standalone
+alias cc := csql-cs
+alias cs := csql-sa
 
 # Echo
 echo-hello:
@@ -28,16 +29,16 @@ build-profile:
 
 # CSQL
 
-csql:
+csql-cs:
   csql -u dba demodb
 
-csql-standalone:
+csql-sa:
   csql -u dba demodb -S
 
-cgdb-csql:
+cgdb-csql-cs:
   cgdb --args csql -u dba demodb
 
-cgdb-csql-standalone:
+cgdb-csql-sa:
   cgdb --args csql -u dba demodb -S
 
 core csql CORE:

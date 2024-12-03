@@ -2,6 +2,23 @@
   "version": "0.2.0",
   "configurations": [
     {
+      "name": "gdbserver, general",
+      "type": "cppdbg",
+      "request": "launch",
+      "program": "/proc/${command:pickProcess}/exe",
+      "miDebuggerServerAddress": "localhost:9999",
+      "miDebuggerPath": "gdb",
+      "stopAtEntry": true,
+      "cwd": "${workspaceFolder}",
+      "setupCommands": [
+        {
+          "description": "Enable pretty printing",
+          "text": "-enable-pretty-printing",
+          "ignoreFailures": true
+        }
+      ]
+    },
+    {
       "name": "gdbserver, csql",
       "type": "cppdbg",
       "request": "launch",
@@ -9,7 +26,7 @@
       "miDebuggerServerAddress": "localhost:9999",
       "miDebuggerPath": "gdb",
       "stopAtEntry": true,
-      "cwd": ".",
+      "cwd": "${workspaceFolder}",
       "setupCommands": [
         {
           "description": "Enable pretty printing",

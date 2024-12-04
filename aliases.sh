@@ -33,7 +33,7 @@ alias cua='cu_all'
 
 ### trace
 alias cu_trace='. ~/my-cubrid/trace.sh'
-alias cut='cu_trace'
+# alias cut='cu_trace' # somehow causes problem
 alias cu_trace_edit='$EDITOR ~/my-cubrid/trace.sh'
 alias cu_tracee='cu_trace_edit'
 alias cute='cu_trace_edit'

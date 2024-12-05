@@ -2,6 +2,9 @@ export PATH=$HOME/CTP/bin:$HOME/CTP/common/script:$PATH
 
 export MY_CUBRID="$HOME/my-cubrid"
 
+alias mycubrid='cd $MY_CUBRID'
+alias mycub='mycubrid'
+
 alias cualias='$EDITOR ~/my-cubrid/aliases.sh'
 alias cuali='$EDITOR ~/my-cubrid/aliases.sh'
 alias socuali='source ~/my-cubrid/aliases.sh'

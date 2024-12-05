@@ -14,7 +14,9 @@
         "CMAKE_EXPORT_COMPILE_COMMANDS": "ON",
         "CMAKE_BUILD_TYPE": "Debug",
         "WITH_CCI": "true",
-        "CMAKE_INSTALL_PREFIX": "install.out/mydebug"
+        "CMAKE_INSTALL_PREFIX": "install.out/mydebug",
+        "CMAKE_C_COMPILER_LAUNCHER": "ccache",
+        "CMAKE_CXX_COMPILER_LAUNCHER": "ccache"
       }
     },
     {
@@ -25,7 +27,9 @@
         "CMAKE_EXPORT_COMPILE_COMMANDS": "ON",
         "CMAKE_BUILD_TYPE": "Profile",
         "WITH_CCI": "true",
-        "CMAKE_INSTALL_PREFIX": "install.out/myprofile"
+        "CMAKE_INSTALL_PREFIX": "install.out/myprofile",
+        "CMAKE_C_COMPILER_LAUNCHER": "ccache",
+        "CMAKE_CXX_COMPILER_LAUNCHER": "ccache"
       }
     }
   ],

@@ -54,3 +54,29 @@ gdbserver-i:
   gdbserver :9999 csql -u dba demodb -S -i run.sql
 
 
+# utils
+
+list-dbtype-function:
+  fd -H -I dbtype_function build_preset_"$PRESET_MODE"
+
+
+# createdb
+
+db-create-testdb:
+  cubrid createdb --db-volume-size=100M --log-volume-size=100M testdb en_US.utf8 -F testdb
+
+db-delete-testdb:
+  cubrid deletedb testdb
+
+
+# csql
+create-vector:
+  csql -u dba testdb -S -c 'create table vt (vec vector);'
+
+insert-vector:
+  csql -u dba testdb -S -c "insert into vt values( {1, 2, 3} );"
+
+select-vector:
+  csql -u dba testdb -S -c "select * from vt;"
+
+run: db-delete-testdb db-create-testdb create-vector insert-vector select-vector

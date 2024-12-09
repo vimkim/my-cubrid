@@ -74,7 +74,8 @@ create-vector:
   csql -u dba testdb -S -c 'create table vt (vec vector);'
 
 insert-vector:
-  csql -u dba testdb -S -c "insert into vt values( {1, 2, 3} );"
+  csql -u dba testdb -S -c "insert into vt values( '[1, 2, 3]' );"
+  @# csql -u dba testdb -S -c "insert into vt values( {1, 2, 3} );"
 
 select-vector:
   csql -u dba testdb -S -c "select * from vt;"

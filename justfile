@@ -7,6 +7,7 @@ alias bd := build-debug
 alias bp := build-profile
 alias cc := csql-cs
 alias cs := csql-sa
+alias br := build-and-run
 
 # Echo
 echo-hello:
@@ -63,6 +64,7 @@ list-dbtype-function:
 # createdb
 
 db-create-testdb:
+  mkdir -p testdb
   cubrid createdb --db-volume-size=100M --log-volume-size=100M testdb en_US.utf8 -F testdb
 
 db-delete-testdb:

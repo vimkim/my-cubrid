@@ -80,3 +80,5 @@ select-vector:
   csql -u dba testdb -S -c "select * from vt;"
 
 run: db-delete-testdb db-create-testdb create-vector insert-vector select-vector
+
+build-and-run: build run

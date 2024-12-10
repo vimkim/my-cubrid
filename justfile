@@ -62,7 +62,7 @@ list-dbtype-function:
 
 db-create-testdb:
     mkdir -p testdb
-    cubrid createdb --db-volume-size=100M --log-volume-size=100M testdb en_US.utf8 -F testdb
+    cubrid createdb --db-volume-size=20M --log-volume-size=20M testdb en_US.utf8 -F testdb
 
 db-delete-testdb:
     cubrid deletedb testdb
@@ -75,6 +75,9 @@ create-vector-with-args:
     csql -u dba testdb -S -c 'create table vta (vec vector(3));'
     csql -u dba testdb -S -c 'create table vta2 (vec vector(3, FLOAT));'
 
+desc-vector-table:
+    csql -u dba testdb -S -c 'desc vt;'
+
 insert-vector:
     csql -u dba testdb -S -c "insert into vt values( '[1, 2, 3]' );"
     @# csql -u dba testdb -S -c "insert into vt values( {1, 2, 3} );"
@@ -82,7 +85,7 @@ insert-vector:
 select-vector:
     csql -u dba testdb -S -c "select * from vt;"
 
-run: db-delete-testdb db-create-testdb create-vector create-vector-with-args insert-vector select-vector
+run: db-delete-testdb db-create-testdb create-vector create-vector-with-args desc-vector-table insert-vector select-vector
     echo "run!"
 
 build-and-run: build run

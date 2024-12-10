@@ -1,0 +1,20 @@
+default:
+    @just --choose
+
+ssh216:
+    TERM=xterm ssh -Y cubrid@192.168.2.216
+
+ssh217:
+    TERM=xterm ssh -Y cubrid@192.168.2.217
+
+ssh218:
+    TERM=xterm ssh -Y cubrid@192.168.2.218
+
+server:
+    TERM=xterm ssh -Y dhkim@192.168.2.253
+
+server-container-rocky8:
+    ssh -Y vimkim@192.168.2.253 -p 2222
+
+server-container-arch:
+    ssh -Y vimkim@192.168.2.253 -p 2223

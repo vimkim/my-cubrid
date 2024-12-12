@@ -5,9 +5,9 @@ alias b := build
 alias c := configure
 alias bd := build-debug
 alias bp := build-profile
-alias cc := csql-cs
-alias cs := csql-sa
-alias br := build-and-run
+alias cc := csql-demodb-cs
+alias cs := csql-demodb-sa
+alias br := build-run
 alias r := run
 
 _gum-confirm-no:
@@ -41,10 +41,16 @@ choose-preset-mode:
 
 # CSQL
 
-csql-cs:
+csql-testdb-cs:
+    csql -u dba testdb
+
+csql-testdb-sa:
+    csql -u dba testdb -S
+
+csql-demodb-cs:
     csql -u dba demodb
 
-csql-sa:
+csql-demodb-sa:
     csql -u dba demodb -S
 
 cgdb-csql-cs:
@@ -101,7 +107,12 @@ insert-vector:
 select-vector:
     csql -u dba testdb -S -c "select * from vt;"
 
-run: db-delete-testdb db-create-testdb create-vector create-vector-with-args desc-vector-table insert-vector select-vector
-    echo "run!"
+run: create-vector create-vector-with-args desc-vector-table insert-vector select-vector
 
-build-and-run: build run
+build-run: build run
+
+recreate: db-delete-testdb db-create-testdb
+
+recreate-run: recreate run
+
+build-recreate-run: build recreate run

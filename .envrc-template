@@ -8,13 +8,14 @@ fi
 
 export CUBRID="$(pwd)/install.out/$PRESET_MODE"
 export CUBRID_DATABASES="$(pwd)/databases.out/$PRESET_MODE"
+export CUBRID_BUILD_DIR="$(pwd)/build_preset_$PRESET_MODE"
 export PATH="$CUBRID/bin:$PATH"
 export LD_LIBRARY_PATH="$CUBRID/cci/lib:$CUBRID/lib:$LD_LIBRARY_PATH"
 
 ln -sf build_preset_"$PRESET_MODE"/compile_commands.json .
 
 # bison 3.0.5
-export BISON_PATH="$HOME/mybin/bison-3.0.5/bison-install"
+export BISON_PATH="$HOME/my-build/bison-3.0.5/bison-install"
 export PATH="$BISON_PATH/bin:$PATH"
 export LD_LIBRARY_PATH="$BISON_PATH/lib:$LD_LIBRARY_PATH"
 

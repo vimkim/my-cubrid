@@ -28,6 +28,9 @@ build-debug:
 build-profile:
     cmake --build --preset myprofile --target install
 
+clear-cache:
+    /bin/rm -rf $CUBRID_BUILD_DIR/CMakeCache.txt $CUBRID_BUILD_DIR/CMakeFiles
+
 # CSQL
 
 csql-cs:
@@ -61,8 +64,8 @@ list-dbtype-function:
 # createdb
 
 db-create-testdb:
-    mkdir -p testdb
-    cubrid createdb --db-volume-size=20M --log-volume-size=20M testdb en_US.utf8 -F testdb
+    mkdir -p $CUBRID_DATABASES/testdb
+    cubrid createdb --db-volume-size=20M --log-volume-size=20M testdb en_US.utf8 -F $CUBRID_DATABASES/testdb
 
 db-delete-testdb:
     cubrid deletedb testdb

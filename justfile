@@ -36,6 +36,9 @@ clear-cache:
     @gum confirm
     /bin/rm -rf $CUBRID_BUILD_DIR/CMakeCache.txt $CUBRID_BUILD_DIR/CMakeFiles
 
+choose-preset-mode:
+    @preset=$(gum choose "mydebug" "myprofile" "debug" "release") && echo "PRESET_MODE=$preset" > .env
+
 # CSQL
 
 csql-cs:

@@ -10,6 +10,10 @@ alias cs := csql-sa
 alias br := build-and-run
 alias r := run
 
+_gum-confirm-no:
+    @# asks, the default is "NO"
+    @gum confirm --default=false
+
 # Echo
 echo-hello:
     @echo "Hello, World!"
@@ -29,6 +33,7 @@ build-profile:
     cmake --build --preset myprofile --target install
 
 clear-cache:
+    @gum confirm
     /bin/rm -rf $CUBRID_BUILD_DIR/CMakeCache.txt $CUBRID_BUILD_DIR/CMakeFiles
 
 # CSQL
@@ -47,6 +52,10 @@ cgdb-csql-sa:
 
 core csql CORE:
     cgdb csql core {{ CORE }}
+
+delete-cores:
+    @gum confirm
+    /bin/rm -rf core.*
 
 # gdbserver
 
@@ -68,6 +77,7 @@ db-create-testdb:
     cubrid createdb --db-volume-size=20M --log-volume-size=20M testdb en_US.utf8 -F $CUBRID_DATABASES/testdb
 
 db-delete-testdb:
+    @gum confirm
     cubrid deletedb testdb
 
 # csql

@@ -2,9 +2,13 @@
 
 # Check if PRESET_MODE is set; if not, print a warning and set a default value
 if [ -z "$PRESET_MODE" ]; then
-    echo "Warning: PRESET_MODE is not set. Setting PRESET_MODE to 'default'."
-    export PRESET_MODE="default"
+    echo "#################################################################"
+    echo "############### Warning: PRESET_MODE is not set. ################"
+    echo "#################################################################"
+    export PRESET_MODE="############################# WARNING ############################"
+    return;
 fi
+
 
 export CUBRID="$(pwd)/install.out/$PRESET_MODE"
 export CUBRID_DATABASES="$(pwd)/databases.out/$PRESET_MODE"

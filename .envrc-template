@@ -15,6 +15,7 @@ export CUBRID_DATABASES="$(pwd)/databases.out/$PRESET_MODE"
 export CUBRID_BUILD_DIR="$(pwd)/build_preset_$PRESET_MODE"
 export PATH="$CUBRID/bin:$PATH"
 export LD_LIBRARY_PATH="$CUBRID/cci/lib:$CUBRID/lib:$LD_LIBRARY_PATH"
+export CUBRID_BUILD_DIR="$(pwd)/build_preset_$PRESET_MODE"
 
 ln -sf build_preset_"$PRESET_MODE"/compile_commands.json .
 
@@ -24,7 +25,8 @@ export PATH="$BISON_PATH/bin:$PATH"
 export LD_LIBRARY_PATH="$BISON_PATH/lib:$LD_LIBRARY_PATH"
 
 
-echo "Environment mode: $PRESET_MODE"
-echo "CUBRID: $CUBRID"
-echo "CUBRID_DATABASES: $CUBRID_DATABASES"
+echo "Preset Mode: $PRESET_MODE"
+echo "Install Dir: $CUBRID"
+echo "DB Dir: $CUBRID_DATABASES"
+echo "Build Dir: $CUBRID_BUILD_DIR"
 

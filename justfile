@@ -62,7 +62,7 @@ cgdb-csql-sa:
 core csql CORE:
     cgdb csql core {{ CORE }}
 
-delete-cores:
+core-delete:
     @gum confirm
     /bin/rm -rf core.*
 
@@ -86,10 +86,9 @@ db-create-testdb:
     cubrid createdb --db-volume-size=20M --log-volume-size=20M testdb en_US.utf8 -F $CUBRID_DATABASES/testdb
 
 db-delete-testdb:
-    @gum confirm
     cubrid deletedb testdb
 
-# csql
+# vector
 create-vector:
     csql -u dba testdb -S -c 'create table vt (vec vector);'
 

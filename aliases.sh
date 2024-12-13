@@ -73,6 +73,12 @@ alias lnpreset='ln -s $MY_CUBRID/CMakeUserPresets.json ./CMakeUserPresets.json'
 alias cubrid_initialize='cpenv && mkdir -p .vscode && lnvscode && lnpreset'
 alias cubi='cubrid_initialize'
 
+cubrid-error-message-to-enum() {
+  rg -- "$1" msg/en_US.utf8/cubrid.msg | awk '{print $1}' | xargs -I{} rg -- "-{}" src/base/error_code.h
+}
+
+alias cuberr='cubrid-error-message-to-enum'
+
 # CTP
 
 function ctp_update_answer {

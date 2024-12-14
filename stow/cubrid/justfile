@@ -21,6 +21,7 @@ echo-hello:
 # CMake
 
 configure:
+    git submodule update --init cubrid-cci
     cmake --preset $PRESET_MODE
 
 build:

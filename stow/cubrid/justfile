@@ -18,6 +18,12 @@ _gum-confirm-no:
 echo-hello:
     @echo "Hello, World!"
 
+stow-create:
+    stow --dir=$MY_CUBRID/stow --target=. cubrid
+
+stow-delete:
+    stow --dir=$MY_CUBRID/stow --target=. -D cubrid
+
 # CMake
 
 configure:

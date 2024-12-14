@@ -15,6 +15,9 @@ alias jr='just-remote'
 alias cu_dir='cd $ISSUE_DIR'
 alias cud='cu_dir'
 
+alias jcub='just --justfile $MY_CUBRID/stow/cubrid/justfile'
+alias cubstow='stow --dir=$MY_CUBRID/stow --target=. cubrid'
+
 # alias cu_build='. ~/my-cubrid/build.sh'
 alias cu_build='cmake --preset profile && cmake --build --preset profile --target install'
 alias cub='cu_build'

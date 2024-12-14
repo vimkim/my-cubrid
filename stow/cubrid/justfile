@@ -14,6 +14,10 @@ _gum-confirm-no:
     @# asks, the default is "NO"
     @gum confirm --default=false
 
+git-sync-with-upstream:
+    git fetch --all --prune
+    git pull cub HEAD
+
 # Echo
 echo-hello:
     @echo "Hello, World!"

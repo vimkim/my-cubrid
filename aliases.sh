@@ -27,7 +27,7 @@ alias cu_rmdb='. ~/my-cubrid/remove-db.sh'
 alias cu_createdb='~/my-cubrid/create-db.sh'
 alias cuc='cu_createdb'
 
-alias nix-install-bison-305='nix-env -iA bison -f https://github.com/NixOS/nixpkgs/archive/0bcbb978795bab0f1a45accc211b8b0e349f1cdb.tar.gz'
+alias cub-nix-install-bison-305='nix-env -iA bison -f https://github.com/NixOS/nixpkgs/archive/0bcbb978795bab0f1a45accc211b8b0e349f1cdb.tar.gz'
 
 alias cu_prepare='. ~/my-cubrid/prepare.sh'
 alias cu_prepare_edit='$EDITOR ~/my-cubrid/prepare.sh'

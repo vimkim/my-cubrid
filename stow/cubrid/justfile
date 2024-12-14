@@ -102,6 +102,7 @@ create-vector:
 create-vector-with-args:
     csql -u dba testdb -S -c 'create table vta (vec vector(3));'
     csql -u dba testdb -S -c 'create table vta2 (vec vector(3, FLOAT));'
+    csql -u dba testdb -S -c 'create table vta2 (vec vector(3, NUMERIC));' && exit 1 || echo "hello"
 
 desc-vector-table:
     csql -u dba testdb -S -c 'desc vt;'

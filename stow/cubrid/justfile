@@ -30,13 +30,12 @@ stow-delete:
 
 # CMake
 
-prepare: tbb-fix-strict stow-create
+prepare: stow-create
     git submodule update --init cubrid-cci
+    sed -i 's/-ggdb /-ggdb3 /' CMakeLists.txt
+    sed -i 's/set(LIBTBB_CONFIGURE -DCMAKE_INSTALL_PREFIX/set(LIBTBB_CONFIGURE -DTBB_STRICT=OFF -DCMAKE_INSTALL_PREFIX/' 3rdparty/CMakeLists.txt
     echo "PRESET_MODE=mydebug" > .env
     direnv allow
-
-tbb-fix-strict:
-    sed -i 's/set(LIBTBB_CONFIGURE -DCMAKE_INSTALL_PREFIX/set(LIBTBB_CONFIGURE -DTBB_STRICT=OFF -DCMAKE_INSTALL_PREFIX/' 3rdparty/CMakeLists.txt
 
 configure:
     cmake --preset $PRESET_MODE

@@ -1,5 +1,5 @@
 default:
-    @just --choose
+    @just --choose --justfile={{ justfile() }} -d {{ invocation_directory() }}
 
 alias b := build
 alias c := configure

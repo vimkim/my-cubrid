@@ -8,6 +8,7 @@ alias bp := build-profile
 alias cc := csql-demodb-cs
 alias cs := csql-demodb-sa
 alias br := build-run
+alias brr := build-recreate-run
 alias r := run
 
 _gum-confirm-no:
@@ -70,11 +71,20 @@ csql-demodb-cs:
 csql-demodb-sa:
     csql -u dba demodb -S
 
-cgdb-csql-cs:
+cgdb-csql-demodb-cs:
     cgdb --args csql -u dba demodb
 
-cgdb-csql-sa:
+cgdb-csql-demodb-sa:
     cgdb --args csql -u dba demodb -S
+
+cgdb-csql-testdb-cs:
+    cgdb --args csql -u dba testdb
+
+cgdb-csql-testdb-sa:
+    cgdb --args csql -u dba testdb -S
+
+cgdb-csql-testdb-sa-vector-insert:
+    cgdb --args csql -u dba testdb -S -c "insert into vt values ('[1, 2, 3]');"
 
 core csql CORE:
     cgdb csql core {{ CORE }}
@@ -127,6 +137,8 @@ select-vector:
 run: create-vector create-vector-with-args desc-vector-table insert-vector select-vector
 
 build-run: build run
+
+build-create-run: build db-create-testdb run
 
 recreate: db-delete-testdb db-create-testdb
 

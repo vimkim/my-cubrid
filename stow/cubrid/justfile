@@ -115,6 +115,14 @@ db-create-testdb:
 db-delete-testdb:
     cubrid deletedb testdb
 
+db-create-demodb:
+    mkdir -p $CUBRID_DATABASES/demodb
+    cubrid createdb --db-volume-size=20M --log-volume-size=20M demodb en_US.utf8 -F $CUBRID_DATABASES/demodb
+    cubrid loaddb -u dba -s $CUBRID/demo/demodb_schema -d $CUBRID/demo/demodb_objects demodb
+
+db-delete-demodb:
+    cubrid deletedb demodb
+
 # vector
 create-vector:
     csql -u dba testdb -S -c 'create table vt (vec vector);'

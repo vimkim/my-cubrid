@@ -158,3 +158,13 @@ recreate: db-delete-testdb db-create-testdb
 recreate-run: recreate run
 
 build-recreate-run: build recreate run
+
+# git
+git-pull-origin-head:
+    git pull origin $(git rev-parse --abbrev-ref HEAD)
+
+git-pull-upstream-head:
+    git pull upstream $(git rev-parse --abbrev-ref HEAD)
+
+git-pull-cub-head:
+    git pull cub $(git rev-parse --abbrev-ref HEAD)

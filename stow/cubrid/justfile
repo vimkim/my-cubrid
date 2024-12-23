@@ -1,6 +1,8 @@
 default:
     @just --choose --justfile={{ justfile() }} -d {{ invocation_directory() }}
 
+set shell := ["zsh", "-cu"]
+
 alias b := build
 alias c := configure
 alias bd := build-debug

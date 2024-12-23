@@ -43,6 +43,9 @@ prepare: stow-create
 configure:
     cmake --preset $PRESET_MODE
 
+configure-build: configure build
+    cmake --preset $PRESET_MODE
+
 build:
     cmake --build --preset $PRESET_MODE --target install
 

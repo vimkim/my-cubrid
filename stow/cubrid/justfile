@@ -9,9 +9,9 @@ alias bd := build-debug
 alias bp := build-profile
 alias cc := csql-demodb-cs
 alias cs := csql-demodb-sa
-alias br := build-run
-alias brr := build-recreate-run
-alias r := run
+alias bvr := build-vector-run
+alias brvr := build-recreate-vector-run
+alias vr := vector-run
 
 _gum-confirm-no:
     @# asks, the default is "NO"
@@ -130,6 +130,7 @@ db-delete-demodb:
 
 # vector
 create-vector:
+    csql -u dba testdb -S -c 'drop if exists vt;'
     csql -u dba testdb -S -c 'create table vt (vec vector);'
 
 create-vector-with-args:
@@ -139,6 +140,8 @@ create-vector-with-args:
 
 desc-vector-table:
     csql -u dba testdb -S -c 'desc vt;'
+    csql -u dba testdb -S -c 'show columns from vt'
+    csql -u dba testdb -S -c 'show create table vt'
 
 insert-vector:
     csql -u dba testdb -S -c "insert into vt values( '[1, 2, 3]' );"
@@ -147,17 +150,17 @@ insert-vector:
 select-vector:
     csql -u dba testdb -S -c "select * from vt;"
 
-run: create-vector create-vector-with-args desc-vector-table insert-vector select-vector
+vector-run: create-vector create-vector-with-args desc-vector-table insert-vector select-vector
 
-build-run: build run
+build-vector-run: build vector-run
 
-build-create-run: build db-create-testdb run
+build-create-vector-run: build db-create-testdb vector-run
 
 recreate: db-delete-testdb db-create-testdb
 
-recreate-run: recreate run
+recreate-vector-run: recreate vector-run
 
-build-recreate-run: build recreate run
+build-recreate-vector-run: build recreate vector-run
 
 # git
 git-pull-origin-head:

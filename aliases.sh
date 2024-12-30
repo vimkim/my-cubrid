@@ -131,3 +131,5 @@ function ctp_diff_all {
     done
 
 }
+
+alias mylog='$EDITOR $HOME/mylog/worklog-$(date +%Y-%m-%d).md'

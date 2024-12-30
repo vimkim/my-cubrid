@@ -1,3 +1,5 @@
+# vim: filetype=zsh
+
 export PATH=$HOME/CTP/bin:$HOME/CTP/common/script:$PATH
 
 export MY_CUBRID="$HOME/my-cubrid"
@@ -77,7 +79,7 @@ alias cubrid_initialize='cpenv && mkdir -p .vscode && lnvscode && lnpreset'
 alias cubi='cubrid_initialize'
 
 cubrid-error-message-to-enum() {
-  rg -- "$1" msg/en_US.utf8/cubrid.msg | awk '{print $1}' | xargs -I{} rg -- "-{}" src/base/error_code.h
+    rg -- "$1" msg/en_US.utf8/cubrid.msg | awk '{print $1}' | xargs -I{} rg -- "-{}" src/base/error_code.h
 }
 
 alias cuberr='cubrid-error-message-to-enum'
@@ -85,46 +87,47 @@ alias cuberr='cubrid-error-message-to-enum'
 # CTP
 
 function ctp_update_answer {
-  local filename="$1"
-  local new_ans_path=$(realpath "$filename")
+    local filename="$1"
+    local new_ans_path=$(realpath "$filename")
 
-  # Ensure the file is indeed in a 'cases' directory
-  if [[ "$new_ans_path" != */cases/* ]]; then
-    echo "Error: The file is not in a 'cases' directory."
-    return 1
-  fi
+    # Ensure the file is indeed in a 'cases' directory
+    if [[ "$new_ans_path" != */cases/* ]]; then
+        echo "Error: The file is not in a 'cases' directory."
+        return 1
+    fi
 
-  # before
-  ctp_diff "$filename"
+    # before
+    ctp_diff "$filename"
 
-  local old_path=$(echo "$new_ans_path" | sed 's|/cases/|/answers/|' | sed 's|\.result$|\.answer|')
+    local old_path=$(echo "$new_ans_path" | sed 's|/cases/|/answers/|' | sed 's|\.result$|\.answer|')
 
-  echo "Renaming $new_ans_path to $old_path"
-  cp "$new_ans_path" "$old_path"
+    echo "Renaming $new_ans_path to $old_path"
+    cp "$new_ans_path" "$old_path"
 
-  # after
-  ctp_diff "$filename"
+    # after
+    ctp_diff "$filename"
 }
 
 function ctp_diff {
-  local filename="$1"
-  local new_ans_path=$(realpath "$filename")
+    local filename="$1"
+    local new_ans_path=$(realpath "$filename")
 
-  # Ensure the file is indeed in a 'cases' directory
-  if [[ "$new_ans_path" != */cases/* ]]; then
-    echo "Error: The file is not in a 'cases' directory."
-    return 1
-  fi
+    # Ensure the file is indeed in a 'cases' directory
+    if [[ "$new_ans_path" != */cases/* ]]; then
+        echo "Error: The file is not in a 'cases' directory."
+        return 1
+    fi
 
-  local old_path=$(echo "$new_ans_path" | sed 's|/cases/|/answers/|' | sed 's|\.result$|\.answer|')
+    local old_path=$(echo "$new_ans_path" | sed 's|/cases/|/answers/|' | sed 's|\.result$|\.answer|')
 
-  echo "Comparing $new_ans_path to $old_path"
-  diff "$old_path" "$new_ans_path"
+    echo "Comparing $new_ans_path to $old_path"
+    diff "$old_path" "$new_ans_path"
 }
 
 function ctp_diff_all {
 
-  for file in $(fd -I -e result); do
-    ctp_diff "$file"
-  done
+    for file in $(fd -I -e result); do
+        ctp_diff "$file"
+    done
+
 }

@@ -132,4 +132,4 @@ function ctp_diff_all {
 
 }
 
-alias mylog='$EDITOR $HOME/mylog/worklog-$(date +%Y-%m-%d).md'
+alias cublog='$EDITOR $HOME/cublog/worklog-$(date +%Y-%m-%d).md'

@@ -27,9 +27,11 @@ echo-hello:
 
 stow-create:
     stow --dir=$MY_CUBRID/stow --target=. cubrid
+    stow --dir=$MY_CUBRID/stow --target=. gdb
 
 stow-delete:
     stow --dir=$MY_CUBRID/stow --target=. -D cubrid
+    stow --dir=$MY_CUBRID/stow --target=. -D gdb
 
 # CMake
 
@@ -37,7 +39,6 @@ prepare: stow-create
     git submodule update --init cubrid-cci
     sed -i 's/-ggdb /-ggdb3 /' CMakeLists.txt
     sed -i 's/set(LIBTBB_CONFIGURE -DCMAKE_INSTALL_PREFIX/set(LIBTBB_CONFIGURE -DTBB_STRICT=OFF -DCMAKE_INSTALL_PREFIX/' 3rdparty/CMakeLists.txt
-    echo "PRESET_MODE=mydebug" > .env
     direnv allow
 
 configure:
@@ -134,9 +135,10 @@ create-vector:
     csql -u dba testdb -S -c 'create table vt (vec vector);'
 
 create-vector-with-args:
-    csql -u dba testdb -S -c 'create table vta (vec vector(3));'
-    csql -u dba testdb -S -c 'create table vta2 (vec vector(3, FLOAT));'
-    csql -u dba testdb -S -c 'create table vta2 (vec vector(3, NUMERIC));' && exit 1 || echo "hello"
+    echo "hello"
+    # csql -u dba testdb -S -c 'create table vta (vec vector(3));'
+    # csql -u dba testdb -S -c 'create table vta2 (vec vector(3, FLOAT));'
+    # csql -u dba testdb -S -c 'create table vta2 (vec vector(3, NUMERIC));' && exit 1 || echo "hello"
 
 desc-vector-table:
     csql -u dba testdb -S -c 'desc vt;'
@@ -144,13 +146,19 @@ desc-vector-table:
     csql -u dba testdb -S -c 'show create table vt'
 
 insert-vector:
-    csql -u dba testdb -S -c "insert into vt values( '[1, 2, 3]' );"
-    @# csql -u dba testdb -S -c "insert into vt values( {1, 2, 3} );"
+    csql -u dba testdb -S -c "insert into vt (vec) values( '[4.321,1, 2,   3.5]' );"
+    # csql -u dba testdb -S -c "insert into vt values( '[1, 2, 3]' );"
+    # csql -u dba testdb -S -c "insert into vt values( {1, 2, 3} );"
+
+vector-insert-more:
+    csql -u dba testdb -S -c "insert into vt (vec) values( '[1,2,3,4,5,6,7,7]' );"
+    csql -u dba testdb -S -c "insert into vt (vec) values( '[1234,12341234,123412341234,1234123412341234.1234   ]' );"
+    csql -u dba testdb -S -c "insert into vt (vec) values( '[3,3,3,3.5f,2.4f]' );"
 
 select-vector:
     csql -u dba testdb -S -c "select * from vt;"
 
-vector-run: create-vector create-vector-with-args desc-vector-table insert-vector select-vector
+vector-run: create-vector create-vector-with-args desc-vector-table insert-vector vector-insert-more select-vector
 
 build-vector-run: build vector-run
 

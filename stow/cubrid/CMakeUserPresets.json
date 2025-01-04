@@ -16,7 +16,12 @@
         "WITH_CCI": "true",
         "CMAKE_INSTALL_PREFIX": "install.out/mydebug",
         "CMAKE_C_COMPILER_LAUNCHER": "ccache",
-        "CMAKE_CXX_COMPILER_LAUNCHER": "ccache"
+        "CMAKE_CXX_COMPILER_LAUNCHER": "ccache",
+        "CMAKE_C_COMPILER": "clang",
+        "CMAKE_CXX_COMPILER": "clang++",
+        "CMAKE_CXX_STANDARD": "17",
+        "CMAKE_CXX_STANDARD_REQUIRED": "ON",
+        "CMAKE_CXX_FLAGS": "-Wno-non-pod-varargs -Wno-c++11-narrowing"
       }
     },
     {

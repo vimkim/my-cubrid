@@ -21,8 +21,10 @@
         "CMAKE_CXX_COMPILER": "clang++",
         "CMAKE_CXX_STANDARD": "17",
         "CMAKE_CXX_STANDARD_REQUIRED": "ON",
-        "CMAKE_C_FLAGS": "-Og -fno-inline -Xclang -fno-validate-pch -Wno-everything -Wno-non-pod-varargs -Wno-c++11-narrowing -Wno-int-conversion -Wno-implicit-function-declaration",
-        "CMAKE_CXX_FLAGS": "-Og -fno-inline -Xclang -fno-validate-pch -Wno-everything -Wno-non-pod-varargs -Wno-c++11-narrowing -Wno-int-conversion -Wno-implicit-function-declaration"
+        "CMAKE_C_FLAGS": "-O0 -w -flto=thin -fno-inline -Xclang -fno-validate-pch -Xclang -fno-pch-timestamp -Wno-everything -Wno-non-pod-varargs -Wno-c++11-narrowing -Wno-int-conversion -Wno-implicit-function-declaration -w",
+        "CMAKE_CXX_FLAGS": "-O0 -w -flto=thin -fno-inline -Xclang -fno-validate-pch -Xclang -fno-pch-timestamp -Wno-everything -Wno-non-pod-varargs -Wno-c++11-narrowing -Wno-int-conversion -Wno-implicit-function-declaration -w",
+        "CMAKE_C_FLAGS_DEBUG": "-O0",
+        "CMAKE_CXX_FLAGS_DEBUG": "-O0"
       }
     },
     {
@@ -42,7 +44,8 @@
   "buildPresets": [
     {
       "name": "mydebug",
-      "configurePreset": "mydebug"
+      "configurePreset": "mydebug",
+      "jobs": 160
     },
     {
       "name": "myprofile",

@@ -21,7 +21,8 @@
         "CMAKE_CXX_COMPILER": "clang++",
         "CMAKE_CXX_STANDARD": "17",
         "CMAKE_CXX_STANDARD_REQUIRED": "ON",
-        "CMAKE_CXX_FLAGS": "-Wno-non-pod-varargs -Wno-c++11-narrowing"
+        "CMAKE_C_FLAGS": "-Og -fno-inline -Xclang -fno-validate-pch -Wno-everything -Wno-non-pod-varargs -Wno-c++11-narrowing -Wno-int-conversion -Wno-implicit-function-declaration",
+        "CMAKE_CXX_FLAGS": "-Og -fno-inline -Xclang -fno-validate-pch -Wno-everything -Wno-non-pod-varargs -Wno-c++11-narrowing -Wno-int-conversion -Wno-implicit-function-declaration"
       }
     },
     {

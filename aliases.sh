@@ -133,3 +133,15 @@ function ctp_diff_all {
 }
 
 alias cublog='$EDITOR $HOME/cublog/worklog-$(date +%Y-%m-%d).md'
+
+# Add CUBRID binaries to PATH if MY_CUBRID is defined and the directory exists
+if [ -n "$MY_CUBRID" ] && [ -d "$MY_CUBRID/bin" ]; then
+    case ":$PATH:" in
+        *":$MY_CUBRID/bin:"*) ;;
+        *) export PATH="$MY_CUBRID/bin:$PATH" ;;
+    esac
+else
+    echo "Warning: MY_CUBRID is not set or $MY_CUBRID/bin does not exist."
+fi
+
+

@@ -17,6 +17,21 @@
         "CMAKE_INSTALL_PREFIX": "install.out/mydebug",
         "CMAKE_C_COMPILER_LAUNCHER": "ccache",
         "CMAKE_CXX_COMPILER_LAUNCHER": "ccache",
+        "CMAKE_C_FLAGS_DEBUG": "-O0",
+        "CMAKE_CXX_FLAGS_DEBUG": "-O0"
+      }
+    },
+    {
+      "name": "mydebug-clang",
+      "generator": "Ninja",
+      "binaryDir": "${sourceDir}/build_preset_mydebug",
+      "cacheVariables": {
+        "CMAKE_EXPORT_COMPILE_COMMANDS": "ON",
+        "CMAKE_BUILD_TYPE": "Debug",
+        "WITH_CCI": "true",
+        "CMAKE_INSTALL_PREFIX": "install.out/mydebug",
+        "CMAKE_C_COMPILER_LAUNCHER": "ccache",
+        "CMAKE_CXX_COMPILER_LAUNCHER": "ccache",
         "CMAKE_C_COMPILER": "clang",
         "CMAKE_CXX_COMPILER": "clang++",
         "CMAKE_CXX_STANDARD": "17",

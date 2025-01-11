@@ -1,0 +1,8 @@
+_default:
+    just gradle-fuzzy
+
+hello:
+    echo 'hello'
+
+gradle-fuzzy:
+    print -z "./gradlew $(./gradlew tasks --all | grep -E '^\\w.* - ' | fzf | awk '{print $1}')"

@@ -1,4 +1,7 @@
--- Basic floating point formats
+drop if exists vt;
+
+create table vt (vec vector);
+
 insert into vt (vec) values('[1,2,3,4,5,6,7,7]');
 insert into vt (vec) values('[1234,12341234,123412341234,1234123412341234.1234]');
 insert into vt (vec) values('[3,3,3,3.5,2.4]');

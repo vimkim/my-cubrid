@@ -12,6 +12,8 @@ alias cs := csql-demodb-sa
 alias bvr := build-vector-run
 alias brvr := build-recreate-vector-run
 alias vr := vector-run
+alias brt := build-recreate-test
+alias t := test
 
 _gum-confirm-no:
     @# asks, the default is "NO"
@@ -219,7 +221,7 @@ build-recreate-test: build recreate test
 
 test: test-vector
 
-test-vector: create-vector insert-vectors test-vector-select
+test-vector: insert-vectors test-vector-select
 
 test-vector-select:
     ./test-vector-select.sh

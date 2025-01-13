@@ -211,3 +211,15 @@ git-pull-upstream-head:
 
 git-pull-cub-head:
     git pull cub $(git rev-parse --abbrev-ref HEAD)
+
+insert-vectors:
+    csql -u dba testdb -S -i ./vector-insert.sql
+
+build-recreate-test: build recreate test
+
+test: test-vector
+
+test-vector: create-vector insert-vectors test-vector-select
+
+test-vector-select:
+    ./test-vector-select.sh

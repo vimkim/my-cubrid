@@ -22,14 +22,14 @@
       }
     },
     {
-      "name": "mydebug-clang",
+      "name": "mydebug_clang",
       "generator": "Ninja",
-      "binaryDir": "${sourceDir}/build_preset_mydebug",
+      "binaryDir": "${sourceDir}/build_preset_mydebug_clang",
       "cacheVariables": {
         "CMAKE_EXPORT_COMPILE_COMMANDS": "ON",
         "CMAKE_BUILD_TYPE": "Debug",
         "WITH_CCI": "true",
-        "CMAKE_INSTALL_PREFIX": "install.out/mydebug",
+        "CMAKE_INSTALL_PREFIX": "install.out/mydebug_clang",
         "CMAKE_C_COMPILER_LAUNCHER": "ccache",
         "CMAKE_CXX_COMPILER_LAUNCHER": "ccache",
         "CMAKE_C_COMPILER": "clang",
@@ -38,8 +38,8 @@
         "CMAKE_CXX_STANDARD_REQUIRED": "ON",
         "CMAKE_C_FLAGS": "-O0 -w -flto=thin -fno-inline -Xclang -fno-validate-pch -Xclang -fno-pch-timestamp -Wno-everything -Wno-non-pod-varargs -Wno-c++11-narrowing -Wno-int-conversion -Wno-implicit-function-declaration -w",
         "CMAKE_CXX_FLAGS": "-O0 -w -flto=thin -fno-inline -Xclang -fno-validate-pch -Xclang -fno-pch-timestamp -Wno-everything -Wno-non-pod-varargs -Wno-c++11-narrowing -Wno-int-conversion -Wno-implicit-function-declaration -w",
-        "CMAKE_C_FLAGS_DEBUG": "-O0",
-        "CMAKE_CXX_FLAGS_DEBUG": "-O0"
+        "CMAKE_C_FLAGS_DEBUG": "-O0 -ggdb3 -w",
+        "CMAKE_CXX_FLAGS_DEBUG": "-O0 -ggdb3 -w"
       }
     },
     {
@@ -62,6 +62,11 @@
     {
       "name": "mydebug",
       "configurePreset": "mydebug",
+      "jobs": 160
+    },
+    {
+      "name": "mydebug_clang",
+      "configurePreset": "mydebug_clang",
       "jobs": 160
     },
     {

@@ -25,6 +25,6 @@ case $ext in
     delta "${f}" <(indent -st -l120 -lc120 "${f}")
     ;;
 .cpp | .hpp | .ipp)
-    astyle --stdout --style=gnu --mode=c --indent-namespaces --indent=spaces=2 -xT8 -xt4 --add-brackets --max-code-length=120 --align-pointer=name --indent-classes --pad-header --pad-first-paren-out ${f}
+    delta "${f}" <(astyle --style=gnu --mode=c --indent-namespaces --indent=spaces=2 -xT8 -xt4 -j --max-code-length=120 --align-pointer=name --indent-classes --pad-header --pad-first-paren-out <${f})
     ;;
 esac

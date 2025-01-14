@@ -66,14 +66,14 @@ else(WIN32)
   set(WITH_LIBFLEXBISON "${WITH_EXTERNAL_PREFIX}" CACHE STRING "Build with flex and bison library (default: EXTERNAL)")
 endif()
 
-set(WITH_LIBEXPAT     "CUB3LIB" CACHE STRING "Build with expat library (default: EXTERNAL)")
-set(WITH_LIBJANSSON   "CUB3LIB" CACHE STRING "Build with jansson library (default: EXTERNAL)")
-set(WITH_LIBEDIT      "CUB3LIB" CACHE STRING "Build with editline library (default: EXTERNAL)")
-set(WITH_LIBOPENSSL   "CUB3LIB" CACHE STRING "Build with openssl library (default: EXTERNAL)")
-set(WITH_LIBUNIXODBC  "CUB3LIB" CACHE STRING "Build with unixODBC library (default: EXTERNAL)")
-set(WITH_RE2          "CUB3LIB" CACHE STRING "Build with re2 library (default: EXTERNAL)")
-set(WITH_LZ4          "CUB3LIB" CACHE STRING "Build with lz4 library (default: EXTERNAL)")
-set(WITH_LIBTBB       "CUB3LIB" CACHE STRING "Build with TBB library (default: EXTERNAL)")
+set(WITH_LIBEXPAT     "${WITH_EXTERNAL_PREFIX}" CACHE STRING "Build with expat library (default: EXTERNAL)")
+set(WITH_LIBJANSSON   "${WITH_EXTERNAL_PREFIX}" CACHE STRING "Build with jansson library (default: EXTERNAL)")
+set(WITH_LIBEDIT      "${WITH_EXTERNAL_PREFIX}" CACHE STRING "Build with editline library (default: EXTERNAL)")
+set(WITH_LIBOPENSSL   "${WITH_EXTERNAL_PREFIX}" CACHE STRING "Build with openssl library (default: EXTERNAL)")
+set(WITH_LIBUNIXODBC  "${WITH_EXTERNAL_PREFIX}" CACHE STRING "Build with unixODBC library (default: EXTERNAL)")
+set(WITH_RE2          "${WITH_EXTERNAL_PREFIX}" CACHE STRING "Build with re2 library (default: EXTERNAL)")
+set(WITH_LZ4          "${WITH_EXTERNAL_PREFIX}" CACHE STRING "Build with lz4 library (default: EXTERNAL)")
+set(WITH_LIBTBB       "${WITH_EXTERNAL_PREFIX}" CACHE STRING "Build with TBB library (default: EXTERNAL)")
 
 message(STATUS "Build with flex and bison library: ${WITH_LIBFLEXBISON}")
 message(STATUS "Build with expat library: ${WITH_LIBEXPAT}")
@@ -117,9 +117,9 @@ endif(WIN32)
 # on Linux:
 # * "SYSTEM"   - use flex and bison library located in the system.
 # on Windows:
-# * "CUB3LIB" - (default) builds flex and bison library from URL
+# * "EXTERNAL" - (default) builds flex and bison library from URL
 # * "SYSTEM"   - use flex and bison library installed by chocolately
-if(WITH_LIBFLEXBISON STREQUAL "CUB3LIB")
+if(WITH_LIBFLEXBISON STREQUAL "EXTERNAL")
   if(WIN32)
     # bison and flex for Windows
     set(WIN_FLEX_BISON_FILENAME "${WINDOWS_EXTERNAL_DIR}/Download/win_flex_bison.zip")
@@ -171,7 +171,7 @@ endif(NOT BISON_FOUND OR NOT FLEX_FOUND)
 
 # WITH_LIBEXPAT can have multiple values with different meanings
 # on Linux:
-# * "CUB3LIB" - (default) builds expat library from URL stored in ${WITH_LIBEXPAT_URL} uses the library created by the build
+# * "EXTERNAL" - (default) builds expat library from URL stored in ${WITH_LIBEXPAT_URL} uses the library created by the build
 # * "SYSTEM"   - use expat library located in:
 #                  ${WITH_EXTERNAL_LIBS_PATH}
 #                  ${WITH_LIBEXPAT_ROOT_PATH}/lib
@@ -179,9 +179,9 @@ endif(NOT BISON_FOUND OR NOT FLEX_FOUND)
 #                  ${WITH_EXTERNAL_HEADERS_PATH}
 #                  ${WITH_LIBEXPAT_ROOT_PATH}/include
 # on Windows:
-# * "CUB3LIB" - (default) uses the prebuilt library from cubrid/win/3rdparty
+# * "EXTERNAL" - (default) uses the prebuilt library from cubrid/win/3rdparty
 set(LIBEXPAT_TARGET libexpat)
-if(WITH_LIBEXPAT STREQUAL "CUB3LIB")
+if(WITH_LIBEXPAT STREQUAL "EXTERNAL")
   if(UNIX)
     set(LIBEXPAT_LIBS ${3RDPARTY_LIBS_DIR}/lib/libexpat.a)
     set(LIBEXPAT_INCLUDES ${3RDPARTY_LIBS_DIR}/include/expat)
@@ -207,7 +207,7 @@ list(APPEND EP_LIBS ${LIBEXPAT_LIBS})
 
 # WITH_LIBJANSSON can have multiple values with different meanings
 # on Linux:
-# * "CUB3LIB" - (default) builds jansson library from URL stored in ${WITH_LIBJANSSON_URL} uses the library created by the build
+# * "EXTERNAL" - (default) builds jansson library from URL stored in ${WITH_LIBJANSSON_URL} uses the library created by the build
 # * "SYSTEM"   - use jansson library located in:
 #                  ${WITH_EXTERNAL_LIBS_PATH}
 #                  ${WITH_LIBJANSSON_ROOT_PATH}/lib
@@ -215,9 +215,9 @@ list(APPEND EP_LIBS ${LIBEXPAT_LIBS})
 #                  ${WITH_EXTERNAL_HEADERS_PATH}
 #                  ${WITH_LIBJANSSON_ROOT_PATH}/include
 # on Windows:
-# * "CUB3LIB" - (default) uses the prebuilt library from cubrid/win/3rdparty
+# * "EXTERNAL" - (default) uses the prebuilt library from cubrid/win/3rdparty
 set(LIBJANSSON_TARGET libjansson)
-if(WITH_LIBJANSSON STREQUAL "CUB3LIB")
+if(WITH_LIBJANSSON STREQUAL "EXTERNAL")
   if(UNIX)
     set(LIBJANSSON_LIBS ${3RDPARTY_LIBS_DIR}/lib/libjansson.a)
     set(LIBJANSSON_INCLUDES ${3RDPARTY_LIBS_DIR}/include/jansson)
@@ -245,7 +245,7 @@ list(APPEND EP_LIBS ${LIBJANSSON_LIBS})
 
 # WITH_LIBEDIT can have multiple values with different meanings
 # on Linux:
-# * "CUB3LIB" - (default) builds editline library from URL stored in ${WITH_LIBEDIT_URL} uses the library created by the build
+# * "EXTERNAL" - (default) builds editline library from URL stored in ${WITH_LIBEDIT_URL} uses the library created by the build
 # * "SYSTEM"   - use editline library located in:
 #                  ${WITH_EXTERNAL_LIBS_PATH}
 #                  ${WITH_LIBEDIT_ROOT_PATH}/lib
@@ -254,7 +254,7 @@ list(APPEND EP_LIBS ${LIBJANSSON_LIBS})
 #                  ${WITH_LIBEDIT_ROOT_PATH}/include
 if(UNIX)
   set(LIBEDIT_TARGET libedit)
-  if(WITH_LIBEDIT STREQUAL "CUB3LIB")
+  if(WITH_LIBEDIT STREQUAL "EXTERNAL")
     set(LIBEDIT_LIBS ${3RDPARTY_LIBS_DIR}/lib/libedit.a)
     set(LIBEDIT_INCLUDES ${3RDPARTY_LIBS_DIR}/include)
     if(TARGET ${LIBNCURSES_TARGET})
@@ -306,7 +306,7 @@ list(APPEND EP_INCLUDES ${LZ4_INCLUDES})
 
 # WITH_LOBOPENSSL can have multiple values with different meanings
 # on Linux:
-# * "CUB3LIB" - (default) builds openssl library from URL stored in ${WITH_LIBOPENSSL_URL} uses the library created by the build
+# * "EXTERNAL" - (default) builds openssl library from URL stored in ${WITH_LIBOPENSSL_URL} uses the library created by the build
 # * "SYSTEM"   - use openssl library located in:
 #                  ${WITH_EXTERNAL_LIBS_PATH}
 #                  ${WITH_LIBOPENSSL_ROOT_PATH}/lib
@@ -314,9 +314,9 @@ list(APPEND EP_INCLUDES ${LZ4_INCLUDES})
 #                  ${WITH_EXTERNAL_HEADERS_PATH}
 #                  ${WITH_LIBOPENSSL_ROOT_PATH}/include
 # on Windows:
-# * "CUB3LIB" - (default) uses the prebuilt library from cubrid/win/3rdparty
+# * "EXTERNAL" - (default) uses the prebuilt library from cubrid/win/3rdparty
 set(LIBOPENSSL_TARGET libopenssl)
-if(WITH_LIBOPENSSL STREQUAL "CUB3LIB")
+if(WITH_LIBOPENSSL STREQUAL "EXTERNAL")
   if(UNIX)
     #compile OpenSSL library given an internet url to a OpenSSL archive
     #e.g. https://www.openssl.org/source/openssl-1.1.1f.tar.gz
@@ -341,19 +341,19 @@ list(APPEND EP_LIBS ${LIBOPENSSL_LIBS})
 
 # WITH_LIBUNIXODBC can have multiple values with different meanings
 # on Linux:
-# * "CUB3LIB" - (default) builds unixODBC library from URL stored in ${WITH_LIBUNIXODBC_URL} uses the library created by the build
+# * "EXTERNAL" - (default) builds unixODBC library from URL stored in ${WITH_LIBUNIXODBC_URL} uses the library created by the build
 #
 set(LIBUNIXODBC_TARGET libodbc)
-if(WITH_LIBUNIXODBC STREQUAL "CUB3LIB")
+if(WITH_LIBUNIXODBC STREQUAL "EXTERNAL")
   if(UNIX)
     #compile unixODBC library given an internet url to a unixODBC archive
     #e.g. http://www.unixodbc.org/unixODBC-2.3.9.tar.gz
     set(LIBUNIXODBC_LIBS ${3RDPARTY_LIBS_DIR}/lib/libodbc.so)
     set(LIBUNIXODBC_INCLUDES ${3RDPARTY_LIBS_DIR}/include)
   endif(UNIX)
-else(WITH_LIBUNIXODBC STREQUAL "CUB3LIB")
+else(WITH_LIBUNIXODBC STREQUAL "EXTERNAL")
     message(FATAL_ERROR "Invalid WITH_LIBUNIXODBC option value ${WITH_LIBUNIXODBC}")
-endif(WITH_LIBUNIXODBC STREQUAL "CUB3LIB")
+endif(WITH_LIBUNIXODBC STREQUAL "EXTERNAL")
 list(APPEND EP_INCLUDES ${LIBUNIXODBC_INCLUDES})
 
 # rapidjson
@@ -385,7 +385,7 @@ list(APPEND EP_TARGETS ${RAPIDJSON_TARGET})
 list(APPEND EP_INCLUDES ${RAPIDJSON_INCLUDES})
 
 # RE2
-if(WITH_RE2 STREQUAL "CUB3LIB")
+if(WITH_RE2 STREQUAL "EXTERNAL")
   if(UNIX)
     set(RE2_INCLUDES ${3RDPARTY_LIBS_DIR}/Source/re2)
     set(RE2_LIBS ${3RDPARTY_LIBS_DIR}/Source/re2/obj/libre2.a)
@@ -398,7 +398,7 @@ if(WITH_RE2 STREQUAL "CUB3LIB")
       COMMAND ${CMAKE_COMMAND} -E copy ${RE2_DLL} ${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/${CMAKE_BUILD_TYPE}/re2.dll
     )
   endif(UNIX)
-else(WITH_RE2 STREQUAL "CUB3LIB")
+else(WITH_RE2 STREQUAL "EXTERNAL")
   message(FATAL_ERROR "Invalid WITH_RE2 option value ${WITH_RE2}")
 endif()
 # add to external project targets
@@ -407,7 +407,7 @@ list(APPEND EP_INCLUDES ${RE2_INCLUDES})
 
 # libTBB
 set(LIBTBB_TARGET libtbb)
-if(WITH_LIBTBB STREQUAL "CUB3LIB")
+if(WITH_LIBTBB STREQUAL "EXTERNAL")
   if(UNIX)
     #compile TBB library given an internet url to a TBB archive
     #e.g. https://github.com/oneapi-src/oneTBB/archive/refs/tags/v2021.11.0.tar.gz

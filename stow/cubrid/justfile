@@ -225,3 +225,6 @@ test-vector: insert-vectors test-vector-select
 
 test-vector-select:
     ./test-vector-select.sh
+
+perfect-error-disable-flags:
+    CFLAGS='-Wno-int-conversion -Wno-implicit-function-declaration -w' CXXFLAGS='-Wno-c++11-narrowing -Wno-non-pod-varargs -w' CC=clang CXX=clang++ ./build.sh -m debug build

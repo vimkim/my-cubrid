@@ -7,29 +7,36 @@
   },
   "configurePresets": [
     {
-      "name": "mydebug",
+      "name": "user_default",
+      "hidden": true,
       "generator": "Ninja",
-      "binaryDir": "${sourceDir}/build_preset_mydebug",
+      "binaryDir": "${sourceDir}/build_preset_${presetName}",
       "cacheVariables": {
         "CMAKE_EXPORT_COMPILE_COMMANDS": "ON",
-        "CMAKE_BUILD_TYPE": "Debug",
-        "WITH_CCI": "true",
-        "CMAKE_INSTALL_PREFIX": "install.out/mydebug",
-        "CMAKE_C_COMPILER_LAUNCHER": "ccache",
-        "CMAKE_CXX_COMPILER_LAUNCHER": "ccache",
-        "CMAKE_C_FLAGS_DEBUG": "-O0 -ggdb3 -w -Wno-error",
-        "CMAKE_CXX_FLAGS_DEBUG": "-O0 -ggdb3 -w -Wno-error"
+        "CMAKE_INSTALL_PREFIX": "$env{CUBRID}",
+        "WITH_CCI": "true"
       }
     },
     {
-      "name": "mydebug_clang",
-      "generator": "Ninja",
-      "binaryDir": "${sourceDir}/build_preset_mydebug_clang",
+      "name": "debug_ccache_gcc",
+      "inherits": "user_default",
       "cacheVariables": {
-        "CMAKE_EXPORT_COMPILE_COMMANDS": "ON",
         "CMAKE_BUILD_TYPE": "Debug",
-        "WITH_CCI": "true",
-        "CMAKE_INSTALL_PREFIX": "install.out/mydebug_clang",
+        "CMAKE_C_COMPILER_LAUNCHER": "ccache",
+        "CMAKE_CXX_COMPILER_LAUNCHER": "ccache",
+        "CMAKE_C_FLAGS_DEBUG": "-O0 -ggdb3 -w -Wno-error",
+        "CMAKE_CXX_FLAGS_DEBUG": "-O0 -ggdb3 -w -Wno-error",
+        "CMAKE_C_COMPILER": "gcc",
+        "CMAKE_CXX_COMPILER": "g++",
+        "CMAKE_CXX_STANDARD": "17",
+        "CMAKE_CXX_STANDARD_REQUIRED": "ON"
+      }
+    },
+    {
+      "name": "debug_ccache_clang",
+      "inherits": "user_default",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Debug",
         "CMAKE_C_COMPILER_LAUNCHER": "ccache",
         "CMAKE_CXX_COMPILER_LAUNCHER": "ccache",
         "CMAKE_C_COMPILER": "clang",
@@ -60,13 +67,13 @@
   ],
   "buildPresets": [
     {
-      "name": "mydebug",
-      "configurePreset": "mydebug",
+      "name": "debug_ccache_gcc",
+      "configurePreset": "debug_ccache_gcc",
       "jobs": 160
     },
     {
-      "name": "mydebug_clang",
-      "configurePreset": "mydebug_clang",
+      "name": "debug_ccache_clang",
+      "configurePreset": "debug_ccache_clang",
       "jobs": 160
     },
     {

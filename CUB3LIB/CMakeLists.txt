@@ -16,6 +16,8 @@ set(JANSSON_URL "https://github.com/CUBRID/3rdparty/raw/develop/jansson/jansson-
 set(JANSSON_HASH "SHA256=78215ad1e277b42681404c1d66870097a50eb084be9d771b1d15576575cf6447")
 set(LIBEDIT_URL "https://github.com/CUBRID/libedit/archive/refs/tags/csql_v1.1.tar.gz")
 set(LIBEDIT_HASH "SHA256=972c7d46844b7b56adde028bb2269546938272dd8d7a58978b7a18a6f6e44141")
+set(LIBUNIXODBC_URL "https://github.com/CUBRID/3rdparty/raw/develop/unixODBC/unixODBC-2.3.9.tar.gz")     # unixODBC library sources URL
+set(LIBUNIXODBC_URL_HASH "SHA256=52833eac3d681c8b0c9a5a65f2ebd745b3a964f208fc748f977e44015a31b207")     # unixODBC library sources URL
 set(OPENSSL_URL "https://github.com/CUBRID/3rdparty/raw/develop/openssl/openssl-1.1.1f.tar.gz")
 set(OPENSSL_HASH "SHA256=186c6bfe6ecfba7a5b48c47f8a1673d0f3b0e5ba2e25602dd23b629975da3f35")
 set(RE2_URL "https://github.com/CUBRID/3rdparty/raw/develop/re2/2022-06-01.tar.gz")
@@ -44,6 +46,16 @@ ExternalProject_Add(expat
     CONFIGURE_COMMAND ${DEFAULT_CONFIGURE_OPTS} --without-xmlwf --without-docbook
     BUILD_COMMAND make -j
     INSTALL_COMMAND make install
+    TIMEOUT 600
+    ${EP_LOG_OPTIONS}
+)
+
+ExternalProject_Add(libodbc
+    URL ${LIBUNIXODBC_URL}
+    URL_HASH ${LIBUNIXODBC_HASH}
+    CONFIGURE_COMMAND    <SOURCE_DIR>/configure --prefix=${INSTALL_DIR} # ${DEFAULT_CONFIGURE_OPTS}
+    BUILD_COMMAND        make -j AUTOCONF=: AUTOHEADER=: AUTOMAKE=: ACLOCAL=:
+    INSTALL_COMMAND      make install AUTOCONF=: AUTOHEADER=: AUTOMAKE=: ACLOCAL=:
     TIMEOUT 600
     ${EP_LOG_OPTIONS}
 )

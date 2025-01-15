@@ -1,0 +1,8 @@
+configure:
+    cmake -S . -B build -G Ninja
+
+build:
+    cmake --build build
+
+clean:
+    cmake --build . --target clean

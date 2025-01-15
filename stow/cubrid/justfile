@@ -51,6 +51,9 @@ prepare: _3rdparty-cmake-remove _clang-support stow-create
 configure:
     cmake --preset $PRESET_MODE
 
+cmake-preset-mode-select:
+    cmake --list-presets=configure | grep -v "Available" | sed 's/"//g' | tr -d ' ' | fzf | xargs -I {} echo "PRESET_MODE={}" > .env
+
 configure-build: configure build
 
 build:
@@ -65,9 +68,6 @@ build-profile:
 clear-cache:
     @gum confirm
     /bin/rm -rf $CUBRID_BUILD_DIR/CMakeCache.txt $CUBRID_BUILD_DIR/CMakeFiles
-
-choose-preset-mode:
-    @preset=$(gum choose "mydebug" "myprofile" "debug" "release") && echo "PRESET_MODE=$preset" > .env
 
 # CSQL
 

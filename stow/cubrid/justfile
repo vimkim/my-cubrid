@@ -43,13 +43,16 @@ stow-delete:
 
 # CMake
 
+gcc-8-fail:
+    gcc -dumpversion | grep -q "^8" && { echo "GCC 8 detected - failing"; return 1; } || echo "GCC version check passed"
+
 prepare: _clang-support stow-create
     git submodule update --init cubrid-cci
     sed -i 's/-ggdb /-ggdb3 /' CMakeLists.txt
     sed -i '/^[^#]*add_dependencies(cubrid \${TBB_TARGETS})/ s/^/# /' cubrid/CMakeLists.txt
     direnv allow
 
-configure:
+configure: gcc-8-fail
     cmake --preset $PRESET_MODE
 
 cmake-preset-mode-select:
@@ -57,7 +60,7 @@ cmake-preset-mode-select:
 
 configure-build: configure build
 
-build:
+build: gcc-8-fail
     cmake --build --preset $PRESET_MODE --target install
 
 build-debug:

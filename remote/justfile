@@ -10,6 +10,9 @@ ssh217:
 ssh218:
     TERM=xterm ssh -Y cubrid@192.168.2.218
 
+server-dev2:
+    TERM=xterm ssh -Y vimkim@192.168.2.252
+
 server-dev3:
     TERM=xterm ssh -Y dhkim@192.168.2.253
 

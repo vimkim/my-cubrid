@@ -11,9 +11,6 @@ alias cualias='$EDITOR ~/my-cubrid/aliases.sh'
 alias cuali='$EDITOR ~/my-cubrid/aliases.sh'
 alias socuali='source ~/my-cubrid/aliases.sh'
 
-alias just-remote='just --justfile ~/my-cubrid/remote/justfile'
-alias jr='just-remote'
-
 alias cu_dir='cd $ISSUE_DIR'
 alias cud='cu_dir'
 

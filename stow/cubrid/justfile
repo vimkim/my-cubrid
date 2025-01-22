@@ -60,7 +60,15 @@ cmake-preset-mode-select:
 
 configure-build: configure build
 
-build: gcc-8-fail
+build: gcc-8-fail cmake-build-install-csql-util
+
+cmake-build-install-3rdparty:
+    cmake --build --preset $PRESET_MODE --target 3rdparty/install
+
+cmake-build-install-csql-util: cmake-build-install-3rdparty
+    cmake --build --preset $PRESET_MODE --target util/install
+
+cmake-build-install-all:
     cmake --build --preset $PRESET_MODE --target install
 
 build-debug:

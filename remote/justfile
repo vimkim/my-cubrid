@@ -13,6 +13,18 @@ ssh218:
 server-dev2:
     TERM=xterm ssh -Y vimkim@192.168.2.252
 
+dev2-container-1:
+    ssh -Y vimkim@192.168.2.120
+
+dev2-container-2:
+    ssh -Y vimkim@192.168.2.121
+
+dev2-container-3:
+    ssh -Y vimkim@192.168.2.122
+
+dev2-container-4:
+    ssh -Y vimkim@192.168.2.123
+
 server-dev3:
     TERM=xterm ssh -Y dhkim@192.168.2.253
 

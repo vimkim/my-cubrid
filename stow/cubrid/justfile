@@ -50,6 +50,7 @@ prepare: _clang-support stow-create
     git submodule update --init cubrid-cci
     sed -i 's/-ggdb /-ggdb3 /' CMakeLists.txt
     sed -i '/^[^#]*add_dependencies(cubrid \${TBB_TARGETS})/ s/^/# /' cubrid/CMakeLists.txt
+    patch -p1 < $MY_CUBRID/rapidjson-patch.diff
     direnv allow
 
 configure: gcc-8-fail

@@ -1,0 +1,18 @@
+diff --git a/3rdparty/CMakeLists.txt b/3rdparty/CMakeLists.txt
+index 3e4c5d459..c92e1003a 100644
+--- a/3rdparty/CMakeLists.txt
++++ b/3rdparty/CMakeLists.txt
+@@ -437,9 +437,10 @@ set(RAPIDJSON_INCLUDES ${3RDPARTY_LIBS_DIR}/Source/rapidjson/include)
+ set(RAPIDJSON_LIBS "")
+ ADD_BY_PRODUCTS_VARIABLE ("RAPIDJSON" ${RAPIDJSON_INCLUDES})
+ externalproject_add(${RAPIDJSON_TARGET}
+-  # tried URL but archive gets downloaded every time. URL_MD5 may help
+-  URL                  ${WITH_RAPIDJSON_URL}
+-  URL_HASH             ${WITH_RAPIDJSON_URL_HASH}
++  GIT_REPOSITORY "https://github.com/tencent/rapidjson.git"
++  GIT_TAG "d621dc9e9c77f81e5c8a35b8dcc16dcd63351321"  # Replace with your desired commit hash
++  GIT_SHALLOW TRUE
++  GIT_PROGRESS TRUE
+   LOG_CONFIGURE        TRUE
+   LOG_BUILD            TRUE
+   LOG_INSTALL          TRUE

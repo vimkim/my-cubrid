@@ -252,3 +252,12 @@ cmakecache-delete:
 
 build-delete: _gum-confirm-no
     /bin/rm -rf $CUBRID_BUILD_DIR
+
+asdf-java:
+    asdf install java $(asdf list all java | fzf)
+
+asdf-java-global:
+    asdf global java $(asdf list java | fzf)
+
+asdf-java-local:
+    asdf local java $(asdf list java | fzf)

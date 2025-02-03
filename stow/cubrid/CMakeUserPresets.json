@@ -67,12 +67,12 @@
   ],
   "buildPresets": [
     {
-      "name": "debug_ccache_gcc",
-      "configurePreset": "debug_ccache_gcc"
+      "name": "debug_gcc",
+      "configurePreset": "debug_gcc"
     },
     {
-      "name": "debug_ccache_clang",
-      "configurePreset": "debug_ccache_clang"
+      "name": "debug_clang",
+      "configurePreset": "debug_clang"
     },
     {
       "name": "myprofile",

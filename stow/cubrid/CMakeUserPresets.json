@@ -68,13 +68,11 @@
   "buildPresets": [
     {
       "name": "debug_ccache_gcc",
-      "configurePreset": "debug_ccache_gcc",
-      "jobs": 160
+      "configurePreset": "debug_ccache_gcc"
     },
     {
       "name": "debug_ccache_clang",
-      "configurePreset": "debug_ccache_clang",
-      "jobs": 160
+      "configurePreset": "debug_ccache_clang"
     },
     {
       "name": "myprofile",

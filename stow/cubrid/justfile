@@ -78,6 +78,9 @@ build-debug:
 build-profile:
     cmake --build --preset myprofile --target install
 
+cmake-build-target:
+    cmake-build-target-fuzzy.sh $CUBRID_BUILD_DIR
+
 clear-cache:
     @gum confirm
     /bin/rm -rf $CUBRID_BUILD_DIR/CMakeCache.txt $CUBRID_BUILD_DIR/CMakeFiles

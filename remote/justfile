@@ -2,37 +2,37 @@ _default:
     @just --choose
 
 ssh216:
-    TERM=xterm ssh -Y cubrid@192.168.2.216
+    TERM=xterm ssh -c aes128-ctr -Y cubrid@192.168.2.216
 
 ssh217:
-    TERM=xterm ssh -Y cubrid@192.168.2.217
+    TERM=xterm ssh -c aes128-ctr -Y cubrid@192.168.2.217
 
 ssh218:
-    TERM=xterm ssh -Y cubrid@192.168.2.218
+    TERM=xterm ssh -c aes128-ctr -Y cubrid@192.168.2.218
 
 server-dev2:
-    TERM=xterm ssh -Y vimkim@192.168.2.252
+    TERM=xterm ssh -c aes128-ctr -Y vimkim@192.168.2.252
 
 dev2-container-1:
-    ssh -Y vimkim@192.168.2.120
+    ssh -c aes128-ctr -Y vimkim@192.168.2.120
 
 dev2-container-2:
-    ssh -Y vimkim@192.168.2.121
+    ssh -c aes128-ctr -Y vimkim@192.168.2.121
 
 dev2-container-3:
-    ssh -Y vimkim@192.168.2.122
+    ssh -c aes128-ctr -Y vimkim@192.168.2.122
 
 dev2-container-4:
-    ssh -Y vimkim@192.168.2.123
+    ssh -c aes128-ctr -Y vimkim@192.168.2.123
 
 server-dev3:
-    TERM=xterm ssh -Y dhkim@192.168.2.253
+    TERM=xterm ssh -c aes128-ctr -Y dhkim@192.168.2.253
 
 server-container-rocky8:
-    ssh -Y vimkim@192.168.2.253 -p 2222
+    ssh -c aes128-ctr -Y vimkim@192.168.2.253 -p 2222
 
 server-container-arch:
-    ssh -Y vimkim@192.168.2.253 -p 2223
+    ssh -c aes128-ctr -Y vimkim@192.168.2.253 -p 2223
 
 vpn:
     sudo openfortivpn cubrid1.fortiddns.com:10443 --username=

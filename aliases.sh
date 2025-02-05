@@ -14,7 +14,7 @@ alias socuali='source ~/my-cubrid/aliases.sh'
 alias cu_dir='cd $ISSUE_DIR'
 alias cud='cu_dir'
 
-alias jcub='just --justfile $MY_CUBRID/stow/cubrid/justfile'
+alias jcub='print -z "$(just.sh -j $MY_CUBRID/stow/cubrid/justfile -d .)"'
 alias cubstow='stow --dir=$MY_CUBRID/stow --target=. cubrid'
 
 # alias cu_build='. ~/my-cubrid/build.sh'

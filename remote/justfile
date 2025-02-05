@@ -10,7 +10,7 @@ ssh217:
 ssh218:
     TERM=xterm ssh -c aes128-ctr -Y cubrid@192.168.2.218
 
-server-dev2:
+dev2-server:
     TERM=xterm ssh -c aes128-ctr -Y vimkim@192.168.2.252
 
 dev2-container-1:
@@ -25,13 +25,13 @@ dev2-container-3:
 dev2-container-4:
     ssh -c aes128-ctr -Y vimkim@192.168.2.123
 
-server-dev3:
+dev3-server:
     TERM=xterm ssh -c aes128-ctr -Y dhkim@192.168.2.253
 
-server-container-rocky8:
+dev3-container-rocky8:
     ssh -c aes128-ctr -Y vimkim@192.168.2.253 -p 2222
 
-server-container-arch:
+dev3-container-arch:
     ssh -c aes128-ctr -Y vimkim@192.168.2.253 -p 2223
 
 vpn:

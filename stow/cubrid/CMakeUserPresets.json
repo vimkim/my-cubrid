@@ -51,17 +51,15 @@
     },
     {
       "name": "myprofile",
-      "generator": "Ninja",
-      "binaryDir": "${sourceDir}/build_preset_myprofile",
+      "inherits": "user_default",
       "cacheVariables": {
         "CMAKE_EXPORT_COMPILE_COMMANDS": "ON",
         "CMAKE_BUILD_TYPE": "Profile",
         "WITH_CCI": "true",
-        "CMAKE_INSTALL_PREFIX": "install.out/myprofile",
         "CMAKE_C_COMPILER_LAUNCHER": "ccache",
         "CMAKE_CXX_COMPILER_LAUNCHER": "ccache",
-        "CMAKE_C_FLAGS_DEBUG": "-O0 -ggdb3",
-        "CMAKE_CXX_FLAGS_DEBUG": "-O0 -ggdb3"
+        "CMAKE_C_FLAGS": "-O0 -pg -ggdb3 -w -Wno-error -Wno-int-conversion -Wno-incompatible-pointer-types -Wno-implicit-function-declaration",
+        "CMAKE_CXX_FLAGS": "-O0 -pg -ggdb3 -w -Wno-error"
       }
     }
   ],

@@ -15,6 +15,12 @@ alias vr := vector-run
 alias brt := build-recreate-test
 alias t := test
 
+server-start-demodb:
+    cubrid server start demodb
+
+server-start-testdb:
+    cubrid server start testdb
+
 _gum-confirm-no:
     @# asks, the default is "NO"
     @gum confirm --default=false
@@ -264,3 +270,9 @@ asdf-java-global:
 
 asdf-java-local:
     asdf local java $(asdf list java | fzf)
+
+uftrace-dump:
+    uftrace dump --chrome > "uftrace-$(date +%Y%m%d_%H%M%S).json"
+
+uftrace-serve-trace:
+    trace_processor --httpd ./uftrace-*.json

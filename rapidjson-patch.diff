@@ -11,7 +11,6 @@ index 3e4c5d459..c92e1003a 100644
 -  URL_HASH             ${WITH_RAPIDJSON_URL_HASH}
 +  GIT_REPOSITORY "https://github.com/tencent/rapidjson.git"
 +  GIT_TAG "d621dc9e9c77f81e5c8a35b8dcc16dcd63351321"  # Replace with your desired commit hash
-+  GIT_SHALLOW TRUE
 +  GIT_PROGRESS TRUE
    LOG_CONFIGURE        TRUE
    LOG_BUILD            TRUE

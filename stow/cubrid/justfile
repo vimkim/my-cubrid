@@ -238,7 +238,8 @@ build-recreate-vector-run: build recreate vector-run
 
 distance:
     csql -u dba testdb -S -c "SELECT L2_DISTANCE('[1, 2, 3]', '[2, 3, 4]') FROM dual;" # L2_DISTANCE의 인자로 들어왔을 때는 무조건 vector로
-    csql -u dba testdb -S -c "SELECT L2_DISTANCE('[1, 2, 3]', vec) FROM vector_table;"
+    # csql -u dba testdb -S -c "SELECT L2_DISTANCE('[1, 2, 3]', vec) FROM vector_table;"
+    $MY_CUBRID/30-survey-distance/vector-distance.sh
 
 build-recreate-distance: build recreate distance
 

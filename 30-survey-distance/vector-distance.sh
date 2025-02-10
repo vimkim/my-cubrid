@@ -2,7 +2,6 @@
 
 set -euo pipefail
 
-
 # Database connection parameters
 DB_USER="dba"
 DB_NAME="testdb"
@@ -12,7 +11,7 @@ csql -u $DB_USER $DB_NAME -S -c "
     DROP TABLE IF EXISTS vector_table;
     CREATE TABLE vector_table (
         id INT PRIMARY KEY,
-        vec VARCHAR(1024)
+        vec VECTOR
     );
     
     INSERT INTO vector_table VALUES 
@@ -50,6 +49,23 @@ csql -u $DB_USER $DB_NAME -S -c "
         id,
         vec,
         L2_DISTANCE(vec, vec) AS distance 
+    FROM vector_table 
+    ORDER BY distance;"
+
+csql -u $DB_USER $DB_NAME -S -c "
+    SELECT 
+        id,
+        vec,
+        L2_DISTANCE(null, vec) AS distance 
+    FROM vector_table 
+    ORDER BY distance;"
+
+csql -u $DB_USER $DB_NAME -S -c "
+    SELECT 
+        id,
+        vec,
+        L2_DISTANCE('[1, 2, 3]', null) AS distance,
+        L2_DISTANCE(null, '[1, 2, 3]') AS distance2
     FROM vector_table 
     ORDER BY distance;"
 

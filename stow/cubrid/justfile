@@ -47,6 +47,14 @@ stow-delete:
     stow --dir=$MY_CUBRID/stow --target=. -D cubrid
     stow --dir=$MY_CUBRID/stow --target=. -D gdb
 
+# install
+
+install-dir-remove: _gum-confirm-no
+    /bin/rm -rf $CUBRID
+
+database-remove: _gum-confirm-no
+    /bin/rm -rf $CUBRID_DATABASES
+
 # CMake
 
 gcc-8-fail:
@@ -90,6 +98,9 @@ cmake-build-target:
 clear-cache:
     @gum confirm
     /bin/rm -rf $CUBRID_BUILD_DIR/CMakeCache.txt $CUBRID_BUILD_DIR/CMakeFiles
+
+build-target:
+    cmake --build --preset $PRESET_MODE --target help | awk -F': ' '{print $1}' | fzf | xargs -I {} cmake --build --preset $PRESET_MODE --target {}
 
 # CSQL
 
@@ -248,7 +259,9 @@ build-recreate-test: build recreate test
 
 test: test-vector
 
-test-vector: insert-vectors test-vector-select
+build-and-test: build test
+
+test-vector: recreate insert-vectors test-vector-select
 
 test-vector-select:
     ./test-vector-select.sh
@@ -276,3 +289,11 @@ uftrace-dump:
 
 uftrace-serve-trace:
     trace_processor --httpd ./uftrace-*.json
+
+format-dryrun:
+    my-code-style.sh -d
+    just format
+
+format:
+    @gum confirm
+    my-code-style.sh

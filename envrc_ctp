@@ -1,0 +1,7 @@
+export SRCDIR="$HOME/github/vimkim/cubrid/develop"
+export CUBRID="/home/vimkim/.cub/install/cubvec/debug_clang"
+export CUBRID_DATABASES="/home/vimkim/.cub/db/cubvec/debug_clang"
+export PATH="$CUBRID/bin:$PATH"
+export PATH="$(pwd)/CTP/bin:$PATH"
+export LD_LIBRARY_PATH="$CUBRID/cci/lib:$CUBRID/lib:$LD_LIBRARY_PATH"
+

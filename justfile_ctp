@@ -1,0 +1,2 @@
+run:
+    ctp.sh sql --interactive

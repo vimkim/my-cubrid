@@ -1,0 +1,49 @@
+diff --git a/CTP/conf/jdbc.conf b/CTP/conf/jdbc.conf
+index bac64c1..dced652 100644
+--- a/CTP/conf/jdbc.conf
++++ b/CTP/conf/jdbc.conf
+@@ -24,7 +24,7 @@
+ 
+ [common]
+ # Define the location of your testing scenario
+-scenario=${HOME}/cubrid-testcases-private/interface/JDBC/test_jdbc
++scenario=${HOME}/github/vimkim/cubrid-testcases-private/interface/JDBC/test_jdbc
+ 
+ # JDBC cubrid.conf section - a section for cubrid.conf configuration
+ [jdbc/cubrid.conf]
+diff --git a/CTP/conf/medium.conf b/CTP/conf/medium.conf
+index 9b95ef6..7ebcb99 100644
+--- a/CTP/conf/medium.conf
++++ b/CTP/conf/medium.conf
+@@ -72,6 +72,9 @@ lock_timeout=10sec
+ # Allow scenario to change database system parameter
+ test_mode=yes
+ 
++# It needs to CUBRID 11.x over
++create_table_reuseoid=no
++
+ 
+ # SQL cubrid_ha.conf section - a section for ha related configuration
+ [sql/cubrid_ha.conf]
+diff --git a/CTP/conf/sql.conf b/CTP/conf/sql.conf
+index a5eea8b..a914aa3 100644
+--- a/CTP/conf/sql.conf
++++ b/CTP/conf/sql.conf
+@@ -31,6 +31,8 @@
+ # The location of your testing scenario
+ scenario=${HOME}/cubrid-testcases/sql
+ 
++create_table_reuseoid=no
++
+ # Run tests with valgrind (no/yes)
+ enable_memory_leak=no
+ 
+@@ -50,7 +52,7 @@ db_charset=en_US
+ # cubrid_createdb_opts=--db-volume-size=512M --log-volume-size=256M -r
+ 
+ # If test need do make locale or not
+-need_make_locale=yes
++need_make_locale=no
+ 
+ 
+ # SQL cubrid.conf section - a section for cubrid.conf configuration

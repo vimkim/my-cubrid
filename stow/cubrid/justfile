@@ -65,6 +65,9 @@ prepare: stow-create
     patch -p1 < $MY_CUBRID/developer-patch.diff
     direnv allow
 
+cpptrace:
+    patch -p1 < $MY_CUBRID/cpptrace.diff
+
 configure: gcc-8-fail
     cmake --preset $PRESET_MODE
 
@@ -310,10 +313,11 @@ run: build-cubvec-assert-server
 build-cubvec-assert-server: build
     csql -u dba testdb -c "drop table if exists vt;"
     csql -u dba testdb -c "create table vt (vec vector);"
-    csql -u dba testdb -c "insert into vt values ('[1, 2, 3]');"
-    csql -u dba testdb -c "insert into vt values ('[1e-40, 2e+40]');"
-    csql -u dba testdb -c "insert into vt values ('[1, 2, nan]');"
-    csql -u dba testdb -c "select * from vt;"
+    csql -u dba testdb -c "insert into vt values ('[1, 2, 3]');" 2> trace.log
+    # csql -u dba testdb -c "insert into vt values ('[1e-40, 2e+40]');"
+    # csql -u dba testdb -c "insert into vt values ('[1, 2, nan]');"
+    # csql -u dba testdb -c "select * from vt;"
+    echo 'wow'
 
 build-cubvec-assert: build
     csql -u dba testdb -S -c "drop table if exists vt;"

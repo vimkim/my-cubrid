@@ -1,0 +1,20 @@
+diff --git a/CMakeLists.txt b/CMakeLists.txt
+index 11ea3c4f2..0aa769809 100644
+--- a/CMakeLists.txt
++++ b/CMakeLists.txt
+@@ -312,6 +312,15 @@ set(ESQL_LEXER_OUTPUT ${CMAKE_BINARY_DIR}/esql_lexer.c)
+ message("Including Third Party Libraries")
+ add_subdirectory(3rdparty)
+ 
++include(FetchContent)
++FetchContent_Declare(
++  cpptrace
++  GIT_REPOSITORY https://github.com/jeremy-rifkin/cpptrace.git
++  GIT_TAG        v0.7.5 # <HASH or TAG>
++)
++FetchContent_MakeAvailable(cpptrace)
++link_libraries(cpptrace::cpptrace)
++
+ # CSQL FLEX/BISON targets
+ # replace old bison directives with new ones
+ # use add_custom_command because we want to regenerate csql_grammar.yy

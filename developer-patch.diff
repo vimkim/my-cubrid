@@ -25,7 +25,7 @@ index 3ec5cf7d2..aa1bb4b14 100644
      externalproject_add(${LIBTBB_TARGET}
        URL                  ${WITH_LIBTBB_URL}
 diff --git a/CMakeLists.txt b/CMakeLists.txt
-index 0aa769809..1b3b084ad 100644
+index 6e6be0adc..dd3fb6490 100644
 --- a/CMakeLists.txt
 +++ b/CMakeLists.txt
 @@ -216,7 +216,7 @@ if(UNIX)
@@ -35,17 +35,18 @@ index 0aa769809..1b3b084ad 100644
 -    set(CMAKE_C_COMMON_FLAGS "-ggdb -fno-omit-frame-pointer")
 +    set(CMAKE_C_COMMON_FLAGS "-ggdb3 -fno-omit-frame-pointer")
      # C++ flags for both debug and release build
-     set(CMAKE_CXX_COMMON_FLAGS "${CMAKE_C_COMMON_FLAGS} -std=c++17")
+     set(CMAKE_CXX_COMMON_FLAGS "${CMAKE_C_COMMON_FLAGS} -std=c++17 -fopenmp -lopenblas -llapack")
  
-@@ -254,7 +254,6 @@ if(UNIX)
+@@ -254,7 +254,7 @@ if(UNIX)
      set(CMAKE_MODULE_LINKER_FLAGS "${CMAKE_MODULE_LINKER_FLAGS} -Wl,--hash-style=both -static-libstdc++")
  
    else(CMAKE_COMPILER_IS_GNUCC)
 -    message(FATAL_ERROR "We currently do not support ${CMAKE_CXX_COMPILER_ID} compiler")
++    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++17 -fopenmp -lopenblas -llapack")
    endif(CMAKE_COMPILER_IS_GNUCC)
  else(UNIX)
    # turn off LinkIncremental option for release build
-@@ -337,7 +336,7 @@ set(CSQL_GRAMMAR_INPUT ${CMAKE_CURRENT_BINARY_DIR}/csql_grammar.yy)
+@@ -328,7 +328,7 @@ set(CSQL_GRAMMAR_INPUT ${CMAKE_CURRENT_BINARY_DIR}/csql_grammar.yy)
  # run to create new outputs
  
  bison_target(csql_grammar ${CSQL_GRAMMAR_INPUT} ${CSQL_GRAMMAR_OUTPUT}

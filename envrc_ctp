@@ -1,7 +1,10 @@
-export SRCDIR="$HOME/github/vimkim/cubrid/develop"
-export CUBRID="/home/vimkim/.cub/install/cubvec/debug_clang"
-export CUBRID_DATABASES="/home/vimkim/.cub/db/cubvec/debug_clang"
+PRESET_MODE=debug_clang
+CURRENT_DIR=47-vector-ctp-null
+export CUBRID="$HOME/.cub/install/$CURRENT_DIR/$PRESET_MODE"
+export CUBRID_DATABASES="$HOME/.cub/db/$CURRENT_DIR/$PRESET_MODE"
+export CUBRID_BUILD_DIR="$(pwd)/build_preset_$PRESET_MODE"
 export PATH="$CUBRID/bin:$PATH"
-export PATH="$(pwd)/CTP/bin:$PATH"
-export LD_LIBRARY_PATH="$CUBRID/cci/lib:$CUBRID/lib:$LD_LIBRARY_PATH"
+export LD_LIBRARY_PATH="$CUBRID/cci/lib:$CUBRID/lib:$HOME/CUB3LIB/lib:/usr/local/lib:$LD_LIBRARY_PATH"
+export CUBRID_BUILD_DIR="$(pwd)/build_preset_$PRESET_MODE"
 
+export PATH="$(pwd)/CTP/bin:$PATH"

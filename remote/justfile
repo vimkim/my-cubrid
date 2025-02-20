@@ -2,19 +2,19 @@ _default:
     @just --choose
 
 ssh216:
-    TERM=xterm ssh -Y cubrid@192.168.2.216
+    LANG=en_US.utf8 TERM=xterm ssh -Y cubrid@192.168.2.216
 
 ssh217:
-    TERM=xterm ssh -Y cubrid@192.168.2.217
+    LANG=en_US.utf8 TERM=xterm ssh -Y cubrid@192.168.2.217
 
 ssh218:
-    TERM=xterm ssh -Y cubrid@192.168.2.218
+    LANG=en_US.utf8 TERM=xterm ssh -Y cubrid@192.168.2.218
 
 dev2-server:
-    TERM=xterm ssh -Y vimkim@192.168.2.252
+    LANG=en_US.utf8 TERM=xterm ssh -Y vimkim@192.168.2.252
 
 dev2-container-1:
-    ssh -Y vimkim@192.168.2.120
+    LANG=en_US.utf8 ssh -Y vimkim@192.168.2.120
 
 dev2-container-2:
     ssh -Y vimkim@192.168.2.121
@@ -26,10 +26,10 @@ dev2-container-4:
     ssh -Y dhkim@192.168.2.123
 
 dev3-server:
-    TERM=xterm ssh -Y dhkim@192.168.2.253
+    LANG=en_US.utf8 TERM=xterm ssh -Y dhkim@192.168.2.253
 
 dev3-container-rocky8:
-    ssh -Y vimkim@192.168.2.253 -p 2222
+    LANG=en_US.utf8 ssh -Y vimkim@192.168.2.253 -p 2222
 
 dev3-container-arch:
     ssh -Y vimkim@192.168.2.253 -p 2223

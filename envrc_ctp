@@ -1,5 +1,5 @@
 PRESET_MODE=debug_clang
-CURRENT_DIR=47-vector-ctp-null
+CURRENT_DIR=30-survey-distance
 export CUBRID="$HOME/.cub/install/$CURRENT_DIR/$PRESET_MODE"
 export CUBRID_DATABASES="$HOME/.cub/db/$CURRENT_DIR/$PRESET_MODE"
 export CUBRID_BUILD_DIR="$(pwd)/build_preset_$PRESET_MODE"
@@ -8,3 +8,4 @@ export LD_LIBRARY_PATH="$CUBRID/cci/lib:$CUBRID/lib:$HOME/CUB3LIB/lib:/usr/local
 export CUBRID_BUILD_DIR="$(pwd)/build_preset_$PRESET_MODE"
 
 export PATH="$(pwd)/CTP/bin:$PATH"
+export CTP_HOME="$(pwd)/CTP"

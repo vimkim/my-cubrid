@@ -7,7 +7,7 @@ vim.api.nvim_create_autocmd({ "FileType" }, {
 
 -- Set tab settings specifically for C and C++ files
 vim.api.nvim_create_autocmd("FileType", {
-	pattern = { "c", "cpp", "h", "hpp", "cc", "hh" },
+	pattern = { "c", "cpp", "h", "hpp", "cc", "hh", "y", "l" },
 	callback = function()
 		vim.bo.cindent = true
 		vim.bo.indentexpr = ""

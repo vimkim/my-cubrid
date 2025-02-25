@@ -18,8 +18,20 @@ alias t := test
 server-start-demodb:
     cubrid server start demodb
 
+server-restart-demodb:
+    cubrid server restart demodb
+
+server-stop-demodb:
+    cubrid server stop demodb
+
 server-start-testdb:
-    cubrid server start testdb
+    cubrid server start testdb || true
+
+server-restart-testdb:
+    cubrid server restart testdb
+
+server-stop-testdb:
+    cubrid server stop testdb
 
 _gum-confirm-no:
     @# asks, the default is "NO"
@@ -237,20 +249,6 @@ recreate-vector-run: recreate vector-run
 
 build-recreate-vector-run: build recreate vector-run
 
-cubvec-30-l2-distance: cubvec-30-simple
-    # csql -u dba testdb -S -c "SELECT L2_DISTANCE('[1, 2, 3]', vec) FROM vector_table;"
-    $MY_CUBRID/30-survey-distance/vector-distance.sh
-
-cubvec-30-simple:
-    # L2_DISTANCE의 인자로 들어왔을 때는 무조건 vector로
-    csql -u dba testdb -S -c "SELECT L2_DISTANCE('[1, 2, 3]', '[2, 3, 4]') FROM dual;"
-
-build-test-30: build cubvec-30-l2-distance
-
-build-test-30-simple: build cubvec-30-simple
-
-build-recreate-distance: build recreate cubvec-30-l2-distance
-
 # git
 git-pull-origin-head:
     git pull origin $(git rev-parse --abbrev-ref HEAD)
@@ -307,10 +305,7 @@ format:
     @gum confirm
     my-code-style.sh
 
-# run: build-test-30-simple
-run: build-cubvec-assert-server
-
-build-cubvec-assert-server: build
+memleak-build-cubvec-assert-server: build server-start-testdb
     csql -u dba testdb -c "drop table if exists vt;"
     csql -u dba testdb -c "create table vt (vec vector);"
     csql -u dba testdb -c "insert into vt values ('[1, 2, 3]');" 2> trace.log
@@ -319,7 +314,77 @@ build-cubvec-assert-server: build
     # csql -u dba testdb -c "select * from vt;"
     echo 'wow'
 
-build-cubvec-assert: build
+memleak-build-cubvec-assert: build
     csql -u dba testdb -S -c "drop table if exists vt;"
     csql -u dba testdb -S -c "create table vt (vec vector);"
     csql -u dba testdb -S -c "insert into vt values ('[1, 2, 3]');"
+
+cubvec-30-l2-distance: cubvec-30-simple-sa
+    # csql -u dba testdb -S -c "SELECT L2_DISTANCE('[1, 2, 3]', vec) FROM vector_table;"
+    $MY_CUBRID/30-survey-distance/vector-distance.sh
+
+cubvec-30-simple-cs:
+    csql -u dba testdb -c "SELECT L2_DISTANCE('[1, 2, 3]', '[2, 3, 4]') FROM dual;"
+
+cubvec-30-simple-sa:
+    csql -u dba testdb -S -c "SELECT L2_DISTANCE('[1, 2, 3]', '[2, 3, 4]') FROM dual;"
+
+build-test-30: build server-restart-testdb cubvec-30-l2-distance
+
+build-test-30-simple-cs: build server-restart-testdb cubvec-30-simple-cs
+
+build-test-30-simple-sa: build cubvec-30-simple-sa
+
+build-recreate-distance: build recreate cubvec-30-l2-distance
+
+run-cs: build-test-30-simple-cs
+
+run-sa: cubvec-30-simple-sa
+
+build-run-sa: build run-sa
+
+debug-dual-cubvec: build
+    csql -u dba testdb -S -c "drop table if exists vt;"
+    csql -u dba testdb -S -c "create table vt (vec vector);"
+    csql -u dba testdb -S -c "insert into vt values ('[1, 2, 3]');"
+    csql -u dba testdb -S -c "insert into vt values ('[2, 3, 4]');"
+    csql -u dba testdb -S -c "SELECT L2_DISTANCE(vec, '[5, 5, 5]') from vt;"
+    csql -u dba testdb -S -c "SELECT L2_DISTANCE('[5, 5, 5]', vec) from vt;"
+    csql -u dba testdb -S -c "SELECT L2_DISTANCE('[5, 5, 5]', '[6, 6, 6]') from vt;"
+
+test-cs:
+
+precommit: build test-cs
+
+build-run-36: build run-36
+
+run-36:
+    csql -u dba testdb -S -c " \
+    select L2_DISTANCE('[1, 2]', '[2, 3]');"
+
+build-run-41: build run-41
+
+run-41-old:
+    csql -u dba testdb -S -c " \
+    drop table if exists vt; \
+    create table vt (vec vector); \
+    insert into vt values ('[1.5, 2, 3e10]'); \
+    SELECT vec from vt; \
+    "
+
+run-41:
+    csql -u dba testdb -S -c " \
+    select VECTOR_DISTANCE('[1, 2]', '[2, 3]', EUCLIDEAN); \
+    select L2_DISTANCE('[1, 2]', '[2, 3]');"
+
+build-run-47: build run-47
+
+run-47:
+    csql -u dba testdb -S -c "drop table if exists vt;"
+    csql -u dba testdb -S -c "create table vt (vec vector);"
+    csql -u dba testdb -S -c "insert into vt values ('[1.5, 2, 3e10]');"
+    csql -u dba testdb -S -c "SELECT cast(vec as varchar) from vt;"
+
+build-run: build run
+
+run: run-41

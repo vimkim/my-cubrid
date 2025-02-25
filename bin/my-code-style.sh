@@ -18,6 +18,7 @@ if [[ "$DRY_RUN" == true ]]; then
 else
     for f in $FILES; do
         echo "for file $f"
-        .github/workflows/codestyle.sh "${f}"
+        # .github/workflows/codestyle.sh "${f}"
+        format-cubrid.sh "${f}"
     done
 fi

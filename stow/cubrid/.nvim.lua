@@ -18,6 +18,18 @@ vim.api.nvim_create_autocmd("FileType", {
 	end,
 })
 
+vim.api.nvim_create_autocmd("FileType", {
+	pattern = { "sh" },
+	callback = function()
+		vim.bo.cindent = true
+		vim.bo.indentexpr = ""
+		vim.bo.cinoptions = "j1,f0,^-2,{2,>4,:4,n-2,(0,t0"
+		vim.bo.shiftwidth = 2
+		vim.bo.tabstop = 2
+		vim.bo.expandtab = true
+	end,
+})
+
 vim.filetype.add({
 	extension = { i = "c" },
 })

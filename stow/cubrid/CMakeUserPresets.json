@@ -50,16 +50,17 @@
       }
     },
     {
-      "name": "myprofile",
-      "inherits": "user_default",
+      "name": "profile_clang",
+      "inherits": "debug_clang",
       "cacheVariables": {
         "CMAKE_EXPORT_COMPILE_COMMANDS": "ON",
-        "CMAKE_BUILD_TYPE": "Profile",
         "WITH_CCI": "true",
         "CMAKE_C_COMPILER_LAUNCHER": "ccache",
         "CMAKE_CXX_COMPILER_LAUNCHER": "ccache",
-        "CMAKE_C_FLAGS": "-O0 -pg -ggdb3 -w -Wno-error -Wno-int-conversion -Wno-incompatible-pointer-types -Wno-implicit-function-declaration",
-        "CMAKE_CXX_FLAGS": "-O0 -pg -ggdb3 -w -Wno-error"
+        "CMAKE_C_FLAGS": "-O0 -pg -ggdb -fdebug-macro -w -flto=thin -fno-inline -Xclang -fno-validate-pch -Xclang -fno-pch-timestamp -Wno-everything -Wno-non-pod-varargs -Wno-c++11-narrowing -Wno-int-conversion -Wno-implicit-function-declaration -w",
+        "CMAKE_CXX_FLAGS": "-O0 -pg -ggdb -fdebug-macro -w -flto=thin -fno-inline -Xclang -fno-validate-pch -Xclang -fno-pch-timestamp -Wno-everything -Wno-non-pod-varargs -Wno-c++11-narrowing -Wno-int-conversion -Wno-implicit-function-declaration -w",
+        "CMAKE_C_FLAGS_DEBUG": "-O0 -ggdb -w",
+        "CMAKE_CXX_FLAGS_DEBUG": "-O0 -ggdb -w"
       }
     }
   ],
@@ -73,8 +74,8 @@
       "configurePreset": "debug_clang"
     },
     {
-      "name": "myprofile",
-      "configurePreset": "myprofile"
+      "name": "profile_clang",
+      "configurePreset": "profile_clang"
     }
   ]
 }

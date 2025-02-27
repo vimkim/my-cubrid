@@ -362,7 +362,7 @@ run-36:
     csql -u dba testdb -S -c " \
     select L2_DISTANCE('[1, 2]', '[2, 3]');"
 
-build-run-41: build run-41
+build-run-41: build run-41-vector-distance
 
 run-41-old:
     csql -u dba testdb -S -c " \
@@ -372,7 +372,7 @@ run-41-old:
     SELECT vec from vt; \
     "
 
-run-41:
+run-41-vector-distance:
     csql -u dba testdb -S -c " \
     select VECTOR_DISTANCE('[1, 2]', '[2, 3]', EUCLIDEAN); \
     select L2_DISTANCE('[1, 2]', '[2, 3]');"
@@ -387,4 +387,11 @@ run-47:
 
 build-run: build run
 
-run: run-41
+run-42:
+    csql -u dba testdb -S -c " \
+    select L1_DISTANCE('[1, 2, 9]', '[2, 3, 0]');"
+
+run:
+    just run-"$CURRENT_DIR"
+
+build-run-42: build run-42

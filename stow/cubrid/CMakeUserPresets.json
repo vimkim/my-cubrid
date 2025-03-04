@@ -62,6 +62,21 @@
         "CMAKE_C_FLAGS_DEBUG": "-O0 -ggdb -w",
         "CMAKE_CXX_FLAGS_DEBUG": "-O0 -ggdb -w"
       }
+    },
+    {
+      "name": "profile_gcc",
+      "inherits": "user_default",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Debug",
+        "CMAKE_C_COMPILER_LAUNCHER": "ccache",
+        "CMAKE_CXX_COMPILER_LAUNCHER": "ccache",
+        "CMAKE_C_FLAGS_DEBUG": "-O0 -pg -ggdb3 -w -Wno-error -Wno-int-conversion -Wno-incompatible-pointer-types -Wno-implicit-function-declaration",
+        "CMAKE_CXX_FLAGS_DEBUG": "-O0 -pg -ggdb3 -w -Wno-error",
+        "CMAKE_C_COMPILER": "gcc",
+        "CMAKE_CXX_COMPILER": "g++",
+        "CMAKE_CXX_STANDARD": "17",
+        "CMAKE_CXX_STANDARD_REQUIRED": "ON"
+      }
     }
   ],
   "buildPresets": [
@@ -76,6 +91,10 @@
     {
       "name": "profile_clang",
       "configurePreset": "profile_clang"
+    },
+    {
+      "name": "profile_gcc",
+      "configurePreset": "profile_gcc"
     }
   ]
 }

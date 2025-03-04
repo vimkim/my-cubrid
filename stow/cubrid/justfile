@@ -395,3 +395,17 @@ run:
     just run-"$CURRENT_DIR"
 
 build-run-42: build run-42
+
+run-23-create-vector-index:
+    csql -u dba testdb -S -c " \
+    drop if exists tbl; \
+    create table tbl (b int);"
+    csql -u dba testdb -S -c "create vector index idx on tbl (b);"
+
+run-44-inner-product:
+    csql -u dba testdb -S -c " \
+    select INNER_PRODUCT('[1, 2, 3]', '[2, 3, 5]');"
+
+run-43-cosine-distance:
+    csql -u dba testdb -S -c " \
+    select COSINE_DISTANCE('[1, 2, 3]', '[2, 3, 5]');"

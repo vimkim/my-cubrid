@@ -25,6 +25,12 @@ dev2-container-3:
 dev2-container-4:
     ssh -Y dhkim@192.168.2.123
 
+dev2-fedora-systemd-1:
+    LANG=en_US.utf8 ssh -Y vimkim-fedora-1@192.168.4.100
+
+dev2-rocky-systemd-1:
+    LANG=en_US.utf8 ssh -Y vimkim-r8@192.168.4.108
+
 dev3-server:
     LANG=en_US.utf8 TERM=xterm ssh -Y dhkim@192.168.2.253
 

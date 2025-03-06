@@ -385,18 +385,53 @@ run-47:
     csql -u dba testdb -S -c "insert into vt values ('[1.5, 2, 3e10]');"
     csql -u dba testdb -S -c "SELECT cast(vec as varchar) from vt;"
 
-build-run: build run
+build-run-42: build run-42
 
 run-42:
     csql -u dba testdb -S -c " \
     select L1_DISTANCE('[1, 2, 9]', '[2, 3, 0]');"
 
+build-run: build run
+
 run:
     just run-"$CURRENT_DIR"
 
-build-run-42: build run-42
+prerun:
+    just prerun-"$CURRENT_DIR"
+
+build-given-when-then: build given when then
+
+given-when-then: given when then
+
+given:
+    just given-"$CURRENT_DIR"
+
+when:
+    just when-"$CURRENT_DIR"
+
+then:
+    just then-"$CURRENT_DIR"
+
+given-23-create-vector-index:
+    csql -u dba testdb -S -c " \
+    drop if exists tbl; \
+    create table tbl (b int);"
+
+when-23-create-vector-index:
+    csql -u dba testdb -S -c "create vector index idx on tbl (b);"
+
+then-23-create-vector-index:
+    csql -u dba testdb -S -c "show index from tbl;"
+
+prerun-23-create-vector-index:
+    csql -u dba testdb -S -c " \
+    drop if exists tbl; \
+    create table tbl (b int);"
 
 run-23-create-vector-index:
+    csql -u dba testdb -S -c "create vector index idx on tbl (b);"
+
+run-23-create-vector-index-check:
     csql -u dba testdb -S -c " \
     drop if exists tbl; \
     create table tbl (b int);"

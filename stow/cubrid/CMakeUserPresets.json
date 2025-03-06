@@ -53,6 +53,8 @@
       "name": "profile_clang",
       "inherits": "debug_clang",
       "cacheVariables": {
+        "CUBVEC_TEAM_BUILD": "ON",
+        "VIMKIM_BUILD": "ON",
         "CMAKE_EXPORT_COMPILE_COMMANDS": "ON",
         "WITH_CCI": "true",
         "CMAKE_C_COMPILER_LAUNCHER": "ccache",

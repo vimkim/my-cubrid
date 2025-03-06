@@ -6,7 +6,24 @@
       "type": "cppdbg",
       "request": "launch",
       "program": "/proc/${command:pickProcess}/exe",
-      "miDebuggerServerAddress": "localhost:9999",
+      "miDebuggerServerAddress": "localhost:9000",
+      "miDebuggerPath": "gdb",
+      "stopAtEntry": true,
+      "cwd": "${workspaceFolder}",
+      "setupCommands": [
+        {
+          "description": "Enable pretty printing",
+          "text": "-enable-pretty-printing",
+          "ignoreFailures": true
+        }
+      ]
+    },
+    {
+      "name": "gdbserver on dev2-container-1",
+      "type": "cppdbg",
+      "request": "launch",
+      "program": "/proc/${command:pickProcess}/exe",
+      "miDebuggerServerAddress": "192.168.2.120:9000",
       "miDebuggerPath": "gdb",
       "stopAtEntry": true,
       "cwd": "${workspaceFolder}",
@@ -229,6 +246,29 @@
       ]
     },
     {
+      "name": "(gdb) csql testdb vector index idx",
+      "type": "cppdbg",
+      "request": "launch",
+      "program": "${env:CUBRID}/bin/csql",
+      "args": ["-u", "dba", "testdb", "-S", "-c", "\"create vector index idx on tbl (b);\""],
+      "stopAtEntry": true,
+      "cwd": "${workspaceFolder}",
+      "environment": [],
+      "externalConsole": false,
+      "MIMode": "gdb",
+      "logging": {
+        "engineLogging": true,
+        "trace": true
+      },
+      "setupCommands": [
+        {
+          "description": "gdb에 자동 서식 지정 사용",
+          "text": "-enable-pretty-printing",
+          "ignoreFailures": true
+        }
+      ]
+    },
+    {
       "name": "(gdb) csql 시작",
       "type": "cppdbg",
       "request": "launch",
@@ -239,6 +279,10 @@
       "environment": [],
       "externalConsole": false,
       "MIMode": "gdb",
+      "logging": {
+        "engineLogging": true,
+        "trace": true
+      },
       "setupCommands": [
         {
           "description": "gdb에 자동 서식 지정 사용",

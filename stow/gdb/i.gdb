@@ -20,7 +20,12 @@ start
 del br
 b csql
 continue
+
+# important main breakpoint
+b start_csql
 b pt_compile
+b db_execute_statement
+
 so br
 continue
 

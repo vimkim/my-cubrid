@@ -147,6 +147,9 @@ cgdb-csql-testdb-sa-vector-insert:
 core csql CORE:
     cgdb csql core {{ CORE }}
 
+coredumpctl-core-csql:
+    coredumpctl debug --debugger=cgdb csql
+
 core-delete:
     @gum confirm
     /bin/rm -rf core.*
@@ -411,6 +414,15 @@ when:
 
 then:
     just then-"$CURRENT_DIR"
+
+rr-when:
+    just rr-when-"$CURRENT_DIR"
+
+rr-when-23-create-vector-index:
+    taskset -c 0-7 rr record csql -u dba testdb -S -c "create vector index idx on tbl (b);"
+
+rr-replay:
+    rr replay
 
 given-23-create-vector-index:
     csql -u dba testdb -S -c " \

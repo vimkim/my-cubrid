@@ -14,6 +14,8 @@
       "cacheVariables": {
         "CMAKE_EXPORT_COMPILE_COMMANDS": "ON",
         "CMAKE_INSTALL_PREFIX": "$env{CUBRID}",
+        "CUBVEC_TEAM_BUILD": "ON",
+        "VIMKIM_BUILD": "ON",
         "WITH_CCI": "true"
       }
     },
@@ -66,6 +68,21 @@
       }
     },
     {
+      "name": "release_clang",
+      "inherits": "user_default",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "RelWithDebInfo",
+        "CMAKE_C_COMPILER_LAUNCHER": "ccache",
+        "CMAKE_CXX_COMPILER_LAUNCHER": "ccache",
+        "CMAKE_C_COMPILER": "clang",
+        "CMAKE_CXX_COMPILER": "clang++",
+        "CMAKE_CXX_STANDARD": "17",
+        "CMAKE_CXX_STANDARD_REQUIRED": "ON",
+        "CMAKE_C_FLAGS": "-w -flto=thin -fno-inline -Xclang -fno-validate-pch -Xclang -fno-pch-timestamp -Wno-everything -Wno-non-pod-varargs -Wno-c++11-narrowing -Wno-int-conversion -Wno-implicit-function-declaration -w",
+        "CMAKE_CXX_FLAGS": "-w -flto=thin -fno-inline -Xclang -fno-validate-pch -Xclang -fno-pch-timestamp -Wno-everything -Wno-non-pod-varargs -Wno-c++11-narrowing -Wno-int-conversion -Wno-implicit-function-declaration -w"
+      }
+    },
+    {
       "name": "profile_gcc",
       "inherits": "user_default",
       "cacheVariables": {
@@ -93,6 +110,10 @@
     {
       "name": "profile_clang",
       "configurePreset": "profile_clang"
+    },
+    {
+      "name": "release_clang",
+      "configurePreset": "release_clang"
     },
     {
       "name": "profile_gcc",

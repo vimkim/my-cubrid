@@ -424,10 +424,12 @@ rr-when-23-create-vector-index:
 rr-replay:
     rr replay
 
+given-when-then-23-2: given-23-create-vector-index-2 when-23-create-vector-index-2 then-23-create-vector-index-2
+
 given-23-create-vector-index:
     csql -u dba testdb -S -c " \
     drop if exists tbl; \
-    create table tbl (b int);"
+    create table tbl (a int, b vector);"
 
 when-23-create-vector-index:
     csql -u dba testdb -S -c "create vector index idx on tbl (b);"
@@ -435,13 +437,25 @@ when-23-create-vector-index:
 then-23-create-vector-index:
     csql -u dba testdb -S -c "show index from tbl;"
 
+given-23-create-vector-index-2:
+    csql -u dba testdb -S -c " \
+    drop if exists items; \
+    create table items (a int, embedding vector);"
+
+when-23-create-vector-index-2:
+    csql -u dba testdb -S -c "CREATE VECTOR INDEX embedding_hnsw_idx \
+    ON items (embedding) \
+    WITH (M = 16, ef_construction = 64);"
+
+then-23-create-vector-index-2:
+    csql -u dba testdb -S -c "show index from items;"
+
 prerun-23-create-vector-index:
     csql -u dba testdb -S -c " \
     drop if exists tbl; \
     create table tbl (b int);"
 
-run-23-create-vector-index:
-    csql -u dba testdb -S -c "create vector index idx on tbl (b);"
+run-23-create-vector-index: then-23-create-vector-index
 
 run-23-create-vector-index-check:
     csql -u dba testdb -S -c " \

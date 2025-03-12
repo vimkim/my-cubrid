@@ -26,8 +26,10 @@
         "CMAKE_BUILD_TYPE": "Debug",
         "CMAKE_C_COMPILER_LAUNCHER": "ccache",
         "CMAKE_CXX_COMPILER_LAUNCHER": "ccache",
-        "CMAKE_C_FLAGS_DEBUG": "-O0 -ggdb3 -w -Wno-error -Wno-int-conversion -Wno-incompatible-pointer-types -Wno-implicit-function-declaration",
-        "CMAKE_CXX_FLAGS_DEBUG": "-O0 -ggdb3 -w -Wno-error",
+        "CMAKE_C_FLAGS": "-fdiagnostics-color=always",
+        "CMAKE_CXX_FLAGS": "-fdiagnostics-color=always",
+        "CMAKE_C_FLAGS_DEBUG": "-O0 -ggdb3 -Wno-int-conversion -Wno-incompatible-pointer-types -Wno-implicit-function-declaration",
+        "CMAKE_CXX_FLAGS_DEBUG": "-O0 -ggdb3",
         "CMAKE_C_COMPILER": "gcc",
         "CMAKE_CXX_COMPILER": "g++",
         "CMAKE_CXX_STANDARD": "17",
@@ -45,10 +47,10 @@
         "CMAKE_CXX_COMPILER": "clang++",
         "CMAKE_CXX_STANDARD": "17",
         "CMAKE_CXX_STANDARD_REQUIRED": "ON",
-        "CMAKE_C_FLAGS": "-O0 -w -flto=thin -fno-inline -Xclang -fno-validate-pch -Xclang -fno-pch-timestamp -Wno-everything -Wno-non-pod-varargs -Wno-c++11-narrowing -Wno-int-conversion -Wno-implicit-function-declaration -w",
-        "CMAKE_CXX_FLAGS": "-O0 -w -flto=thin -fno-inline -Xclang -fno-validate-pch -Xclang -fno-pch-timestamp -Wno-everything -Wno-non-pod-varargs -Wno-c++11-narrowing -Wno-int-conversion -Wno-implicit-function-declaration -w",
-        "CMAKE_C_FLAGS_DEBUG": "-O0 -ggdb3 -w",
-        "CMAKE_CXX_FLAGS_DEBUG": "-O0 -ggdb3 -w"
+        "CMAKE_C_FLAGS": "-fcolor-diagnostics -O0 -flto=thin -fno-inline -Xclang -fno-validate-pch -Xclang -fno-pch-timestamp -Wno-everything -Wno-non-pod-varargs -Wno-c++11-narrowing -Wno-int-conversion -Wno-implicit-function-declaration",
+        "CMAKE_CXX_FLAGS": "-fcolor-diagnostics -O0 -flto=thin -fno-inline -Xclang -fno-validate-pch -Xclang -fno-pch-timestamp -Wno-everything -Wno-non-pod-varargs -Wno-c++11-narrowing -Wno-int-conversion -Wno-implicit-function-declaration",
+        "CMAKE_C_FLAGS_DEBUG": "-O0 -ggdb3",
+        "CMAKE_CXX_FLAGS_DEBUG": "-O0 -ggdb3"
       }
     },
     {
@@ -61,10 +63,10 @@
         "WITH_CCI": "true",
         "CMAKE_C_COMPILER_LAUNCHER": "ccache",
         "CMAKE_CXX_COMPILER_LAUNCHER": "ccache",
-        "CMAKE_C_FLAGS": "-O0 -pg -ggdb -fdebug-macro -w -flto=thin -fno-inline -Xclang -fno-validate-pch -Xclang -fno-pch-timestamp -Wno-everything -Wno-non-pod-varargs -Wno-c++11-narrowing -Wno-int-conversion -Wno-implicit-function-declaration -w",
-        "CMAKE_CXX_FLAGS": "-O0 -pg -ggdb -fdebug-macro -w -flto=thin -fno-inline -Xclang -fno-validate-pch -Xclang -fno-pch-timestamp -Wno-everything -Wno-non-pod-varargs -Wno-c++11-narrowing -Wno-int-conversion -Wno-implicit-function-declaration -w",
-        "CMAKE_C_FLAGS_DEBUG": "-O0 -ggdb -w",
-        "CMAKE_CXX_FLAGS_DEBUG": "-O0 -ggdb -w"
+        "CMAKE_C_FLAGS": "-fcolor-diagnostics -O0 -pg -ggdb -fdebug-macro -flto=thin -fno-inline -Xclang -fno-validate-pch -Xclang -fno-pch-timestamp -Wno-everything -Wno-non-pod-varargs -Wno-c++11-narrowing -Wno-int-conversion -Wno-implicit-function-declaration",
+        "CMAKE_CXX_FLAGS": "-fcolor-diagnostics -O0 -pg -ggdb -fdebug-macro -flto=thin -fno-inline -Xclang -fno-validate-pch -Xclang -fno-pch-timestamp -Wno-everything -Wno-non-pod-varargs -Wno-c++11-narrowing -Wno-int-conversion -Wno-implicit-function-declaration",
+        "CMAKE_C_FLAGS_DEBUG": "-O0 -ggdb",
+        "CMAKE_CXX_FLAGS_DEBUG": "-O0 -ggdb"
       }
     },
     {

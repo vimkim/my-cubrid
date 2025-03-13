@@ -42,7 +42,7 @@ index 6e6be0adc..dd3fb6490 100644
  
    else(CMAKE_COMPILER_IS_GNUCC)
 -    message(FATAL_ERROR "We currently do not support ${CMAKE_CXX_COMPILER_ID} compiler")
-+    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++17 -fopenmp -lopenblas -llapack")
++    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fopenmp -lopenblas -llapack")
    endif(CMAKE_COMPILER_IS_GNUCC)
  else(UNIX)
    # turn off LinkIncremental option for release build

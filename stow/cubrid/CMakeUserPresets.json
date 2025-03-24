@@ -14,10 +14,14 @@
       "cacheVariables": {
         "CMAKE_EXPORT_COMPILE_COMMANDS": "ON",
         "CMAKE_INSTALL_PREFIX": "$env{CUBRID}",
+        "CMAKE_C_COMPILER_LAUNCHER": "ccache",
+        "CMAKE_CXX_COMPILER_LAUNCHER": "ccache",
+        "CMAKE_COLOR_DIAGNOSTICS": "ON",
         "CUBVEC_TEAM_BUILD": "ON",
         "VIMKIM_BUILD": "ON",
         "WITH_CCI": "true"
-      }
+      },
+      "environment": { "NINJA_STATUS": "[%f/%t %es]", "CLICOLOR_FORCE": "1" }
     },
     {
       "name": "debug_gcc",
@@ -33,6 +37,57 @@
         "CMAKE_C_COMPILER": "gcc",
         "CMAKE_CXX_COMPILER": "g++",
         "CMAKE_CXX_STANDARD": "17",
+        "CMAKE_CXX_STANDARD_REQUIRED": "ON"
+      }
+    },
+    {
+      "name": "debug_gcc_23",
+      "inherits": "user_default",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Debug",
+        "CMAKE_C_COMPILER_LAUNCHER": "ccache",
+        "CMAKE_CXX_COMPILER_LAUNCHER": "ccache",
+        "CMAKE_C_FLAGS": "-fdiagnostics-color=always",
+        "CMAKE_CXX_FLAGS": "-fdiagnostics-color=always",
+        "CMAKE_C_FLAGS_DEBUG": "-O0 -ggdb3 -Wno-int-conversion -Wno-incompatible-pointer-types -Wno-implicit-function-declaration",
+        "CMAKE_CXX_FLAGS_DEBUG": "-O0 -ggdb3",
+        "CMAKE_C_COMPILER": "gcc",
+        "CMAKE_CXX_COMPILER": "g++",
+        "CMAKE_CXX_STANDARD": "23",
+        "CMAKE_CXX_STANDARD_REQUIRED": "ON"
+      }
+    },
+    {
+      "name": "sanitize_gcc_23",
+      "inherits": "user_default",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Debug",
+        "CMAKE_C_COMPILER_LAUNCHER": "ccache",
+        "CMAKE_CXX_COMPILER_LAUNCHER": "ccache",
+        "CMAKE_C_FLAGS": "-fdiagnostics-color=always",
+        "CMAKE_CXX_FLAGS": "-fdiagnostics-color=always",
+        "CMAKE_C_FLAGS_DEBUG": "-Og -ggdb3 -Wno-int-conversion -Wno-incompatible-pointer-types -Wno-implicit-function-declaration -fsanitize=address,undefined,leak,pointer-subtract,pointer-compare,bounds-strict,integer-divide-by-zero,float-divide-by-zero,float-cast-overflow,shift,signed-integer-overflow,object-size,return,bool,builtin,unreachable,vptr -fno-omit-frame-pointer -fstack-protector-strong -D_FORTIFY_SOURCE=2 -Wfatal-errors",
+        "CMAKE_CXX_FLAGS_DEBUG": "-Og -ggdb3 -fsanitize=address,undefined,leak,pointer-subtract,pointer-compare,bounds-strict,integer-divide-by-zero,float-divide-by-zero,float-cast-overflow,shift,signed-integer-overflow,object-size,return,bool,builtin,unreachable,vptr -fno-omit-frame-pointer -fstack-protector-strong -D_FORTIFY_SOURCE=2 -Wfatal-errors",
+        "CMAKE_C_COMPILER": "gcc",
+        "CMAKE_CXX_COMPILER": "g++",
+        "CMAKE_CXX_STANDARD": "23",
+        "CMAKE_CXX_STANDARD_REQUIRED": "ON"
+      }
+    },
+    {
+      "name": "stack_gcc_23",
+      "inherits": "user_default",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Debug",
+        "CMAKE_C_COMPILER_LAUNCHER": "ccache",
+        "CMAKE_CXX_COMPILER_LAUNCHER": "ccache",
+        "CMAKE_C_FLAGS": "-fdiagnostics-color=always",
+        "CMAKE_CXX_FLAGS": "-fdiagnostics-color=always",
+        "CMAKE_C_FLAGS_DEBUG": "-Og -ggdb3 -Wno-int-conversion -Wno-incompatible-pointer-types -Wno-implicit-function-declaration -fsanitize=undefined,leak,bounds-strict,integer-divide-by-zero,float-divide-by-zero,float-cast-overflow,shift,signed-integer-overflow,object-size,return,bool,builtin,unreachable,vptr -fno-omit-frame-pointer -fstack-protector-strong -D_FORTIFY_SOURCE=2 -Wfatal-errors",
+        "CMAKE_CXX_FLAGS_DEBUG": "-Og -ggdb3 -fsanitize=undefined,leak,bounds-strict,integer-divide-by-zero,float-divide-by-zero,float-cast-overflow,shift,signed-integer-overflow,object-size,return,bool,builtin,unreachable,vptr -fno-omit-frame-pointer -fstack-protector-strong -D_FORTIFY_SOURCE=2 -Wfatal-errors",
+        "CMAKE_C_COMPILER": "gcc",
+        "CMAKE_CXX_COMPILER": "g++",
+        "CMAKE_CXX_STANDARD": "23",
         "CMAKE_CXX_STANDARD_REQUIRED": "ON"
       }
     },
@@ -59,8 +114,6 @@
       "cacheVariables": {
         "CMAKE_CXX_STANDARD": "17",
         "CMAKE_CXX_STANDARD_REQUIRED": "ON",
-        "CUBVEC_TEAM_BUILD": "ON",
-        "VIMKIM_BUILD": "ON",
         "CMAKE_EXPORT_COMPILE_COMMANDS": "ON",
         "WITH_CCI": "true",
         "CMAKE_C_COMPILER_LAUNCHER": "ccache",
@@ -128,6 +181,18 @@
     {
       "name": "debug_clang",
       "configurePreset": "debug_clang"
+    },
+    {
+      "name": "debug_gcc_23",
+      "configurePreset": "debug_gcc_23"
+    },
+    {
+      "name": "sanitize_gcc_23",
+      "configurePreset": "sanitize_gcc_23"
+    },
+    {
+      "name": "stack_gcc_23",
+      "configurePreset": "stack_gcc_23"
     },
     {
       "name": "profile_clang",

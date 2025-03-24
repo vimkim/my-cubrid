@@ -1,0 +1,40 @@
+# Justfile for PostgreSQL operations
+
+database := 'vimkimdb'
+table := 'items'
+
+# List all tables
+list-tables:
+    psql -d {{ database }} -c "SELECT * FROM pg_catalog.pg_tables WHERE schemaname != 'pg_catalog' AND schemaname != 'information_schema';"
+
+# Get column info for a table
+table-info table:
+    psql -d {{ database }} -c "SELECT column_name, data_type, is_nullable FROM information_schema.columns WHERE table_name = '{{ table }}';"
+
+# Run a custom query
+query query:
+    psql -d {{ database }} -c "{{ query }}"
+
+# Backup a database
+backup:
+    pg_dump -d {{ database }} > backup_$(date +"%Y%m%d_%H%M%S").sql
+
+# psql
+psql:
+    psql -d {{ database }}
+
+add-group:
+    sudo usermod -aG postgres vimkim
+    id vimkim
+    getent group postgres
+    groups
+
+change-permission:
+    sudo find /var/lib/pgsql -type d -exec chmod 750 {} \;
+    sudo find /var/lib/pgsql -type f -exec chmod 660 {} \;
+
+server-start:
+    sudo -u postgres pg_ctl -D /var/lib/pgsql/data start
+
+server-stop:
+    sudo -u postgres pg_ctl -D /var/lib/pgsql/data start

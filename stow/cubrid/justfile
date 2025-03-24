@@ -1,3 +1,5 @@
+mod? local '.just/justfile'
+
 default:
     @just --choose --justfile={{ justfile() }} -d {{ invocation_directory() }}
 
@@ -57,6 +59,9 @@ _clang-support:
 stow-create:
     stow --dir=$MY_CUBRID/stow --target=. cubrid
     stow --dir=$MY_CUBRID/stow --target=. gdb
+    mkdir -p $MY_CUBRID/just-cubrid/$(basename $(pwd))
+    touch $MY_CUBRID/just-cubrid/$(basename $(pwd))/justfile
+    ln -sf $MY_CUBRID/just-cubrid/$(basename $(pwd)) .just
 
 stow-delete:
     stow --dir=$MY_CUBRID/stow --target=. -D cubrid
@@ -77,11 +82,11 @@ gcc-8-fail:
 
 prepare: stow-create
     git submodule update --init cubrid-cci
-    patch -p1 < $MY_CUBRID/developer-patch.diff
+    patch -N -r rej.rej -p1 < $MY_CUBRID/developer-patch.diff
     direnv allow
 
 cpptrace:
-    patch -p1 < $MY_CUBRID/cpptrace.diff
+    patch -N -p1 < $MY_CUBRID/cpptrace.diff
 
 configure: gcc-8-fail
     cmake --preset $PRESET_MODE
@@ -303,13 +308,16 @@ uftrace-dump:
 uftrace-serve-trace:
     trace_processor --httpd ./uftrace-*.json
 
-format-dryrun:
+format-git-changed-dryrun:
     my-code-style.sh -d
     just format
 
-format:
+format-git-changed:
     @gum confirm
     my-code-style.sh
+
+format-one-file:
+    format-cubrid.sh $(fd | fzf)
 
 memleak-build-cubvec-assert-server: build server-start-testdb
     csql -u dba testdb -c "drop table if exists vt;"
@@ -400,10 +408,9 @@ run-42:
 build-run: build run
 
 run:
-    just run-"$CURRENT_DIR"
-
-prerun:
-    just prerun-"$CURRENT_DIR"
+    just given-"$CURRENT_DIR"
+    just when-"$CURRENT_DIR"
+    just then-"$CURRENT_DIR"
 
 build-given-when-then: build given when then
 
@@ -435,7 +442,7 @@ given-23-create-vector-index:
     create table tbl (a int, b vector);"
 
 when-23-create-vector-index:
-    csql -u dba testdb -S -c "create vector index idx on tbl (b);"
+    csql -u dba testdb -S -c "create vector index idx on tbl (b cosine);"
 
 then-23-create-vector-index:
     csql -u dba testdb -S -c "show index from tbl;"
@@ -447,7 +454,7 @@ given-23-create-vector-index-2:
 
 when-23-create-vector-index-2:
     csql -u dba testdb -S -c "CREATE VECTOR INDEX embedding_hnsw_idx \
-    ON items (embedding) \
+    ON items (embedding cosine) \
     WITH (M = 16, ef_construction = 64);"
 
 then-23-create-vector-index-2:

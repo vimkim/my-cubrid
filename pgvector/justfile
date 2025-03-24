@@ -32,7 +32,7 @@ server-start:
     sudo -u postgres pg_ctl -D /var/lib/pgsql/data start
 
 server-stop:
-    sudo -u postgres pg_ctl -D /var/lib/pgsql/data start
+    sudo -u postgres pg_ctl -D /var/lib/pgsql/data stop
 
 ###############################################################################
 # Monitoring
@@ -52,3 +52,79 @@ table-info table:
 # Run a custom query
 query query:
     psql -d {{ database }} -c "{{ query }}"
+
+count-number-of-rows:
+    psql -d {{ database }} -c "SELECT * from tbl1 limit 5;"
+    psql -d {{ database }} -c "SELECT * from tbl2 limit 5;"
+    psql -d {{ database }} -c "SELECT count(*) as tbl1_count from tbl1;"
+    psql -d {{ database }} -c "SELECT count(*) as tbl2_count from tbl2;"
+
+get-one-vector-from-two-tables:
+    psql -d {{ database }} -c "SELECT * from tbl1 limit 1;"
+    psql -d {{ database }} -c "SELECT * from tbl2 limit 1;"
+
+# \pset pager off, or .psqlrc
+pager-off:
+    psql -P pager-off
+
+get-vector-indexes:
+    psql -d {{ database }} -c "select * from pg_indexes where tablename = 'tbl1' or tablename = 'tbl2'";
+
+get-pgtune-parameters:
+    psql -d {{ database }} -c "SELECT name, setting, unit, source FROM pg_settings WHERE name IN ( \
+    'max_connections', \
+    'shared_buffers', \
+    'effective_cache_size', \
+    'maintenance_work_mem', \
+    'checkpoint_completion_target', \
+    'wal_buffers', \
+    'default_statistics_target', \
+    'random_page_cost', \
+    'effective_io_concurrency', \
+    'work_mem', \
+    'huge_pages', \
+    'min_wal_size', \
+    'max_wal_size', \
+    'max_worker_processes', \
+    'max_parallel_workers_per_gather', \
+    'max_parallel_workers', \
+    'max_parallel_maintenance_workers' \
+    );"
+
+###############################################################################
+# Vector Load
+###############################################################################
+
+create-table-benchmark:
+    psql -d {{ database }} -c "CREATE TABLE vector_benchmark (id SERIAL PRIMARY KEY, embedding VECTOR(256));"
+
+load-vectors:
+    psql -d {{ database }} -c "
+
+###############################################################################
+# Examples
+###############################################################################
+
+l2-distance-1000000:
+    psql -qd {{ database }} -c "select t1.id, t2.id, t1.embedding <-> t2.embedding as l2_distance from tbl1 t1 cross join tbl1 t2;"
+
+l1-distance-1000000:
+    psql -qd {{ database }} -c "select t1.id, t2.id, t1.embedding <-> t2.embedding as l1_distance from tbl1 t1 cross join tbl1 t2;"
+
+cosine-distance-1000000:
+    psql -qd {{ database }} -c "select t1.id, t2.id, 1 - (t1.embedding <=> t2.embedding) as cosine_distance from tbl1 t1 cross join tbl1 t2;"
+
+inner-product-1000000:
+    psql -qd {{ database }} -c "select t1.id, t2.id, t1.embedding <#> t2.embedding as inner_product from tbl1 t1 cross join tbl1 t2;"
+
+benshmark-1000000:
+    psql -qd {{ database }} -c "select t1.id, t2.id, t1.embedding <-> t2.embedding as l2_distance, 1 - (t1.embedding <=> t2.embedding) as cosine_distance, t1.embedding <#> t2.embedding as inner_product, l1_distance(t1.embedding, t2.embedding) as l1_distance from tbl1 t1 cross join tbl1 t2 limit 10;"
+
+time-l1-distance-1000000:
+    time (PAGER= psql -qd vimkimdb -c "select t1.id, t2.id, t1.embedding <-> t2.embedding as l1_distance from tbl1 t1 cross join tbl1 t2;" | tail)
+
+time-l2-distance-1000000:
+    time (PAGER= psql -qd vimkimdb -c "select t1.id, t2.id, t1.embedding <-> t2.embedding as l2_distance from tbl1 t1 cross join tbl1 t2;" | tail)
+
+time-cosine-distance-1000000:
+    time (PAGER= psql -qd vimkimdb -c "select t1.id, t2.id, 1 - (t1.embedding <=> t2.embedding) as cosine_distance from tbl1 t1 cross join tbl1 t2;" | tail)

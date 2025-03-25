@@ -109,22 +109,28 @@ l2-distance-1000000:
     psql -qd {{ database }} -c "select t1.id, t2.id, t1.embedding <-> t2.embedding as l2_distance from tbl1 t1 cross join tbl1 t2;"
 
 l1-distance-1000000:
-    psql -qd {{ database }} -c "select t1.id, t2.id, t1.embedding <-> t2.embedding as l1_distance from tbl1 t1 cross join tbl1 t2;"
+    psql -qd {{ database }} -c "select t1.id, t2.id, t1.embedding <+> t2.embedding as l1_distance from tbl1 t1 cross join tbl1 t2;"
 
 cosine-distance-1000000:
-    psql -qd {{ database }} -c "select t1.id, t2.id, 1 - (t1.embedding <=> t2.embedding) as cosine_distance from tbl1 t1 cross join tbl1 t2;"
+    psql -qd {{ database }} -c "select t1.id, t2.id, t1.embedding <=> t2.embedding as cosine_distance from tbl1 t1 cross join tbl1 t2;"
 
 inner-product-1000000:
     psql -qd {{ database }} -c "select t1.id, t2.id, t1.embedding <#> t2.embedding as inner_product from tbl1 t1 cross join tbl1 t2;"
 
 benshmark-1000000:
-    psql -qd {{ database }} -c "select t1.id, t2.id, t1.embedding <-> t2.embedding as l2_distance, 1 - (t1.embedding <=> t2.embedding) as cosine_distance, t1.embedding <#> t2.embedding as inner_product, l1_distance(t1.embedding, t2.embedding) as l1_distance from tbl1 t1 cross join tbl1 t2 limit 10;"
+    psql -qd {{ database }} -c "select t1.id, t2.id, t1.embedding <-> t2.embedding as l2_distance, t1.embedding <=> t2.embedding as cosine_distance, t1.embedding <#> t2.embedding as inner_product, l1_distance(t1.embedding, t2.embedding) as l1_distance from tbl1 t1 cross join tbl1 t2 limit 10;"
 
 time-l1-distance-1000000:
-    time (PAGER= psql -qd vimkimdb -c "select t1.id, t2.id, t1.embedding <-> t2.embedding as l1_distance from tbl1 t1 cross join tbl1 t2;" | tail)
+    time (PAGER= psql -qd vimkimdb -c "select t1.id, t2.id, t1.embedding <+> t2.embedding as l1_distance from tbl1 t1 cross join tbl1 t2;" | tail)
 
 time-l2-distance-1000000:
     time (PAGER= psql -qd vimkimdb -c "select t1.id, t2.id, t1.embedding <-> t2.embedding as l2_distance from tbl1 t1 cross join tbl1 t2;" | tail)
 
+time-cosine-distance-100000:
+    time (PAGER= psql -qd vimkimdb -c "select t1.id, t2.id, t1.embedding <=> t2.embedding as cosine_distance from tbl1 t1 cross join tbl1 t2 limit 100000;" | tail)
+
 time-cosine-distance-1000000:
-    time (PAGER= psql -qd vimkimdb -c "select t1.id, t2.id, 1 - (t1.embedding <=> t2.embedding) as cosine_distance from tbl1 t1 cross join tbl1 t2;" | tail)
+    time (PAGER= psql -qd vimkimdb -c "select t1.id, t2.id, t1.embedding <=> t2.embedding as cosine_distance from tbl1 t1 cross join tbl1 t2;" | tail)
+
+explain-analyze-time-cosine-distance-1000000:
+    PAGER= psql -qd vimkimdb -c "explain analyze select t1.id, t2.id, t1.embedding <=> t2.embedding as cosine_distance from tbl1 t1 cross join tbl1 t2;"

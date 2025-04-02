@@ -1,11 +1,21 @@
-PRESET_MODE=debug_clang
-CURRENT_DIR=30-survey-distance
+##############################################################################
+# Variable
+##############################################################################
+
+PRESET_MODE=release_clang
+SOURCE_DIR=$HOME/gh/cb/cubvec
+
+##############################################################################
+# Do not change below
+##############################################################################
+
+CURRENT_DIR=$(basename $SOURCE_DIR)
 export CUBRID="$HOME/.cub/install/$CURRENT_DIR/$PRESET_MODE"
 export CUBRID_DATABASES="$HOME/.cub/db/$CURRENT_DIR/$PRESET_MODE"
-export CUBRID_BUILD_DIR="$(pwd)/build_preset_$PRESET_MODE"
+export CUBRID_BUILD_DIR="$SOURCE_DIR/build_preset_$PRESET_MODE"
 export PATH="$CUBRID/bin:$PATH"
 export LD_LIBRARY_PATH="$CUBRID/cci/lib:$CUBRID/lib:$HOME/CUB3LIB/lib:/usr/local/lib:$LD_LIBRARY_PATH"
-export CUBRID_BUILD_DIR="$(pwd)/build_preset_$PRESET_MODE"
+export CUBRID_BUILD_DIR="$SOURCE_DIR/build_preset_$PRESET_MODE"
 
 export PATH="$(pwd)/CTP/bin:$PATH"
 export CTP_HOME="$(pwd)/CTP"

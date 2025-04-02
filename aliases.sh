@@ -7,6 +7,8 @@ export MY_CUBRID="$HOME/my-cubrid"
 alias mycubrid='cd $MY_CUBRID'
 alias mycub='mycubrid'
 
+alias mypg='cd $(fd -t d -p "gh.*pgvector$" $HOME)'
+
 alias cualias='$EDITOR ~/my-cubrid/aliases.sh'
 alias cuali='$EDITOR ~/my-cubrid/aliases.sh'
 alias socuali='source ~/my-cubrid/aliases.sh'
@@ -16,6 +18,10 @@ alias cud='cu_dir'
 
 alias jcub='print -z "$(just.sh -j $MY_CUBRID/stow/cubrid/justfile -d .)"'
 alias cubstow='stow --dir=$MY_CUBRID/stow --target=. cubrid'
+
+# alias justfile for work
+alias jw='print -z "$(just.sh -j $MY_CUBRID/work.just -d .)"'
+alias jwe='$EDITOR $MY_CUBRID/work.just'
 
 # alias cu_build='. ~/my-cubrid/build.sh'
 alias cu_build='cmake --preset profile && cmake --build --preset profile --target install'

@@ -38,6 +38,9 @@ server-restart-testdb:
 server-stop-testdb:
     cubrid server stop testdb
 
+paramdump-testdb:
+    cubrid paramdump testdb | grep 'buffer'
+
 _gum-confirm-no:
     @# asks, the default is "NO"
     @gum confirm --default=false
@@ -83,6 +86,9 @@ gcc-8-fail:
 prepare: stow-create
     git submodule update --init cubrid-cci
     patch -N -r rej.rej -p1 < $MY_CUBRID/developer-patch.diff
+    just allow-direnv
+
+allow-direnv:
     direnv allow
 
 cpptrace:
@@ -96,7 +102,12 @@ cmake-preset-mode-select:
 
 configure-build: configure build
 
-build: gcc-8-fail cmake-build-install-all
+build: gcc-8-fail cmake-build-install-all update-cubrid-conf
+
+update-cubrid-conf:
+    sed -i 's/data_buffer_size=512M/data_buffer_size=32G/' $CUBRID/conf/cubrid.conf
+    sed -i 's/log_buffer_size=512M/data_buffer_size=4G/' $CUBRID/conf/cubrid.conf
+    echo "Updated buffer size is in $CUBRID/conf/cubrid.conf"
 
 cmake-build-install-3rdparty:
     cmake --build --preset $PRESET_MODE --target 3rdparty/install
@@ -480,3 +491,29 @@ run-44-inner-product:
 run-43-cosine-distance:
     csql -u dba testdb -S -c " \
     select COSINE_DISTANCE('[1, 2, 3]', '[2, 3, 5]');"
+
+cosine-distance-100000:
+    csql -u dba testdb -S -c 'select t1.id, t2.id, COSINE_DISTANCE(t1.embedding, t2.embedding) from tbl1 t1 cross join tbl1 t2 limit 100000;'
+
+load-vector:
+    csql -u dba testdb -c 'drop if exists tbl1; create table tbl1 (id int, vec1 vector, vec2 vector);'
+    csql -u dba testdb -i ./vectorload/insert_batch_1.sql
+    csql -u dba testdb -i ./vectorload/insert_batch_2.sql
+    csql -u dba testdb -i ./vectorload/insert_batch_3.sql
+    csql -u dba testdb -i ./vectorload/insert_batch_4.sql
+    csql -u dba testdb -i ./vectorload/insert_batch_5.sql
+    csql -u dba testdb -i ./vectorload/insert_batch_6.sql
+    csql -u dba testdb -i ./vectorload/insert_batch_7.sql
+    csql -u dba testdb -i ./vectorload/insert_batch_8.sql
+    csql -u dba testdb -i ./vectorload/insert_batch_9.sql
+    csql -u dba testdb -i ./vectorload/insert_batch_10.sql
+    csql -u dba testdb -c "insert into tbl1 select (a.id, a.vec1, a.vec2) from tbl1 a, tbl1 b limit 999000"
+
+given-36-bugfix-euclidean:
+    csql -u dba testdb -S -c "drop if exists tbl; create table tbl (a int, b vector);"
+
+when-36-bugfix-euclidean:
+    csql -u dba testdb -S -c "insert into tbl values (1, '[1, 2, 3]');"
+
+then-36-bugfix-euclidean:
+    csql -u dba testdb -S -c "select L2_DISTANCE('[1, 2, 3]', b) from tbl;"

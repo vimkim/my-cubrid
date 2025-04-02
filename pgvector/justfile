@@ -21,8 +21,33 @@ change-permission:
     sudo find /var/lib/pgsql -type f -exec chmod 660 {} \;
 
 ###############################################################################
+# Useful
+###############################################################################
+
+auto-explain:
+    echo 'use below in psql'
+    LOAD 'auto_explain';
+    SET auto_explain.log_analyze = on;
+    SET auto_explain.log_min_duration = 0; -- log all queries
+    SET auto_explain.log_timing = on;
+    SET client_min_messages = 'log';
+
+###############################################################################
 # Administration (Used only daily)
 ###############################################################################
+
+initdb:
+    sudo mkdir -p /var/lib/pgsql/data
+    sudo chown postgres:postgres /var/lib/pgsql/data
+    sudo -u postgres initdb -D /var/lib/pgsql/data
+    sudo -u postgres createuser --pwprompt vimkim
+
+createuser:
+    psql -U postgres -c "DROP USER vimkim;"
+    psql -U postgres -c "CREATE USER vimkim WITH SUPERUSER PASSWORD 'qwfpqwfp';"
+
+createdb:
+    createdb vimkimdb
 
 # Backup a database
 backup:
@@ -33,6 +58,12 @@ server-start:
 
 server-stop:
     sudo -u postgres pg_ctl -D /var/lib/pgsql/data stop
+
+server-restart:
+    sudo -u postgres pg_ctl -D /var/lib/pgsql/data restart
+
+server-reload:
+    sudo -u postgres pg_ctl -D /var/lib/pgsql/data reload
 
 ###############################################################################
 # Monitoring
@@ -46,7 +77,7 @@ list-tables:
     psql -d {{ database }} -c "SELECT * FROM pg_catalog.pg_tables WHERE schemaname != 'pg_catalog' AND schemaname != 'information_schema';"
 
 # Get column info for a table
-table-info table:
+table-info:
     psql -d {{ database }} -c "SELECT column_name, data_type, is_nullable FROM information_schema.columns WHERE table_name = '{{ table }}';"
 
 # Run a custom query
@@ -95,15 +126,24 @@ get-pgtune-parameters:
 # Vector Load
 ###############################################################################
 
-create-table-benchmark:
-    psql -d {{ database }} -c "CREATE TABLE vector_benchmark (id SERIAL PRIMARY KEY, embedding VECTOR(256));"
+vector-load-tbl:
+    uv run --directory ./vectorload vectorload.py --csv1 ../datagen/pgvector_test_data1.csv --csv2 ../datagen/pgvector_test_data2.csv --tablename tbl
 
-load-vectors:
+amplify-vectors-tbl:
+    psql -d {{ database }} -c "INSERT INTO tbl (vec1, vec2) SELECT a.vec1, a.vec2 FROM tbl a, tbl b limit 999000;"
+
+psq:
     psql -d {{ database }} -c "
 
 ###############################################################################
 # Examples
 ###############################################################################
+
+select-cosine-distance:
+    psql -d {{ database }} -c "select vec1 <=> vec2 as cosine_distance from tbl limit 1000000;"
+
+explain-analyze-select-cosine-distance:
+    psql -d {{ database }} -c "explain (analyze, buffers, verbose) select vec1 <=> vec2 as cosine_distance from tbl limit 1000000;"
 
 l2-distance-1000000:
     psql -qd {{ database }} -c "select t1.id, t2.id, t1.embedding <-> t2.embedding as l2_distance from tbl1 t1 cross join tbl1 t2;"
@@ -134,3 +174,6 @@ time-cosine-distance-1000000:
 
 explain-analyze-time-cosine-distance-1000000:
     PAGER= psql -qd vimkimdb -c "explain analyze select t1.id, t2.id, t1.embedding <=> t2.embedding as cosine_distance from tbl1 t1 cross join tbl1 t2;"
+
+count-simd:
+    objdump -d -M intel vector.so | grep -E 'addps|mulps|vmov|vadd|vmul|vfma|vxor' | wc -l

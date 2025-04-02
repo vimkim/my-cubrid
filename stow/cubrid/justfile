@@ -136,7 +136,7 @@ build-target:
 
 # CSQL
 
-csql-testdb-cs:
+csql-testdb-cs: paramdump-testdb
     csql -u dba testdb
 
 csql-testdb-sa:

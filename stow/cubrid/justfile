@@ -17,8 +17,11 @@ alias vr := vector-run
 alias brt := build-recreate-test
 alias t := test
 
-build-oldway:
-    CXXFLAGS="-fdiagnostics-color=always" CFLAGS="-fdiagnostics-color=always -Wno-int-conversion -Wno-incompatible-pointer-types -Wno-implicit-function-declaration" ./build.sh -m debug build
+build-debug-oldway-gcc14:
+    CXXFLAGS="-fdiagnostics-color=always" CFLAGS="-fdiagnostics-color=always -Wno-int-conversion -Wno-incompatible-pointer-types -Wno-implicit-function-declaration" ./build.sh -m debug -b build_debug ./install_debug build
+
+build-release-oldway-gcc14:
+    CXXFLAGS="-fdiagnostics-color=always" CFLAGS="-fdiagnostics-color=always -Wno-int-conversion -Wno-incompatible-pointer-types -Wno-implicit-function-declaration" ./build.sh -m release -b build_rel -p ./install_rel build
 
 server-start-demodb:
     cubrid server start demodb

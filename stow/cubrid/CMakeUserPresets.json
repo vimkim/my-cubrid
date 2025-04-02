@@ -150,8 +150,8 @@
         "CMAKE_CXX_COMPILER_LAUNCHER": "ccache",
         "CMAKE_C_COMPILER": "clang",
         "CMAKE_CXX_COMPILER": "clang++",
-        "CMAKE_C_FLAGS": "-fcolor-diagnostics -O2 -pg -ggdb -fdebug-macro -flto=thin -fno-inline -Xclang -fno-validate-pch -Xclang -fno-pch-timestamp -Wno-everything -Wno-non-pod-varargs -Wno-c++11-narrowing -Wno-int-conversion -Wno-implicit-function-declaration",
-        "CMAKE_CXX_FLAGS": "-fcolor-diagnostics -O2 -pg -ggdb -fdebug-macro -flto=thin -fno-inline -Xclang -fno-validate-pch -Xclang -fno-pch-timestamp -Wno-everything -Wno-non-pod-varargs -Wno-c++11-narrowing -Wno-int-conversion -Wno-implicit-function-declaration"
+        "CMAKE_C_FLAGS": "-fcolor-diagnostics -O2 -pg -ggdb -fdebug-macro -flto=thin -fno-inline -Xclang -fno-validate-pch -Xclang -fno-pch-timestamp -Wno-everything -Wno-non-pod-varargs -Wno-c++11-narrowing -Wno-int-conversion -Wno-implicit-function-declaration -Wno-unused-parameter",
+        "CMAKE_CXX_FLAGS": "-fcolor-diagnostics -O2 -pg -ggdb -fdebug-macro -flto=thin -fno-inline -Xclang -fno-validate-pch -Xclang -fno-pch-timestamp -Wno-everything -Wno-non-pod-varargs -Wno-c++11-narrowing -Wno-int-conversion -Wno-implicit-function-declaration -Wno-unused-parameter"
       }
     },
     {
@@ -187,8 +187,8 @@
         "CMAKE_CXX_COMPILER_LAUNCHER": "ccache",
         "CMAKE_C_COMPILER": "clang",
         "CMAKE_CXX_COMPILER": "clang++",
-        "CMAKE_C_FLAGS": "-fcolor-diagnostics -flto=thin -fno-inline -Xclang -fno-validate-pch -Xclang -fno-pch-timestamp -Wno-everything -Wno-non-pod-varargs -Wno-c++11-narrowing -Wno-int-conversion -Wno-implicit-function-declaration",
-        "CMAKE_CXX_FLAGS": "-fcolor-diagnostics -flto=thin -fno-inline -Xclang -fno-validate-pch -Xclang -fno-pch-timestamp -Wno-everything -Wno-non-pod-varargs -Wno-c++11-narrowing -Wno-int-conversion -Wno-implicit-function-declaration"
+        "CMAKE_C_FLAGS": "-fcolor-diagnostics -O2 -g -flto=thin -fno-inline -Xclang -fno-validate-pch -Xclang -fno-pch-timestamp -Wno-everything -Wno-non-pod-varargs -Wno-c++11-narrowing -Wno-int-conversion -Wno-implicit-function-declaration -Wno-unused-parameter",
+        "CMAKE_CXX_FLAGS": "-fcolor-diagnostics -O2 -g -flto=thin -fno-inline -Xclang -fno-validate-pch -Xclang -fno-pch-timestamp -Wno-everything -Wno-non-pod-varargs -Wno-c++11-narrowing -Wno-int-conversion -Wno-implicit-function-declaration -Wno-unused-parameter"
       }
     }
   ],

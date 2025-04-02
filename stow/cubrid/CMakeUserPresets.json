@@ -24,6 +24,36 @@
       "environment": { "NINJA_STATUS": "[%f/%t %es]", "CLICOLOR_FORCE": "1" }
     },
     {
+      "name": "release_gcc",
+      "inherits": "user_default",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "RelWithDebInfo",
+        "CMAKE_C_COMPILER_LAUNCHER": "ccache",
+        "CMAKE_CXX_COMPILER_LAUNCHER": "ccache",
+        "CMAKE_C_FLAGS": "-fdiagnostics-color=always -O2 -g -Wno-int-conversion -Wno-incompatible-pointer-types -Wno-implicit-function-declaration",
+        "CMAKE_CXX_FLAGS": "-fdiagnostics-color=always -O2 -g",
+        "CMAKE_C_COMPILER": "gcc",
+        "CMAKE_CXX_COMPILER": "g++",
+        "CMAKE_CXX_STANDARD": "17",
+        "CMAKE_CXX_STANDARD_REQUIRED": "ON"
+      }
+    },
+    {
+      "name": "profile_gcc",
+      "inherits": "user_default",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Debug",
+        "CMAKE_C_COMPILER_LAUNCHER": "ccache",
+        "CMAKE_CXX_COMPILER_LAUNCHER": "ccache",
+        "CMAKE_C_FLAGS": "-fdiagnostics-color=always -O2 -pg -ggdb3 -Wno-int-conversion -Wno-incompatible-pointer-types -Wno-implicit-function-declaration",
+        "CMAKE_CXX_FLAGS": "-fdiagnostics-color=always -O2 -pg -ggdb3",
+        "CMAKE_C_COMPILER": "gcc",
+        "CMAKE_CXX_COMPILER": "g++",
+        "CMAKE_CXX_STANDARD": "17",
+        "CMAKE_CXX_STANDARD_REQUIRED": "ON"
+      }
+    },
+    {
       "name": "debug_gcc",
       "inherits": "user_default",
       "cacheVariables": {
@@ -147,33 +177,26 @@
       "inherits": "user_default",
       "cacheVariables": {
         "CMAKE_BUILD_TYPE": "RelWithDebInfo",
+        "WITH_CCI": "true",
+        "CUBVEC_TEAM_BUILD": "ON",
+        "VIMKIM_BUILD": "ON",
+        "CMAKE_CXX_STANDARD": "17",
+        "CMAKE_CXX_STANDARD_REQUIRED": "ON",
+        "CMAKE_EXPORT_COMPILE_COMMANDS": "ON",
         "CMAKE_C_COMPILER_LAUNCHER": "ccache",
         "CMAKE_CXX_COMPILER_LAUNCHER": "ccache",
         "CMAKE_C_COMPILER": "clang",
         "CMAKE_CXX_COMPILER": "clang++",
-        "CMAKE_CXX_STANDARD": "17",
-        "CMAKE_CXX_STANDARD_REQUIRED": "ON",
-        "CMAKE_C_FLAGS": "-w -flto=thin -fno-inline -Xclang -fno-validate-pch -Xclang -fno-pch-timestamp -Wno-everything -Wno-non-pod-varargs -Wno-c++11-narrowing -Wno-int-conversion -Wno-implicit-function-declaration -w",
-        "CMAKE_CXX_FLAGS": "-w -flto=thin -fno-inline -Xclang -fno-validate-pch -Xclang -fno-pch-timestamp -Wno-everything -Wno-non-pod-varargs -Wno-c++11-narrowing -Wno-int-conversion -Wno-implicit-function-declaration -w"
-      }
-    },
-    {
-      "name": "profile_gcc",
-      "inherits": "user_default",
-      "cacheVariables": {
-        "CMAKE_BUILD_TYPE": "Debug",
-        "CMAKE_C_COMPILER_LAUNCHER": "ccache",
-        "CMAKE_CXX_COMPILER_LAUNCHER": "ccache",
-        "CMAKE_C_FLAGS_DEBUG": "-O2 -pg -ggdb3 -w -Wno-error -Wno-int-conversion -Wno-incompatible-pointer-types -Wno-implicit-function-declaration",
-        "CMAKE_CXX_FLAGS_DEBUG": "-O2 -pg -ggdb3 -w -Wno-error",
-        "CMAKE_C_COMPILER": "gcc",
-        "CMAKE_CXX_COMPILER": "g++",
-        "CMAKE_CXX_STANDARD": "17",
-        "CMAKE_CXX_STANDARD_REQUIRED": "ON"
+        "CMAKE_C_FLAGS": "-fcolor-diagnostics -flto=thin -fno-inline -Xclang -fno-validate-pch -Xclang -fno-pch-timestamp -Wno-everything -Wno-non-pod-varargs -Wno-c++11-narrowing -Wno-int-conversion -Wno-implicit-function-declaration",
+        "CMAKE_CXX_FLAGS": "-fcolor-diagnostics -flto=thin -fno-inline -Xclang -fno-validate-pch -Xclang -fno-pch-timestamp -Wno-everything -Wno-non-pod-varargs -Wno-c++11-narrowing -Wno-int-conversion -Wno-implicit-function-declaration"
       }
     }
   ],
   "buildPresets": [
+    {
+      "name": "release_gcc",
+      "configurePreset": "release_gcc"
+    },
     {
       "name": "debug_gcc",
       "configurePreset": "debug_gcc"

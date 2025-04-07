@@ -1,0 +1,40 @@
+check-size:
+    csql -u dba testdb -S -c 'select count(*) from tbl_256_75000;'
+    csql -u dba testdb -S -c 'select count(*) from tbl_256_150000;'
+    csql -u dba testdb -S -c 'select count(*) from tbl_256_300000;'
+
+load-256-75000:
+    csql -u dba testdb -S -c 'create table tbl_256_75000 (id int, vec vector(256));'
+    cubrid loaddb --no-statistics -c 10240 -S -l -u dba -d out/loaddb_256_75000.object --estimated-size=75000 --no-logging testdb
+
+load-256-150000:
+    csql -u dba testdb -S -c 'create table tbl_256_150000 (id int, vec vector(256));'
+    cubrid loaddb --no-statistics -c 10240 -S -l -u dba -d out/loaddb_256_150000.object --estimated-size=150000 --no-logging testdb
+
+load-256-300000:
+    csql -u dba testdb -S -c 'create table tbl_256_300000 (id int, vec vector(256));'
+    cubrid loaddb --no-statistics -c 10240 -S -l -u dba -d out/loaddb_256_300000.object --estimated-size=300000 --no-logging testdb
+
+load-768-75000:
+    csql -u dba testdb -S -c 'create table tbl_768_75000 (id int, vec vector(768));'
+    cubrid loaddb --no-statistics -c 10240 -S -l -u dba -d out/loaddb_768_75000.object --estimated-size=75000 --no-logging testdb
+
+load-768-150000:
+    csql -u dba testdb -S -c 'create table tbl_768_150000 (id int, vec vector(768));'
+    cubrid loaddb --no-statistics -c 10240 -S -l -u dba -d out/loaddb_768_150000.object --estimated-size=150000 --no-logging testdb
+
+load-768-300000:
+    csql -u dba testdb -S -c 'create table tbl_768_300000 (id int, vec vector(768));'
+    cubrid loaddb --no-statistics -c 10240 -S -l -u dba -d out/loaddb_768_300000.object --estimated-size=300000 --no-logging testdb
+
+load-1536-75000:
+    csql -u dba testdb -S -c 'create table tbl_1536_75000 (id int, vec vector(1536));'
+    cubrid loaddb --no-statistics -c 10240 -S -l -u dba -d out/loaddb_1536_75000.object --estimated-size=75000 --no-logging testdb
+
+load-1536-150000:
+    csql -u dba testdb -S -c 'create table tbl_1536_150000 (id int, vec vector(1536));'
+    cubrid loaddb --no-statistics -c 10240 -S -l -u dba -d out/loaddb_1536_150000.object --estimated-size=150000 --no-logging testdb
+
+load-1536-300000:
+    csql -u dba testdb -S -c 'create table tbl_1536_300000 (id int, vec vector(1536));'
+    cubrid loaddb --no-statistics -c 10240 -S -l -u dba -d out/loaddb_1536_300000.object --estimated-size=300000 --no-logging testdb

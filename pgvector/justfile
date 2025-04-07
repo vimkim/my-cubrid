@@ -126,8 +126,11 @@ get-pgtune-parameters:
 # Vector Load
 ###############################################################################
 
-vector-load-tbl:
+deprecated-vector-load-tbl:
     uv run --directory ./vectorload vectorload.py --csv1 ../datagen/pgvector_test_data1.csv --csv2 ../datagen/pgvector_test_data2.csv --tablename tbl
+
+vector-load-tbl:
+    uv run --directory ./vectorload/load_vector.py --csv ../datagen/pgvector_test_data1.csv --tablename tbl1
 
 amplify-vectors-tbl:
     psql -d {{ database }} -c "INSERT INTO tbl (vec1, vec2) SELECT a.vec1, a.vec2 FROM tbl a, tbl b limit 999000;"
@@ -177,3 +180,14 @@ explain-analyze-time-cosine-distance-1000000:
 
 count-simd:
     objdump -d -M intel vector.so | grep -E 'addps|mulps|vmov|vadd|vmul|vfma|vxor' | wc -l
+
+check-dimensions:
+    psql -tAqd vimkimdb -c 'select count(*) from tbl_256_75000;'
+    psql -tAqd vimkimdb -c 'select count(*) from tbl_256_150000;'
+    psql -tAqd vimkimdb -c 'select count(*) from tbl_256_300000;'
+    psql -tAqd vimkimdb -c 'select count(*) from tbl_768_75000;'
+    psql -tAqd vimkimdb -c 'select count(*) from tbl_768_150000;'
+    psql -tAqd vimkimdb -c 'select count(*) from tbl_768_300000;'
+    psql -tAqd vimkimdb -c 'select count(*) from tbl_1536_75000;'
+    psql -tAqd vimkimdb -c 'select count(*) from tbl_1536_150000;'
+    psql -tAqd vimkimdb -c 'select count(*) from tbl_1536_300000;'

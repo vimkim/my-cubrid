@@ -105,7 +105,9 @@ cmake-preset-mode-select:
 
 configure-build: configure build
 
-build: gcc-8-fail cmake-build-install-all update-cubrid-conf
+build: gcc-8-fail cmake-build-install-all
+
+build-update: gcc-8-fail cmake-build-install-all update-cubrid-conf
 
 update-cubrid-conf:
     sed -i 's/data_buffer_size=512M/data_buffer_size=32G/' $CUBRID/conf/cubrid.conf

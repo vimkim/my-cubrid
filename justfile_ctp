@@ -1,2 +1,6 @@
+prepare:
+    rm ./CTP/conf/sql.conf
+    ln -s ~/my-cubrid/ctp/sql.conf ./CTP/conf/sql.conf
+
 run:
     ctp.sh sql --interactive

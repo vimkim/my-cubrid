@@ -64,8 +64,8 @@
         "CMAKE_CXX_COMPILER_LAUNCHER": "ccache",
         "CMAKE_C_FLAGS": "-fdiagnostics-color=always",
         "CMAKE_CXX_FLAGS": "-fdiagnostics-color=always",
-        "CMAKE_C_FLAGS_DEBUG": "-O0 -ggdb3 -Wno-int-conversion -Wno-incompatible-pointer-types -Wno-implicit-function-declaration",
-        "CMAKE_CXX_FLAGS_DEBUG": "-O0 -ggdb3",
+        "CMAKE_C_FLAGS_DEBUG": "-Og -ggdb3 -Wno-int-conversion -Wno-incompatible-pointer-types -Wno-implicit-function-declaration",
+        "CMAKE_CXX_FLAGS_DEBUG": "-Og -ggdb3",
         "CMAKE_C_COMPILER": "gcc",
         "CMAKE_CXX_COMPILER": "g++",
         "CMAKE_CXX_STANDARD": "17",
@@ -134,8 +134,8 @@
         "CMAKE_CXX_COMPILER": "clang++",
         "CMAKE_CXX_STANDARD": "17",
         "CMAKE_CXX_STANDARD_REQUIRED": "ON",
-        "CMAKE_C_FLAGS": "-fcolor-diagnostics -O0 -flto=thin -fno-inline -Xclang -fno-validate-pch -Xclang -fno-pch-timestamp -Wno-everything -Wno-non-pod-varargs -Wno-c++11-narrowing -Wno-int-conversion -Wno-implicit-function-declaration",
-        "CMAKE_CXX_FLAGS": "-fcolor-diagnostics -O0 -flto=thin -fno-inline -Xclang -fno-validate-pch -Xclang -fno-pch-timestamp -Wno-everything -Wno-non-pod-varargs -Wno-c++11-narrowing -Wno-int-conversion -Wno-implicit-function-declaration",
+        "CMAKE_C_FLAGS": "-fcolor-diagnostics -Og -flto=thin -fno-inline -Xclang -fno-validate-pch -Xclang -fno-pch-timestamp -Wno-everything -Wno-non-pod-varargs -Wno-c++11-narrowing -Wno-int-conversion -Wno-implicit-function-declaration",
+        "CMAKE_CXX_FLAGS": "-fcolor-diagnostics -Og -flto=thin -fno-inline -Xclang -fno-validate-pch -Xclang -fno-pch-timestamp -Wno-everything -Wno-non-pod-varargs -Wno-c++11-narrowing -Wno-int-conversion -Wno-implicit-function-declaration",
         "CMAKE_C_FLAGS_DEBUG": "-O0 -ggdb3",
         "CMAKE_CXX_FLAGS_DEBUG": "-O0 -ggdb3"
       }

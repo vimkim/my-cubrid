@@ -124,7 +124,7 @@ function ctp_diff {
     local old_path=$(echo "$new_ans_path" | sed 's|/cases/|/answers/|' | sed 's|\.result$|\.answer|')
 
     echo "Comparing $new_ans_path to $old_path"
-    diff "$old_path" "$new_ans_path"
+    delta "$old_path" "$new_ans_path"
 }
 
 function ctp_diff_all {

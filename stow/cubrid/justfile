@@ -200,6 +200,8 @@ db-create-testdb:
 db-delete-testdb:
     cubrid deletedb testdb
 
+db-recreate-testdb: db-delete-testdb db-create-testdb
+
 db-create-demodb:
     mkdir -p $CUBRID_DATABASES/demodb
     cubrid createdb --db-volume-size=20M --log-volume-size=20M demodb en_US.utf8 -F $CUBRID_DATABASES/demodb
@@ -207,6 +209,8 @@ db-create-demodb:
 
 db-delete-demodb:
     cubrid deletedb demodb
+
+db-recreate-demodb: db-delete-demodb db-create-demodb
 
 # vector
 create-vector:
@@ -270,11 +274,11 @@ build-vector-run: build vector-run
 
 build-create-vector-run: build db-create-testdb vector-run
 
-recreate: db-delete-testdb db-create-testdb
+recreate-testdb: db-delete-testdb db-create-testdb
 
-recreate-vector-run: recreate vector-run
+recreate-vector-run: recreate-testdb vector-run
 
-build-recreate-vector-run: build recreate vector-run
+build-recreate-vector-run: build recreate-testdb vector-run
 
 # git
 git-pull-origin-head:
@@ -289,13 +293,13 @@ git-pull-cub-head:
 insert-vectors:
     csql -u dba testdb -S -i ./vector-insert.sql
 
-build-recreate-test: build recreate test
+build-recreate-test: build recreate-testdb test
 
 test: test-vector
 
 build-and-test: build test
 
-test-vector: recreate insert-vectors test-vector-select
+test-vector: recreate-testdb insert-vectors test-vector-select
 
 test-vector-select:
     ./test-vector-select.sh
@@ -365,7 +369,7 @@ build-test-30-simple-cs: build server-restart-testdb cubvec-30-simple-cs
 
 build-test-30-simple-sa: build cubvec-30-simple-sa
 
-build-recreate-distance: build recreate cubvec-30-l2-distance
+build-recreate-distance: build recreate-testdb cubvec-30-l2-distance
 
 run-cs: build-test-30-simple-cs
 

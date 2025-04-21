@@ -7,9 +7,9 @@ db=$(pgrep cub_server | xargs -I{} ps -p {} -o args= | awk '{print $2}')
 if [ -n "$db" ]; then
     # If a database was found, connect to it
     echo "##### CS MODE to db: $db"
-    csql -u dba "${db}"
+    csql -u dba "${db}" "$@"
 else
     # If no database was found, connect to the default "testdb"
     echo "##### SA MODE to db: testdb"
-    csql -u dba testdb -S
+    csql -u dba testdb -S "$@"
 fi

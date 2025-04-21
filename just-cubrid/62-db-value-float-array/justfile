@@ -1,0 +1,8 @@
+create-tbl:
+    csql -u dba testdb -c 'create table tbl (vec vector);' -S
+
+insert-vector:
+    csql -u dba testdb -c "insert into tbl values ('[1, 2]');" -S
+
+select-vector:
+    csql -u dba testdb -c "select vec from tbl;" -S

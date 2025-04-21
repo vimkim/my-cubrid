@@ -15,7 +15,7 @@ set breakpoint pending on
 # b tp_str_to_vector
 # continue
 
-set args -u dba testdb -S -c "select L2_DISTANCE('[1, 2, 3]', '[2, 3, 4]') from dual;"
+# set args -u dba testdb -S -c "select L2_DISTANCE('[1, 2, 3]', '[2, 3, 4]') from dual;"
 start
 del br
 b csql

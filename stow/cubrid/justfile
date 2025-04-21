@@ -202,6 +202,8 @@ db-delete-testdb:
 
 db-recreate-testdb: db-delete-testdb db-create-testdb
 
+db-stop-recreate-start-testdb: server-stop-testdb db-recreate-testdb server-start-testdb
+
 db-create-demodb:
     mkdir -p $CUBRID_DATABASES/demodb
     cubrid createdb --db-volume-size=20M --log-volume-size=20M demodb en_US.utf8 -F $CUBRID_DATABASES/demodb
@@ -229,9 +231,7 @@ desc-vector-table:
     csql -u dba testdb -S -c 'show create table vt'
 
 insert-vector:
-    csql -u dba testdb -S -c "insert into vt (vec) values( '[4.321,1, 2,   3.5]' );"
-    # csql -u dba testdb -S -c "insert into vt values( '[1, 2, 3]' );"
-    # csql -u dba testdb -S -c "insert into vt values( {1, 2, 3} );"
+    csql -u dba testdb -S -c "insert into tbl (vec) values( '[4.321,1, 2,   3.5]' );"
 
 vector-insert-more:
     csql -u dba testdb -S -c "insert into vt (vec) values( '[1,2,3,4,5,6,7,7]' );"
@@ -526,3 +526,57 @@ when-36-bugfix-euclidean:
 
 then-36-bugfix-euclidean:
     csql -u dba testdb -S -c "select L2_DISTANCE('[1, 2, 3]', b) from tbl;"
+
+check-size:
+    csql -u dba testdb -S -c 'select count(*) from tbl_256_75000;'
+    csql -u dba testdb -S -c 'select count(*) from tbl_256_150000;'
+    csql -u dba testdb -S -c 'select count(*) from tbl_256_300000;'
+
+load-3-1:
+    csql -u dba testdb -S -c 'create table if not exists tbl_3_1 (id int, vec vector(3));'
+    cubrid loaddb -S -u dba -d out/loaddb_3_1.object testdb
+
+load-3-1-check:
+    csql -u dba testdb -S -c 'select * from tbl_3_1;'
+
+load-256-75000:
+    csql -u dba testdb -S -c 'create table if not exists tbl_256_75000 (id int, vec vector(256));'
+    cubrid loaddb --no-statistics -c 10240 -S -l -u dba -d out/loaddb_256_75000.object --estimated-size=75000 --no-logging testdb
+
+load-256-75000-cs:
+    cubrid loaddb -C -u dba -d out/loaddb_256_75000.object testdb
+
+load-256-150000:
+    csql -u dba testdb -S -c 'create table if not exists tbl_256_150000 (id int, vec vector(256));'
+    cubrid loaddb --no-statistics -c 10240 -S -l -u dba -d out/loaddb_256_150000.object --estimated-size=150000 --no-logging testdb
+
+load-256-300000:
+    csql -u dba testdb -S -c 'create table if not exists tbl_256_300000 (id int, vec vector(256));'
+    cubrid loaddb --no-statistics -c 10240 -S -l -u dba -d out/loaddb_256_300000.object --estimated-size=300000 --no-logging testdb
+
+load-768-75000:
+    csql -u dba testdb -S -c 'create table if not exists tbl_768_75000 (id int, vec vector(768));'
+    cubrid loaddb --no-statistics -c 10240 -S -l -u dba -d out/loaddb_768_75000.object --estimated-size=75000 --no-logging testdb
+
+load-768-150000:
+    csql -u dba testdb -S -c 'create table if not exists tbl_768_150000 (id int, vec vector(768));'
+    cubrid loaddb --no-statistics -c 10240 -S -l -u dba -d out/loaddb_768_150000.object --estimated-size=150000 --no-logging testdb
+
+load-768-300000:
+    csql -u dba testdb -S -c 'create table if not exists tbl_768_300000 (id int, vec vector(768));'
+    cubrid loaddb --no-statistics -c 10240 -S -l -u dba -d out/loaddb_768_300000.object --estimated-size=300000 --no-logging testdb
+
+load-1536-75000:
+    csql -u dba testdb -S -c 'create table if not exists tbl_1536_75000 (id int, vec vector(1536));'
+    cubrid loaddb --no-statistics -c 10240 -S -l -u dba -d out/loaddb_1536_75000.object --estimated-size=75000 --no-logging testdb
+
+load-1536-150000:
+    csql -u dba testdb -S -c 'create table if not exists tbl_1536_150000 (id int, vec vector(1536));'
+    cubrid loaddb --no-statistics -c 10240 -S -l -u dba -d out/loaddb_1536_150000.object --estimated-size=150000 --no-logging testdb
+
+load-1536-300000:
+    csql -u dba testdb -S -c 'create table if not exists tbl_1536_300000 (id int, vec vector(1536));'
+    cubrid loaddb --no-statistics -c 10240 -S -l -u dba -d out/loaddb_1536_300000.object --estimated-size=300000 --no-logging testdb
+
+csql:
+    $MY_CUBRID/bin/csql.sh

@@ -181,6 +181,10 @@ explain-analyze-time-cosine-distance-1000000:
 count-simd:
     objdump -d -M intel vector.so | grep -E 'addps|mulps|vmov|vadd|vmul|vfma|vxor' | wc -l
 
+check-simd:
+    objdump -d -M intel vector.so | grep -E 'addps|mulps|vmov|vadd|vmul|vfma|vxor' | wc -l
+    objdump -d -M intel /usr/lib64/pgsql/vector.so | grep -E 'addps|mulps|vmov|vadd|vmul|vfma|vxor' | wc -l
+
 check-dimensions:
     psql -tAqd vimkimdb -c 'select count(*) from tbl_256_75000;'
     psql -tAqd vimkimdb -c 'select count(*) from tbl_256_150000;'

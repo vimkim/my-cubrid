@@ -142,10 +142,10 @@ build-target:
 # CSQL
 
 csql-testdb-cs: paramdump-testdb
-    csql -u dba testdb
+    csql.sh
 
 csql-testdb-sa:
-    csql -u dba testdb -S
+    csql.sh
 
 csql-demodb-cs:
     csql -u dba demodb
@@ -160,13 +160,13 @@ cgdb-csql-demodb-sa:
     cgdb --args csql -u dba demodb -S
 
 cgdb-csql-testdb-cs:
-    cgdb --args csql -u dba testdb
+    cgdb --args csql.sh
 
 cgdb-csql-testdb-sa:
-    cgdb --args csql -u dba testdb -S
+    cgdb --args csql.sh
 
 cgdb-csql-testdb-sa-vector-insert:
-    cgdb --args csql -u dba testdb -S -c "insert into vt values ('[1, 2, 3]');"
+    cgdb --args csql.sh -c "insert into vt values ('[1, 2, 3]');"
 
 core csql CORE:
     cgdb csql core {{ CORE }}
@@ -216,55 +216,55 @@ db-recreate-demodb: db-delete-demodb db-create-demodb
 
 # vector
 create-vector:
-    csql -u dba testdb -S -c 'drop if exists vt;'
-    csql -u dba testdb -S -c 'create table vt (vec vector);'
+    csql.sh -c 'drop if exists vt;'
+    csql.sh -c 'create table vt (vec vector);'
 
 create-vector-with-args:
     echo "hello"
-    # csql -u dba testdb -S -c 'create table vta (vec vector(3));'
-    # csql -u dba testdb -S -c 'create table vta2 (vec vector(3, FLOAT));'
-    # csql -u dba testdb -S -c 'create table vta2 (vec vector(3, NUMERIC));' && exit 1 || echo "hello"
+    # csql.sh -c 'create table vta (vec vector(3));'
+    # csql.sh -c 'create table vta2 (vec vector(3, FLOAT));'
+    # csql.sh -c 'create table vta2 (vec vector(3, NUMERIC));' && exit 1 || echo "hello"
 
 desc-vector-table:
-    csql -u dba testdb -S -c 'desc vt;'
-    csql -u dba testdb -S -c 'show columns from vt'
-    csql -u dba testdb -S -c 'show create table vt'
+    csql.sh -c 'desc vt;'
+    csql.sh -c 'show columns from vt'
+    csql.sh -c 'show create table vt'
 
 insert-vector:
-    csql -u dba testdb -S -c "insert into tbl (vec) values( '[4.321,1, 2,   3.5]' );"
+    csql.sh -c "insert into tbl (vec) values( '[4.321,1, 2,   3.5]' );"
 
 vector-insert-more:
-    csql -u dba testdb -S -c "insert into vt (vec) values( '[1,2,3,4,5,6,7,7]' );"
-    csql -u dba testdb -S -c "insert into vt (vec) values( '[1234,12341234,123412341234,1234123412341234.1234   ]' );"
-    csql -u dba testdb -S -c "insert into vt (vec) values( '[3,3,3,3.5,2.4]' );"
+    csql.sh -c "insert into vt (vec) values( '[1,2,3,4,5,6,7,7]' );"
+    csql.sh -c "insert into vt (vec) values( '[1234,12341234,123412341234,1234123412341234.1234   ]' );"
+    csql.sh -c "insert into vt (vec) values( '[3,3,3,3.5,2.4]' );"
 
 vector-insert-more-more:
     # Basic floating point formats
-    csql -u dba testdb -S -c "insert into vt (vec) values('[1.0, 2.0, 3.0]');"
-    csql -u dba testdb -S -c "insert into vt (vec) values('[1.1111, 2.2222, 3.3333, 4.4444]');"
-    csql -u dba testdb -S -c "insert into vt (vec) values('[0.1, 0.01, 0.001, 0.0001]');"
+    csql.sh -c "insert into vt (vec) values('[1.0, 2.0, 3.0]');"
+    csql.sh -c "insert into vt (vec) values('[1.1111, 2.2222, 3.3333, 4.4444]');"
+    csql.sh -c "insert into vt (vec) values('[0.1, 0.01, 0.001, 0.0001]');"
     # Scientific notation
-    csql -u dba testdb -S -c "insert into vt (vec) values('[1.234e-5, 1.234e5, 1.234e10]');"
-    csql -u dba testdb -S -c "insert into vt (vec) values('[1E-10, 1E10, 1E-3]');"
+    csql.sh -c "insert into vt (vec) values('[1.234e-5, 1.234e5, 1.234e10]');"
+    csql.sh -c "insert into vt (vec) values('[1E-10, 1E10, 1E-3]');"
     # Mixed integer and float
-    csql -u dba testdb -S -c "insert into vt (vec) values('[1, 2.5, 3, 4.75, 5]');"
+    csql.sh -c "insert into vt (vec) values('[1, 2.5, 3, 4.75, 5]');"
     # Negative numbers
-    csql -u dba testdb -S -c "insert into vt (vec) values('[-1.5, -2.25, -3.75]');"
-    csql -u dba testdb -S -c "insert into vt (vec) values('[-0.001, -0.002, -0.003]');"
+    csql.sh -c "insert into vt (vec) values('[-1.5, -2.25, -3.75]');"
+    csql.sh -c "insert into vt (vec) values('[-0.001, -0.002, -0.003]');"
     # Edge cases
-    csql -u dba testdb -S -c "insert into vt (vec) values('[0.0, -0.0, 1.0, -1.0]');"
-    csql -u dba testdb -S -c "insert into vt (vec) values('[9999999.9999999, -9999999.9999999]');"
+    csql.sh -c "insert into vt (vec) values('[0.0, -0.0, 1.0, -1.0]');"
+    csql.sh -c "insert into vt (vec) values('[9999999.9999999, -9999999.9999999]');"
     # Whitespace handling
-    csql -u dba testdb -S -c "insert into vt (vec) values('[  1.5  ,  2.5  ,  3.5  ]');"
-    csql -u dba testdb -S -c "insert into vt (vec) values('[1.1,    2.2,   3.3   ]');"
+    csql.sh -c "insert into vt (vec) values('[  1.5  ,  2.5  ,  3.5  ]');"
+    csql.sh -c "insert into vt (vec) values('[1.1,    2.2,   3.3   ]');"
     # Precision tests
-    csql -u dba testdb -S -c "insert into vt (vec) values('[1.123456789, 2.123456789, 3.123456789]');"
-    csql -u dba testdb -S -c "insert into vt (vec) values('[0.000000001, 0.999999999]');"
+    csql.sh -c "insert into vt (vec) values('[1.123456789, 2.123456789, 3.123456789]');"
+    csql.sh -c "insert into vt (vec) values('[0.000000001, 0.999999999]');"
     # Mixed precision
-    csql -u dba testdb -S -c "insert into vt (vec) values('[1.1, 2.22, 3.333, 4.4444, 5.55555]');"
+    csql.sh -c "insert into vt (vec) values('[1.1, 2.22, 3.333, 4.4444, 5.55555]');"
 
 select-vector:
-    csql -u dba testdb -S -c "select * from vt;"
+    csql.sh -c "select * from vt;"
 
 vector-run: create-vector create-vector-with-args desc-vector-table insert-vector vector-insert-more select-vector
     just vector-insert-more-more
@@ -291,7 +291,7 @@ git-pull-cub-head:
     git pull cub $(git rev-parse --abbrev-ref HEAD)
 
 insert-vectors:
-    csql -u dba testdb -S -i ./vector-insert.sql
+    csql.sh -i ./vector-insert.sql
 
 build-recreate-test: build recreate-testdb test
 
@@ -340,31 +340,31 @@ format-one-file:
     format-cubrid.sh $(fd | fzf)
 
 format-cubvec-diff:
-    git diff --name-only cubvec/cubvec | xargs -I {} sh -c 'format-cubrid.sh {}'
+    git diff --name-only origin/cubvec/cubvec | xargs -I {} sh -c 'format-cubrid.sh {}'
 
 memleak-build-cubvec-assert-server: build server-start-testdb
-    csql -u dba testdb -c "drop table if exists vt;"
-    csql -u dba testdb -c "create table vt (vec vector);"
-    csql -u dba testdb -c "insert into vt values ('[1, 2, 3]');" 2> trace.log
-    # csql -u dba testdb -c "insert into vt values ('[1e-40, 2e+40]');"
-    # csql -u dba testdb -c "insert into vt values ('[1, 2, nan]');"
-    # csql -u dba testdb -c "select * from vt;"
+    csql.sh -c "drop table if exists vt;"
+    csql.sh -c "create table vt (vec vector);"
+    csql.sh -c "insert into vt values ('[1, 2, 3]');" 2> trace.log
+    # csql.sh -c "insert into vt values ('[1e-40, 2e+40]');"
+    # csql.sh -c "insert into vt values ('[1, 2, nan]');"
+    # csql.sh -c "select * from vt;"
     echo 'wow'
 
 memleak-build-cubvec-assert: build
-    csql -u dba testdb -S -c "drop table if exists vt;"
-    csql -u dba testdb -S -c "create table vt (vec vector);"
-    csql -u dba testdb -S -c "insert into vt values ('[1, 2, 3]');"
+    csql.sh -c "drop table if exists vt;"
+    csql.sh -c "create table vt (vec vector);"
+    csql.sh -c "insert into vt values ('[1, 2, 3]');"
 
 cubvec-30-l2-distance: cubvec-30-simple-sa
-    # csql -u dba testdb -S -c "SELECT L2_DISTANCE('[1, 2, 3]', vec) FROM vector_table;"
+    # csql.sh -c "SELECT L2_DISTANCE('[1, 2, 3]', vec) FROM vector_table;"
     $MY_CUBRID/30-survey-distance/vector-distance.sh
 
 cubvec-30-simple-cs:
-    csql -u dba testdb -c "SELECT L2_DISTANCE('[1, 2, 3]', '[2, 3, 4]') FROM dual;"
+    csql.sh -c "SELECT L2_DISTANCE('[1, 2, 3]', '[2, 3, 4]') FROM dual;"
 
 cubvec-30-simple-sa:
-    csql -u dba testdb -S -c "SELECT L2_DISTANCE('[1, 2, 3]', '[2, 3, 4]') FROM dual;"
+    csql.sh -c "SELECT L2_DISTANCE('[1, 2, 3]', '[2, 3, 4]') FROM dual;"
 
 build-test-30: build server-restart-testdb cubvec-30-l2-distance
 
@@ -381,13 +381,13 @@ run-sa: cubvec-30-simple-sa
 build-run-sa: build run-sa
 
 debug-dual-cubvec: build
-    csql -u dba testdb -S -c "drop table if exists vt;"
-    csql -u dba testdb -S -c "create table vt (vec vector);"
-    csql -u dba testdb -S -c "insert into vt values ('[1, 2, 3]');"
-    csql -u dba testdb -S -c "insert into vt values ('[2, 3, 4]');"
-    csql -u dba testdb -S -c "SELECT L2_DISTANCE(vec, '[5, 5, 5]') from vt;"
-    csql -u dba testdb -S -c "SELECT L2_DISTANCE('[5, 5, 5]', vec) from vt;"
-    csql -u dba testdb -S -c "SELECT L2_DISTANCE('[5, 5, 5]', '[6, 6, 6]') from vt;"
+    csql.sh -c "drop table if exists vt;"
+    csql.sh -c "create table vt (vec vector);"
+    csql.sh -c "insert into vt values ('[1, 2, 3]');"
+    csql.sh -c "insert into vt values ('[2, 3, 4]');"
+    csql.sh -c "SELECT L2_DISTANCE(vec, '[5, 5, 5]') from vt;"
+    csql.sh -c "SELECT L2_DISTANCE('[5, 5, 5]', vec) from vt;"
+    csql.sh -c "SELECT L2_DISTANCE('[5, 5, 5]', '[6, 6, 6]') from vt;"
 
 test-cs:
 
@@ -396,13 +396,13 @@ precommit: build test-cs
 build-run-36: build run-36
 
 run-36:
-    csql -u dba testdb -S -c " \
+    csql.sh -c " \
     select L2_DISTANCE('[1, 2]', '[2, 3]');"
 
 build-run-41: build run-41-vector-distance
 
 run-41-old:
-    csql -u dba testdb -S -c " \
+    csql.sh -c " \
     drop table if exists vt; \
     create table vt (vec vector); \
     insert into vt values ('[1.5, 2, 3e10]'); \
@@ -410,22 +410,22 @@ run-41-old:
     "
 
 run-41-vector-distance:
-    csql -u dba testdb -S -c " \
+    csql.sh -c " \
     select VECTOR_DISTANCE('[1, 2]', '[2, 3]', EUCLIDEAN); \
     select L2_DISTANCE('[1, 2]', '[2, 3]');"
 
 build-run-47: build run-47
 
 run-47:
-    csql -u dba testdb -S -c "drop table if exists vt;"
-    csql -u dba testdb -S -c "create table vt (vec vector);"
-    csql -u dba testdb -S -c "insert into vt values ('[1.5, 2, 3e10]');"
-    csql -u dba testdb -S -c "SELECT cast(vec as varchar) from vt;"
+    csql.sh -c "drop table if exists vt;"
+    csql.sh -c "create table vt (vec vector);"
+    csql.sh -c "insert into vt values ('[1.5, 2, 3e10]');"
+    csql.sh -c "SELECT cast(vec as varchar) from vt;"
 
 build-run-42: build run-42
 
 run-42:
-    csql -u dba testdb -S -c " \
+    csql.sh -c " \
     select L1_DISTANCE('[1, 2, 9]', '[2, 3, 0]');"
 
 build-run: build run
@@ -452,7 +452,7 @@ rr-when:
     just rr-when-"$CURRENT_DIR"
 
 rr-when-23-create-vector-index:
-    taskset -c 0-7 rr record csql -u dba testdb -S -c "create vector index idx on tbl (b);"
+    taskset -c 0-7 rr record csql.sh -c "create vector index idx on tbl (b);"
 
 rr-replay:
     rr replay
@@ -460,137 +460,141 @@ rr-replay:
 given-when-then-23-2: given-23-create-vector-index-2 when-23-create-vector-index-2 then-23-create-vector-index-2
 
 given-23-create-vector-index:
-    csql -u dba testdb -S -c " \
+    csql.sh -c " \
     drop if exists tbl; \
     create table tbl (a int, b vector);"
 
 when-23-create-vector-index:
-    csql -u dba testdb -S -c "create vector index idx on tbl (b cosine);"
+    csql.sh -c "create vector index idx on tbl (b cosine);"
 
 then-23-create-vector-index:
-    csql -u dba testdb -S -c "show index from tbl;"
+    csql.sh -c "show index from tbl;"
 
 given-23-create-vector-index-2:
-    csql -u dba testdb -S -c " \
+    csql.sh -c " \
     drop if exists items; \
     create table items (a int, embedding vector);"
 
 when-23-create-vector-index-2:
-    csql -u dba testdb -S -c "CREATE VECTOR INDEX embedding_hnsw_idx \
+    csql.sh -c "CREATE VECTOR INDEX embedding_hnsw_idx \
     ON items (embedding cosine) \
     WITH (M = 16, ef_construction = 64);"
 
 then-23-create-vector-index-2:
-    csql -u dba testdb -S -c "show index from items;"
+    csql.sh -c "show index from items;"
 
 prerun-23-create-vector-index:
-    csql -u dba testdb -S -c " \
+    csql.sh -c " \
     drop if exists tbl; \
     create table tbl (b int);"
 
 run-23-create-vector-index: then-23-create-vector-index
 
 run-23-create-vector-index-check:
-    csql -u dba testdb -S -c " \
+    csql.sh -c " \
     drop if exists tbl; \
     create table tbl (b int);"
-    csql -u dba testdb -S -c "create vector index idx on tbl (b);"
+    csql.sh -c "create vector index idx on tbl (b);"
 
 run-44-inner-product:
-    csql -u dba testdb -S -c " \
+    csql.sh -c " \
     select INNER_PRODUCT('[1, 2, 3]', '[2, 3, 5]');"
 
 run-43-cosine-distance:
-    csql -u dba testdb -S -c " \
+    csql.sh -c " \
     select COSINE_DISTANCE('[1, 2, 3]', '[2, 3, 5]');"
 
 cosine-distance-100000:
-    csql -u dba testdb -S -c 'select t1.id, t2.id, COSINE_DISTANCE(t1.embedding, t2.embedding) from tbl1 t1 cross join tbl1 t2 limit 100000;'
+    csql.sh -c 'select t1.id, t2.id, COSINE_DISTANCE(t1.embedding, t2.embedding) from tbl1 t1 cross join tbl1 t2 limit 100000;'
 
 load-vector:
-    csql -u dba testdb -c 'drop if exists tbl1; create table tbl1 (id int, vec1 vector, vec2 vector);'
-    csql -u dba testdb -i ./vectorload/insert_batch_1.sql
-    csql -u dba testdb -i ./vectorload/insert_batch_2.sql
-    csql -u dba testdb -i ./vectorload/insert_batch_3.sql
-    csql -u dba testdb -i ./vectorload/insert_batch_4.sql
-    csql -u dba testdb -i ./vectorload/insert_batch_5.sql
-    csql -u dba testdb -i ./vectorload/insert_batch_6.sql
-    csql -u dba testdb -i ./vectorload/insert_batch_7.sql
-    csql -u dba testdb -i ./vectorload/insert_batch_8.sql
-    csql -u dba testdb -i ./vectorload/insert_batch_9.sql
-    csql -u dba testdb -i ./vectorload/insert_batch_10.sql
-    csql -u dba testdb -c "insert into tbl1 select (a.id, a.vec1, a.vec2) from tbl1 a, tbl1 b limit 999000"
+    csql.sh -c 'drop if exists tbl1; create table tbl1 (id int, vec1 vector, vec2 vector);'
+    csql.sh -i ./vectorload/insert_batch_1.sql
+    csql.sh -i ./vectorload/insert_batch_2.sql
+    csql.sh -i ./vectorload/insert_batch_3.sql
+    csql.sh -i ./vectorload/insert_batch_4.sql
+    csql.sh -i ./vectorload/insert_batch_5.sql
+    csql.sh -i ./vectorload/insert_batch_6.sql
+    csql.sh -i ./vectorload/insert_batch_7.sql
+    csql.sh -i ./vectorload/insert_batch_8.sql
+    csql.sh -i ./vectorload/insert_batch_9.sql
+    csql.sh -i ./vectorload/insert_batch_10.sql
+    csql.sh -c "insert into tbl1 select (a.id, a.vec1, a.vec2) from tbl1 a, tbl1 b limit 999000"
 
 given-36-bugfix-euclidean:
-    csql -u dba testdb -S -c "drop if exists tbl; create table tbl (a int, b vector);"
+    csql.sh -c "drop if exists tbl; create table tbl (a int, b vector);"
 
 when-36-bugfix-euclidean:
-    csql -u dba testdb -S -c "insert into tbl values (1, '[1, 2, 3]');"
+    csql.sh -c "insert into tbl values (1, '[1, 2, 3]');"
 
 then-36-bugfix-euclidean:
-    csql -u dba testdb -S -c "select L2_DISTANCE('[1, 2, 3]', b) from tbl;"
+    csql.sh -c "select L2_DISTANCE('[1, 2, 3]', b) from tbl;"
 
 check-size:
-    csql -u dba testdb -S -c 'select count(*) from tbl_256_75000;'
-    csql -u dba testdb -S -c 'select count(*) from tbl_256_150000;'
-    csql -u dba testdb -S -c 'select count(*) from tbl_256_300000;'
+    csql.sh -c 'select count(*) from tbl_256_75000;'
+    csql.sh -c 'select count(*) from tbl_256_150000;'
+    csql.sh -c 'select count(*) from tbl_256_300000;'
 
 load-3-1:
-    csql -u dba testdb -S -c 'create table tbl_3_1 (id int, vec vector(3));'
+    csql.sh -c 'create table tbl_3_1 (id int, vec vector(3));'
     # cubrid loaddb -S -u dba -d out/loaddb_3_1.object testdb
     cubrid loaddb --no-statistics -c 10240 -S -l -u dba -d out/loaddb_3_1.object --estimated-size=150000 --no-logging testdb
 
 load-3-1-check:
-    csql -u dba testdb -S -c 'select * from tbl_3_1;'
+    csql.sh -c 'select * from tbl_3_1;'
+
+load-256-zeroes:
+    csql.sh -c 'create table tbl_256_zeroes (id int, vec vector(256));'
+    cubrid loaddb --no-statistics -c 10240 -S -l -u dba -d out/loaddb_256_zeroes.object --estimated-size=75000 --no-logging testdb
 
 load-256-75000:
-    csql -u dba testdb -S -c 'create table tbl_256_75000 (id int, vec vector(256));'
+    csql.sh -c 'create table tbl_256_75000 (id int, vec vector(256));'
     cubrid loaddb --no-statistics -c 10240 -S -l -u dba -d out/loaddb_256_75000.object --estimated-size=75000 --no-logging testdb
 
 load-256-75000-9:
-    csql -u dba testdb -S -c 'create table tbl_256_75000 (id int, vec vector(256));'
+    csql.sh -c 'create table tbl_256_75000 (id int, vec vector(256));'
     cubrid loaddb --no-statistics -c 10240 -S -l -u dba -d out/loaddb_256_75000_limit_9.object --estimated-size=75000 --no-logging testdb
 
 load-even:
-    csql -u dba testdb -S -c 'create table tbl_even (id int, vec vector);'
+    csql.sh -c 'create table tbl_even (id int, vec vector);'
     cubrid loaddb --no-statistics -c 10240 -S -l -u dba -d out/even.object --estimated-size=75000 --no-logging testdb
 
 select-all-tbl_even:
-    csql -u dba testdb -S -c 'select * from tbl_even;'
+    csql.sh -c 'select * from tbl_even;'
 
 select-all-load-256-75000:
-    csql -u dba testdb -S -c 'select * from tbl_256_75000;'
+    csql.sh -c 'select * from tbl_256_75000;'
 
 load-256-150000:
-    csql -u dba testdb -S -c 'create table tbl_256_150000 (id int, vec vector(256));'
+    csql.sh -c 'create table tbl_256_150000 (id int, vec vector(256));'
     cubrid loaddb --no-statistics -c 10240 -S -l -u dba -d out/loaddb_256_150000.object --estimated-size=150000 --no-logging testdb
 
 load-256-300000:
-    csql -u dba testdb -S -c 'create table tbl_256_300000 (id int, vec vector(256));'
+    csql.sh -c 'create table tbl_256_300000 (id int, vec vector(256));'
     cubrid loaddb --no-statistics -c 10240 -S -l -u dba -d out/loaddb_256_300000.object --estimated-size=300000 --no-logging testdb
 
 load-768-75000:
-    csql -u dba testdb -S -c 'create table tbl_768_75000 (id int, vec vector(768));'
+    csql.sh -c 'create table tbl_768_75000 (id int, vec vector(768));'
     cubrid loaddb --no-statistics -c 10240 -S -l -u dba -d out/loaddb_768_75000.object --estimated-size=75000 --no-logging testdb
 
 load-768-150000:
-    csql -u dba testdb -S -c 'create table tbl_768_150000 (id int, vec vector(768));'
+    csql.sh -c 'create table tbl_768_150000 (id int, vec vector(768));'
     cubrid loaddb --no-statistics -c 10240 -S -l -u dba -d out/loaddb_768_150000.object --estimated-size=150000 --no-logging testdb
 
 load-768-300000:
-    csql -u dba testdb -S -c 'create table tbl_768_300000 (id int, vec vector(768));'
+    csql.sh -c 'create table tbl_768_300000 (id int, vec vector(768));'
     cubrid loaddb --no-statistics -c 10240 -S -l -u dba -d out/loaddb_768_300000.object --estimated-size=300000 --no-logging testdb
 
 load-1536-75000:
-    csql -u dba testdb -S -c 'create table tbl_1536_75000 (id int, vec vector(1536));'
+    csql.sh -c 'create table tbl_1536_75000 (id int, vec vector(1536));'
     cubrid loaddb --no-statistics -c 10240 -S -l -u dba -d out/loaddb_1536_75000.object --estimated-size=75000 --no-logging testdb
 
 load-1536-150000:
-    csql -u dba testdb -S -c 'create table tbl_1536_150000 (id int, vec vector(1536));'
+    csql.sh -c 'create table tbl_1536_150000 (id int, vec vector(1536));'
     cubrid loaddb --no-statistics -c 10240 -S -l -u dba -d out/loaddb_1536_150000.object --estimated-size=150000 --no-logging testdb
 
 load-1536-300000:
-    csql -u dba testdb -S -c 'create table tbl_1536_300000 (id int, vec vector(1536));'
+    csql.sh -c 'create table tbl_1536_300000 (id int, vec vector(1536));'
     cubrid loaddb --no-statistics -c 10240 -S -l -u dba -d out/loaddb_1536_300000.object --estimated-size=300000 --no-logging testdb
 
 csql:

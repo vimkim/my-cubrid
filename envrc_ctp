@@ -2,8 +2,11 @@
 # Variable
 ##############################################################################
 
-PRESET_MODE=profile_clang
-SOURCE_DIR=$HOME/gh/cb/cubvec
+# PRESET_MODE=profile_clang
+PRESET_MODE=debug_clang
+# SOURCE_DIR=$HOME/gh/cb/23-create-index-fix-with/
+# SOURCE_DIR=/home/vimkim/gh/cb/62-db-value-float-array
+SOURCE_DIR=/home/vimkim/gh/cb/cubvec
 
 ##############################################################################
 # Do not change below

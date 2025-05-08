@@ -20,7 +20,7 @@
         "CUBVEC_TEAM_BUILD": "ON",
         "ENABLE_CUBVEC_LOG": "ON",
         "VIMKIM_BUILD": "ON",
-        "WITH_CCI": "true"
+        "WITH_CCI": "true",
         "FAISS_SIMD_MODE": "AVX2"
       },
       "environment": { "NINJA_STATUS": "[%f/%t %es]", "CLICOLOR_FORCE": "1" }

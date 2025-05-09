@@ -22,6 +22,11 @@ alias jc='jcub'
 alias nc='jcub'
 alias jce='$EDITOR $MY_CUBRID/stow/cubrid/justfile'
 alias nce='jce'
+alias nl='print -z "$(just.sh -j ./.just/justfile -d .)"'
+alias nu='print -z "$(just.sh -j ./.just/justfile -d .)"'
+alias nle='$EDITOR ./.just/justfile'
+alias nue='$EDITOR ./.just/justfile'
+
 
 # alias justfile for work
 alias jw='print -z "$(just.sh -j $MY_CUBRID/work.just -d .)"'

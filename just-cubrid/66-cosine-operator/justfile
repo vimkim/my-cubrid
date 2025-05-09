@@ -1,0 +1,19 @@
+run: run-cosine-operator
+
+run-cosine-operator:
+    csql.sh -c "select '[1, 2, 3]' <=> '[2, 3, 4]';"
+
+run-cosine-func:
+    csql.sh -c "select cosine_distance('[1, 2, 3]', '[2, 3, 4]');"
+
+run-euclidean-operator:
+    csql.sh -c "select '[1, 2, 3]' <-> '[2, 3, 4]';"
+
+run-euclidean-func:
+    csql.sh -c "select l2_distance('[1, 2, 3]', '[2, 3, 4]');"
+
+cgdb-cosine-operator:
+    cgdb --args csql -u dba testdb -S -c "select '[1, 2, 3]' <=> '[2, 3, 4]';"
+
+cgdb-euclidean-operator:
+    cgdb --args csql -u dba testdb -S -c "select '[1, 2, 3]' <-> '[2, 3, 4]';"

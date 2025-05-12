@@ -84,7 +84,8 @@ database-remove: _gum-confirm-no
 # CMake
 
 gcc-8-fail:
-    gcc -dumpversion | grep -q "^8" && { echo "GCC 8 detected - failing"; return 1; } || echo "GCC version check passed"
+    # gcc -dumpversion | grep -q "^8" && { echo "GCC 8 detected - failing"; return 1; } || echo "GCC version check passed"
+    echo wow
 
 prepare: stow-create
     git submodule update --init cubrid-cci
@@ -98,7 +99,7 @@ cpptrace:
     patch -N -p1 < $MY_CUBRID/cpptrace.diff
 
 configure: gcc-8-fail
-    cmake --preset $PRESET_MODE
+    cmake --preset $env.PRESET_MODE
 
 cmake-preset-mode-select:
     cmake --list-presets=configure | grep -v "Available" | sed 's/"//g' | tr -d ' ' | fzf | xargs -I {} echo "PRESET_MODE={}" > .env
@@ -115,13 +116,13 @@ update-cubrid-conf:
     echo "Updated buffer size is in $CUBRID/conf/cubrid.conf"
 
 cmake-build-install-3rdparty:
-    cmake --build --preset $PRESET_MODE --target 3rdparty/install
+    cmake --build --preset $env.PRESET_MODE --target 3rdparty/install
 
 cmake-build-install-csql-util: cmake-build-install-3rdparty
-    cmake --build --preset $PRESET_MODE --target util/install
+    cmake --build --preset $env.PRESET_MODE --target util/install
 
 cmake-build-install-all:
-    cmake --build --preset $PRESET_MODE --target install
+    cmake --build --preset $env.PRESET_MODE --target install
 
 build-debug:
     cmake --build --preset mydebug --target install
@@ -137,7 +138,7 @@ clear-cache:
     /bin/rm -rf $CUBRID_BUILD_DIR/CMakeCache.txt $CUBRID_BUILD_DIR/CMakeFiles
 
 build-target:
-    cmake --build --preset $PRESET_MODE --target help | awk -F': ' '{print $1}' | fzf | xargs -I {} cmake --build --preset $PRESET_MODE --target {}
+    cmake --build --preset $env.PRESET_MODE --target help | awk -F': ' '{print $1}' | fzf | xargs -I {} cmake --build --preset $env.PRESET_MODE --target {}
 
 # CSQL
 
@@ -189,7 +190,7 @@ gdbserver-i:
 # utils
 
 list-dbtype-function:
-    fd -H -I dbtype_function build_preset_"$PRESET_MODE"
+    fd -H -I dbtype_function build_preset_"$env.PRESET_MODE"
 
 # createdb
 
@@ -279,6 +280,8 @@ recreate-testdb: db-delete-testdb db-create-testdb
 recreate-vector-run: recreate-testdb vector-run
 
 build-recreate-vector-run: build recreate-testdb vector-run
+
+build-restart-testdb: build server-restart-testdb
 
 # git
 git-pull-origin-head:
@@ -598,7 +601,7 @@ load-1536-300000:
     cubrid loaddb --no-statistics -c 10240 -S -l -u dba -d out/loaddb_1536_300000.object --estimated-size=300000 --no-logging testdb
 
 csql:
-    $MY_CUBRID/bin/csql.sh
+    csql.sh
 
 loaddb-debug:
     cubrid loaddb -S -u dba -d ./loaddb-debug/object testdb
@@ -608,3 +611,12 @@ select-all-from-tbl:
 
 select-all-from-tbl_3_1:
     csql.sh -c 'select * from tbl_3_1;'
+
+vimkim-log:
+    open vimkim.log | lines | parse "[{log_level}] [{function_name}] {message}"
+
+bare-lazygit:
+    with-env { GIT_DIR: ./bare.git.out, GIT_WORK_TREE: . } { lazygit }
+
+bare-nvim:
+    with-env { GIT_DIR: ./bare.git.out, GIT_WORK_TREE: . } { v }

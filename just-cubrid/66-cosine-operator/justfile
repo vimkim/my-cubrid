@@ -9,6 +9,15 @@ run-cosine-func:
 run-euclidean-operator:
     csql.sh -c "select '[1, 2, 3]' <-> '[2, 3, 4]';"
 
+run-create-table:
+    csql.sh -c "drop table if exists tbl; create table tbl (id int, vec vector); insert into tbl values (1, '[1, 2, 3]'), (2, '[2, 3, 4]'); select * from tbl;"
+
+run-euclidean-operator-col:
+    csql.sh -c "select '[1, 2, 3]' <-> vec from tbl;"
+
+run-order-by-euclidean-operator:
+    csql.sh -c "select * from tbl order by '[1, 2, 3]' <-> vec;"
+
 run-euclidean-func:
     csql.sh -c "select l2_distance('[1, 2, 3]', '[2, 3, 4]');"
 
@@ -17,3 +26,9 @@ cgdb-cosine-operator:
 
 cgdb-euclidean-operator:
     cgdb --args csql -u dba testdb -S -c "select '[1, 2, 3]' <-> '[2, 3, 4]';"
+
+uftrace-record-euclidean:
+    uftrace record -d ./uftrace.out/euclidean -- csql -u dba testdb -S -c "select '[1, 2, 3]' <-> '[2, 3, 4]';"
+
+uftrace-replay-euclidean:
+    uftrace replay -d ./uftrace.out/euclidean

@@ -1,9 +1,9 @@
 mod? local '.just/justfile'
 
+set shell := ["nu", "-c"]
+
 default:
     @just --choose --justfile={{ justfile() }} -d {{ invocation_directory() }}
-
-set shell := ["zsh", "-cu"]
 
 alias b := build
 alias c := configure
@@ -63,11 +63,7 @@ _clang-support:
     sed -i '/message(FATAL_ERROR "We currently do not support ${CMAKE_CXX_COMPILER_ID} compiler")/d' CMakeLists.txt
 
 stow-create:
-    stow --dir=$MY_CUBRID/stow --target=. cubrid
-    stow --dir=$MY_CUBRID/stow --target=. gdb
-    mkdir -p $MY_CUBRID/just-cubrid/$(basename $(pwd))
-    touch $MY_CUBRID/just-cubrid/$(basename $(pwd))/justfile
-    ln -sf $MY_CUBRID/just-cubrid/$(basename $(pwd)) .just
+    ~/my-cubrid/stow-create.sh
 
 stow-delete:
     stow --dir=$MY_CUBRID/stow --target=. -D cubrid
@@ -89,20 +85,26 @@ gcc-8-fail:
 
 prepare: stow-create
     git submodule update --init cubrid-cci
-    patch -N -r rej.rej -p1 < $MY_CUBRID/developer-patch.diff
+    open ($env.MY_CUBRID | path join developer-patch.diff) | patch -N -r rej.rej -p1
     just allow-direnv
 
 allow-direnv:
     direnv allow
 
 cpptrace:
-    patch -N -p1 < $MY_CUBRID/cpptrace.diff
+    open ($env.MY_CUBRID | path join cpptrace.diff) | patch -N -r rej.rej -p1
 
-configure: gcc-8-fail
+configure:
     cmake --preset $env.PRESET_MODE
 
 cmake-preset-mode-select:
-    cmake --list-presets=configure | grep -v "Available" | sed 's/"//g' | tr -d ' ' | fzf | xargs -I {} echo "PRESET_MODE={}" > .env
+    ^cmake --list-presets=configure |
+    lines |
+    skip until {|line| $line =~ 'Available configure presets:' } |
+    skip 1 |
+    each { |line| $line | str trim | str replace -a '"' '' } |
+    filter {|line| $line != '' } | str join (char nl) | fzf |
+    xargs -I {} echo "PRESET_MODE={}" | save .env -f
 
 configure-build: configure build
 

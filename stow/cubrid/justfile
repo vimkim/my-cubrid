@@ -98,13 +98,7 @@ configure:
     cmake --preset $env.PRESET_MODE
 
 cmake-preset-mode-select:
-    ^cmake --list-presets=configure |
-    lines |
-    skip until {|line| $line =~ 'Available configure presets:' } |
-    skip 1 |
-    each { |line| $line | str trim | str replace -a '"' '' } |
-    filter {|line| $line != '' } | str join (char nl) | fzf |
-    xargs -I {} echo "PRESET_MODE={}" | save .env -f
+    cmake-preset-mode-select.sh
 
 configure-build: configure build
 
@@ -113,9 +107,8 @@ build: gcc-8-fail cmake-build-install-all
 build-update: gcc-8-fail cmake-build-install-all update-cubrid-conf
 
 update-cubrid-conf:
-    sed -i 's/data_buffer_size=512M/data_buffer_size=32G/' $CUBRID/conf/cubrid.conf
-    sed -i 's/log_buffer_size=512M/data_buffer_size=4G/' $CUBRID/conf/cubrid.conf
-    echo "Updated buffer size is in $CUBRID/conf/cubrid.conf"
+    sed -i 's/data_buffer_size=512M/data_buffer_size=32G/' $"($env.CUBRID)/conf/cubrid.conf"
+    sed -i 's/log_buffer_size=512M/data_buffer_size=4G/' $"($env.CUBRID)/conf/cubrid.conf"
 
 cmake-build-install-3rdparty:
     cmake --build --preset $env.PRESET_MODE --target 3rdparty/install
@@ -197,8 +190,8 @@ list-dbtype-function:
 # createdb
 
 db-create-testdb:
-    mkdir -p $CUBRID_DATABASES/testdb
-    cubrid createdb --db-volume-size=20M --log-volume-size=20M testdb en_US.utf8 -F $CUBRID_DATABASES/testdb
+    ^mkdir -p $"($env.CUBRID_DATABASES)/testdb"
+    cubrid createdb --db-volume-size=20M --log-volume-size=20M testdb en_US.utf8 -F $"($env.CUBRID_DATABASES)/testdb"
 
 db-delete-testdb:
     cubrid deletedb testdb

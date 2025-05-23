@@ -20,5 +20,7 @@ export PATH="$CUBRID/bin:$PATH"
 export LD_LIBRARY_PATH="$CUBRID/cci/lib:$CUBRID/lib:$HOME/CUB3LIB/lib:/usr/local/lib:$LD_LIBRARY_PATH"
 export CUBRID_BUILD_DIR="$SOURCE_DIR/build_preset_$PRESET_MODE"
 
-export PATH="$(pwd)/CTP/bin:$PATH"
-export CTP_HOME="$(pwd)/CTP"
+PATH="$(pwd)/CTP/bin:$PATH"
+export PATH
+CTP_HOME="$(pwd)/CTP"
+export CTP_HOME

@@ -14,8 +14,8 @@
       "cacheVariables": {
         "CMAKE_EXPORT_COMPILE_COMMANDS": "ON",
         "CMAKE_INSTALL_PREFIX": "$env{CUBRID}",
-        "CMAKE_C_COMPILER_LAUNCHER": "ccache",
-        "CMAKE_CXX_COMPILER_LAUNCHER": "ccache",
+        // "CMAKE_C_COMPILER_LAUNCHER": "ccache",
+        // "CMAKE_CXX_COMPILER_LAUNCHER": "ccache",
         "CMAKE_COLOR_DIAGNOSTICS": "ON",
         "CUBVEC_TEAM_BUILD": "ON",
         "ENABLE_CUBVEC_LOG": "ON",
@@ -30,8 +30,6 @@
       "inherits": "user_default",
       "cacheVariables": {
         "CMAKE_BUILD_TYPE": "RelWithDebInfo",
-        "CMAKE_C_COMPILER_LAUNCHER": "ccache",
-        "CMAKE_CXX_COMPILER_LAUNCHER": "ccache",
         "CMAKE_C_FLAGS": "-fdiagnostics-color=always -Wno-int-conversion -Wno-incompatible-pointer-types -Wno-implicit-function-declaration",
         "CMAKE_CXX_FLAGS": "-fdiagnostics-color=always",
         "CMAKE_C_FLAGS_RELWITHDEBINFO": "-Ofast -g -DNDEBUG -finline-functions -Wno-error=mismatched-new-delete",
@@ -47,8 +45,6 @@
       "inherits": "user_default",
       "cacheVariables": {
         "CMAKE_BUILD_TYPE": "RelWithDebInfo",
-        "CMAKE_C_COMPILER_LAUNCHER": "ccache",
-        "CMAKE_CXX_COMPILER_LAUNCHER": "ccache",
         "CMAKE_C_FLAGS": "-fdiagnostics-color=always -Wno-int-conversion -Wno-incompatible-pointer-types -Wno-implicit-function-declaration",
         "CMAKE_CXX_FLAGS": "-fdiagnostics-color=always",
         "CMAKE_C_FLAGS_RELWITHDEBINFO": "-O2 -g -DNDEBUG -finline-functions -Wno-error=mismatched-new-delete",
@@ -64,8 +60,6 @@
       "inherits": "user_default",
       "cacheVariables": {
         "CMAKE_BUILD_TYPE": "Debug",
-        "CMAKE_C_COMPILER_LAUNCHER": "ccache",
-        "CMAKE_CXX_COMPILER_LAUNCHER": "ccache",
         "CMAKE_C_FLAGS": "-fdiagnostics-color=always -O2 -pg -ggdb3 -Wno-int-conversion -Wno-incompatible-pointer-types -Wno-implicit-function-declaration",
         "CMAKE_CXX_FLAGS": "-fdiagnostics-color=always -O2 -pg -ggdb3",
         "CMAKE_C_COMPILER": "gcc",
@@ -79,8 +73,6 @@
       "inherits": "user_default",
       "cacheVariables": {
         "CMAKE_BUILD_TYPE": "Debug",
-        "CMAKE_C_COMPILER_LAUNCHER": "ccache",
-        "CMAKE_CXX_COMPILER_LAUNCHER": "ccache",
         "CMAKE_C_FLAGS": "-fdiagnostics-color=always",
         "CMAKE_CXX_FLAGS": "-fdiagnostics-color=always",
         "CMAKE_C_FLAGS_DEBUG": "-Og -ggdb3 -Wno-int-conversion -Wno-incompatible-pointer-types -Wno-implicit-function-declaration",
@@ -96,8 +88,6 @@
       "inherits": "user_default",
       "cacheVariables": {
         "CMAKE_BUILD_TYPE": "Debug",
-        "CMAKE_C_COMPILER_LAUNCHER": "ccache",
-        "CMAKE_CXX_COMPILER_LAUNCHER": "ccache",
         "CMAKE_C_FLAGS": "-fdiagnostics-color=always",
         "CMAKE_CXX_FLAGS": "-fdiagnostics-color=always",
         "CMAKE_C_FLAGS_DEBUG": "-O0 -ggdb3 -Wno-int-conversion -Wno-incompatible-pointer-types -Wno-implicit-function-declaration",
@@ -113,8 +103,6 @@
       "inherits": "user_default",
       "cacheVariables": {
         "CMAKE_BUILD_TYPE": "Debug",
-        "CMAKE_C_COMPILER_LAUNCHER": "ccache",
-        "CMAKE_CXX_COMPILER_LAUNCHER": "ccache",
         "CMAKE_C_FLAGS": "-fdiagnostics-color=always",
         "CMAKE_CXX_FLAGS": "-fdiagnostics-color=always",
         "CMAKE_C_FLAGS_DEBUG": "-Og -ggdb3 -Wno-int-conversion -Wno-incompatible-pointer-types -Wno-implicit-function-declaration -fsanitize=address,undefined,leak,pointer-subtract,pointer-compare,bounds-strict,integer-divide-by-zero,float-divide-by-zero,float-cast-overflow,shift,signed-integer-overflow,object-size,return,bool,builtin,unreachable,vptr -fno-omit-frame-pointer -fstack-protector-strong -D_FORTIFY_SOURCE=2 -Wfatal-errors",
@@ -130,8 +118,6 @@
       "inherits": "user_default",
       "cacheVariables": {
         "CMAKE_BUILD_TYPE": "Debug",
-        "CMAKE_C_COMPILER_LAUNCHER": "ccache",
-        "CMAKE_CXX_COMPILER_LAUNCHER": "ccache",
         "CMAKE_C_FLAGS": "-fdiagnostics-color=always",
         "CMAKE_CXX_FLAGS": "-fdiagnostics-color=always",
         "CMAKE_C_FLAGS_DEBUG": "-Og -ggdb3 -Wno-int-conversion -Wno-incompatible-pointer-types -Wno-implicit-function-declaration -fsanitize=undefined,leak,bounds-strict,integer-divide-by-zero,float-divide-by-zero,float-cast-overflow,shift,signed-integer-overflow,object-size,return,bool,builtin,unreachable,vptr -fno-omit-frame-pointer -fstack-protector-strong -D_FORTIFY_SOURCE=2 -Wfatal-errors",
@@ -147,8 +133,6 @@
       "inherits": "user_default",
       "cacheVariables": {
         "CMAKE_BUILD_TYPE": "Debug",
-        "CMAKE_C_COMPILER_LAUNCHER": "ccache",
-        "CMAKE_CXX_COMPILER_LAUNCHER": "ccache",
         "CUBVEC_TEAM_BUILD": "ON",
         "VIMKIM_BUILD": "ON",
         "CMAKE_C_COMPILER": "clang",
@@ -166,8 +150,6 @@
       "inherits": "user_default",
       "cacheVariables": {
         "CMAKE_BUILD_TYPE": "Debug",
-        "CMAKE_C_COMPILER_LAUNCHER": "ccache",
-        "CMAKE_CXX_COMPILER_LAUNCHER": "ccache",
         "CUBVEC_TEAM_BUILD": "ON",
         "VIMKIM_BUILD": "ON",
         "CMAKE_C_COMPILER": "clang",
@@ -188,8 +170,6 @@
         "CMAKE_CXX_STANDARD_REQUIRED": "ON",
         "CMAKE_EXPORT_COMPILE_COMMANDS": "ON",
         "WITH_CCI": "true",
-        "CMAKE_C_COMPILER_LAUNCHER": "ccache",
-        "CMAKE_CXX_COMPILER_LAUNCHER": "ccache",
         "CMAKE_C_COMPILER": "clang",
         "CMAKE_CXX_COMPILER": "clang++",
         "CMAKE_C_FLAGS": "-fcolor-diagnostics -O2 -pg -ggdb3 -fdebug-macro -flto=thin -fno-inline -Xclang -fno-validate-pch -Xclang -fno-pch-timestamp -Wno-everything -Wno-non-pod-varargs -Wno-c++11-narrowing -Wno-int-conversion -Wno-implicit-function-declaration -Wno-unused-parameter",
@@ -206,8 +186,6 @@
         "VIMKIM_BUILD": "ON",
         "CMAKE_EXPORT_COMPILE_COMMANDS": "ON",
         "WITH_CCI": "true",
-        "CMAKE_C_COMPILER_LAUNCHER": "ccache",
-        "CMAKE_CXX_COMPILER_LAUNCHER": "ccache",
         "CMAKE_C_COMPILER": "clang",
         "CMAKE_CXX_COMPILER": "clang++",
         "CMAKE_C_FLAGS": "-fcolor-diagnostics -O2 -pg -ggdb3 -fdebug-macro -flto=thin -fno-inline -Xclang -fno-validate-pch -Xclang -fno-pch-timestamp -Wno-everything -Wno-non-pod-varargs -Wno-c++11-narrowing -Wno-int-conversion -Wno-implicit-function-declaration",
@@ -225,8 +203,6 @@
         "CMAKE_CXX_STANDARD": "17",
         "CMAKE_CXX_STANDARD_REQUIRED": "ON",
         "CMAKE_EXPORT_COMPILE_COMMANDS": "ON",
-        "CMAKE_C_COMPILER_LAUNCHER": "ccache",
-        "CMAKE_CXX_COMPILER_LAUNCHER": "ccache",
         "CMAKE_C_COMPILER": "clang",
         "CMAKE_CXX_COMPILER": "clang++",
         "CMAKE_C_FLAGS": "-fcolor-diagnostics -flto=thin -Xclang -fno-validate-pch -Xclang -fno-pch-timestamp -Wno-everything -Wno-non-pod-varargs -Wno-c++11-narrowing -Wno-int-conversion -Wno-implicit-function-declaration -Wno-unused-parameter",

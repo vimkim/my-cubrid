@@ -79,10 +79,6 @@ database-remove: _gum-confirm-no
 
 # CMake
 
-gcc-8-fail:
-    # gcc -dumpversion | grep -q "^8" && { echo "GCC 8 detected - failing"; return 1; } || echo "GCC version check passed"
-    echo wow
-
 prepare: stow-create
     git submodule update --init cubrid-cci
     open ($env.MY_CUBRID | path join developer-patch.diff) | patch -N -r rej.rej -p1
@@ -102,9 +98,9 @@ cmake-preset-mode-select:
 
 configure-build: configure build
 
-build: gcc-8-fail cmake-build-install-all
+build: cmake-build-install-all
 
-build-update: gcc-8-fail cmake-build-install-all update-cubrid-conf
+build-update: cmake-build-install-all update-cubrid-conf
 
 update-cubrid-conf:
     sed -i 's/data_buffer_size=512M/data_buffer_size=32G/' $"($env.CUBRID)/conf/cubrid.conf"

@@ -1,8 +1,8 @@
 diff --git a/3rdparty/CMakeLists.txt b/3rdparty/CMakeLists.txt
-index 3ec5cf7d2..aa1bb4b14 100644
+index 70f80d90d..eb6b5d9fe 100644
 --- a/3rdparty/CMakeLists.txt
 +++ b/3rdparty/CMakeLists.txt
-@@ -437,9 +437,9 @@ set(RAPIDJSON_INCLUDES ${3RDPARTY_LIBS_DIR}/Source/rapidjson/include)
+@@ -450,9 +450,9 @@ set(RAPIDJSON_INCLUDES ${3RDPARTY_LIBS_DIR}/Source/rapidjson/include)
  set(RAPIDJSON_LIBS "")
  ADD_BY_PRODUCTS_VARIABLE ("RAPIDJSON" ${RAPIDJSON_INCLUDES})
  externalproject_add(${RAPIDJSON_TARGET}
@@ -15,7 +15,7 @@ index 3ec5cf7d2..aa1bb4b14 100644
    LOG_CONFIGURE        TRUE
    LOG_BUILD            TRUE
    LOG_INSTALL          TRUE
-@@ -502,7 +502,7 @@ if(WITH_LIBTBB STREQUAL "EXTERNAL")
+@@ -515,7 +515,7 @@ if(WITH_LIBTBB STREQUAL "EXTERNAL")
      #e.g. https://github.com/oneapi-src/oneTBB/archive/refs/tags/v2021.11.0.tar.gz
      set(LIBTBB_LIBS ${3RDPARTY_LIBS_DIR}/lib/libtbb.a)
      set(LIBTBB_INCLUDES ${3RDPARTY_LIBS_DIR}/Source/libtbb/include/tbb ${3RDPARTY_LIBS_DIR}/Source/libtbb/include/oneapi ${3RDPARTY_LIBS_DIR}/Source/libtbb/include/oneapi/tbb ${3RDPARTY_LIBS_DIR}/Source/libtbb/include/oneapi/tbb/detail)
@@ -25,10 +25,10 @@ index 3ec5cf7d2..aa1bb4b14 100644
      externalproject_add(${LIBTBB_TARGET}
        URL                  ${WITH_LIBTBB_URL}
 diff --git a/CMakeLists.txt b/CMakeLists.txt
-index 6e6be0adc..dd3fb6490 100644
+index 2016f8326..1bb480eb9 100644
 --- a/CMakeLists.txt
 +++ b/CMakeLists.txt
-@@ -216,7 +216,7 @@ if(UNIX)
+@@ -264,7 +264,7 @@ if(UNIX)
      endif(CMAKE_CXX_COMPILER_VERSION VERSION_LESS 4.4.7)
  
      # C flags for both debug and release build
@@ -37,16 +37,15 @@ index 6e6be0adc..dd3fb6490 100644
      # C++ flags for both debug and release build
      set(CMAKE_CXX_COMMON_FLAGS "${CMAKE_C_COMMON_FLAGS} -std=c++17 -fopenmp -lopenblas -llapack")
  
-@@ -254,7 +254,7 @@ if(UNIX)
+@@ -302,6 +302,7 @@ if(UNIX)
      set(CMAKE_MODULE_LINKER_FLAGS "${CMAKE_MODULE_LINKER_FLAGS} -Wl,--hash-style=both -static-libstdc++")
  
-   else(CMAKE_COMPILER_IS_GNUCC)
--    message(FATAL_ERROR "We currently do not support ${CMAKE_CXX_COMPILER_ID} compiler")
+   elseif (CMAKE_CXX_COMPILER_ID STREQUAL "Clang")
 +    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fopenmp -lopenblas -llapack")
+   else()
+     message(FATAL_ERROR "We currently do not support ${CMAKE_CXX_COMPILER_ID} compiler")
    endif(CMAKE_COMPILER_IS_GNUCC)
- else(UNIX)
-   # turn off LinkIncremental option for release build
-@@ -328,7 +328,7 @@ set(CSQL_GRAMMAR_INPUT ${CMAKE_CURRENT_BINARY_DIR}/csql_grammar.yy)
+@@ -373,7 +374,7 @@ set(CSQL_GRAMMAR_INPUT ${CMAKE_CURRENT_BINARY_DIR}/csql_grammar.yy)
  # run to create new outputs
  
  bison_target(csql_grammar ${CSQL_GRAMMAR_INPUT} ${CSQL_GRAMMAR_OUTPUT}
@@ -61,48 +60,16 @@ diff --git a/cubrid-cci b/cubrid-cci
 @@ -1 +1 @@
 -Subproject commit ef5470ffae4aa934425145e393fefc81899c84a7
 +Subproject commit ef5470ffae4aa934425145e393fefc81899c84a7-dirty
-diff --git a/cubrid/CMakeLists.txt b/cubrid/CMakeLists.txt
-index 0f41b4eba..86c060e7c 100644
---- a/cubrid/CMakeLists.txt
-+++ b/cubrid/CMakeLists.txt
-@@ -580,7 +580,7 @@ if(UNIX)
-   # Add TBB
-   target_include_directories(cubrid PUBLIC ${TBB_INCLUDES})
-   target_link_libraries(cubrid LINK_PRIVATE ${TBB_LIBS})
--  add_dependencies(cubrid ${TBB_TARGETS})
-+#   add_dependencies(cubrid ${TBB_TARGETS})
- else(UNIX)
-   target_link_libraries(cubrid LINK_PRIVATE ${EP_LIBS})
- endif(UNIX)
-diff --git a/cubridmanager b/cubridmanager
-deleted file mode 160000
-index ee4b78b54..000000000
---- a/cubridmanager
-+++ /dev/null
-@@ -1 +0,0 @@
--Subproject commit ee4b78b546c9ae68da74c6effe3f9081631b2325
-diff --git a/src/transaction/flashback.c b/src/transaction/flashback.c
-index b64fb632c..a0d5d15b0 100644
---- a/src/transaction/flashback.c
-+++ b/src/transaction/flashback.c
-@@ -22,6 +22,7 @@
+diff --git a/src/sp/pl_session.hpp b/src/sp/pl_session.hpp
+index 3537d9f7a..414e478fe 100644
+--- a/src/sp/pl_session.hpp
++++ b/src/sp/pl_session.hpp
+@@ -51,7 +51,7 @@ namespace cubthread
+ namespace cubmethod
+ {
+   class method_invoke_group;
+-  class db_parameter_info;
++  struct db_parameter_info;
+ }
  
- #ident "$Id$"
- 
-+#include <algorithm>
- #include <stdio.h>
- #include <string.h>
- #include <stddef.h>
-diff --git a/src/xasl/xasl_stream.hpp b/src/xasl/xasl_stream.hpp
-index 70cf5287d..c32fb09ff 100644
---- a/src/xasl/xasl_stream.hpp
-+++ b/src/xasl/xasl_stream.hpp
-@@ -94,7 +94,7 @@ template <typename T>
- static void stx_alloc_array (THREAD_ENTRY *thread_p, T *&ptr, std::size_t count);
- 
- template <typename T>
--void stx_restore (THREAD_ENTRY *thread_p, char *&ptr, T *&target);
-+static void stx_restore (THREAD_ENTRY *thread_p, char *&ptr, T *&target);
- 
- //////////////////////////////////////////////////////////////////////////
- // Template and inline implementation
+ namespace cubpl

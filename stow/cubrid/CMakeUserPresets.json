@@ -14,14 +14,15 @@
       "cacheVariables": {
         "CMAKE_EXPORT_COMPILE_COMMANDS": "ON",
         "CMAKE_INSTALL_PREFIX": "$env{CUBRID}",
+        "CMAKE_TOOLCHAIN_FILE": "$env{VCPKG_ROOT}/scripts/buildsystems/vcpkg.cmake",
         // "CMAKE_C_COMPILER_LAUNCHER": "ccache",
         // "CMAKE_CXX_COMPILER_LAUNCHER": "ccache",
         "CMAKE_COLOR_DIAGNOSTICS": "ON",
         "CUBVEC_TEAM_BUILD": "ON",
         "ENABLE_CUBVEC_LOG": "ON",
         "VIMKIM_BUILD": "ON",
-        "WITH_CCI": "true",
-        "FAISS_SIMD_MODE": "AVX2"
+        "WITH_CCI": "true"
+        // "FAISS_SIMD_MODE": "AVX2"
       },
       "environment": { "NINJA_STATUS": "[%f/%t %es]", "CLICOLOR_FORCE": "1" }
     },

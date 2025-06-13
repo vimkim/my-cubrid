@@ -4,9 +4,12 @@
 
 # PRESET_MODE=profile_clang
 PRESET_MODE=debug_clang
+# PRESET_MODE=release_gcc
 # SOURCE_DIR=$HOME/gh/cb/23-create-index-fix-with/
 # SOURCE_DIR=/home/vimkim/gh/cb/62-db-value-float-array
-SOURCE_DIR=/home/vimkim/gh/cb/cubvec
+# SOURCE_DIR=/home/vimkim/gh/cb/cubvec
+# SOURCE_DIR=/home/vimkim/gh/cb/66-cosine-operator
+SOURCE_DIR=/home/vimkim/gh/cb/68-l1-op
 
 ##############################################################################
 # Do not change below

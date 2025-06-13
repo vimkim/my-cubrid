@@ -11,15 +11,18 @@
       "displayName": "FAISS External Build",
       "description": "Configure project to build FAISS externally.",
       "generator": "Ninja",
-      "binaryDir": "${sourceDir}/build.o",
+      "binaryDir": "${sourceDir}/build_preset_simple",
       "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Release",
         "WITH_FAISS": "EXTERNAL",
         "WITH_FAISS_URL": "https://your-faiss-url.example.com/faiss.tar.gz",
         "CMAKE_INSTALL_PREFIX": "${sourceDir}/3RDPARTY_LIBS/faiss",
         "CMAKE_CXX_FLAGS": "-llapack -lopenblas",
+        "CMAKE_CXX_COMPILER": "g++",
         "BUILD_SHARED_LIBS": "OFF",
         "FAISS_ENABLE_GPU": "OFF",
         "FAISS_ENABLE_PYTHON": "OFF",
+        // "FAISS_OPT_LEVEL": "avx2",
         "BUILD_TESTING": "OFF",
         "CMAKE_EXPORT_COMPILE_COMMANDS": "ON"
       }

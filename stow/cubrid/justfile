@@ -41,6 +41,8 @@ server-restart-testdb:
 server-stop-testdb:
     cubrid server stop testdb
 
+get-server-config: paramdump-testdb
+
 paramdump-testdb:
     cubrid paramdump testdb | grep 'buffer'
 
@@ -591,7 +593,7 @@ load-1536-300000:
     csql.sh -c 'create table tbl_1536_300000 (id int, vec vector(1536));'
     cubrid loaddb --no-statistics -c 10240 -S -l -u dba -d out/loaddb_1536_300000.object --estimated-size=300000 --no-logging testdb
 
-csql:
+csql: paramdump-testdb
     csql.sh
 
 loaddb-debug:

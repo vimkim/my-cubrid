@@ -1,0 +1,8 @@
+CompileFlags:
+  Add: [
+    # Tell clangd to imitate these drivers and steal their implicit include/lib paths
+    # "--query-driver=g++",
+    # "--query-driver=gcc",
+    "-U__clang__",
+    "-U__clang_major__"
+  ]

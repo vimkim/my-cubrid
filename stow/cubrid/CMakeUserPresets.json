@@ -42,6 +42,21 @@
       }
     },
     {
+      "name": "release_gcc_O3",
+      "inherits": "user_default",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "RelWithDebInfo",
+        "CMAKE_C_FLAGS": "-fdiagnostics-color=always -Wno-int-conversion -Wno-incompatible-pointer-types -Wno-implicit-function-declaration",
+        "CMAKE_CXX_FLAGS": "-fdiagnostics-color=always",
+        "CMAKE_C_FLAGS_RELWITHDEBINFO": "-O3 -g -DNDEBUG -finline-functions -Wno-error=mismatched-new-delete",
+        "CMAKE_CXX_FLAGS_RELWITHDEBINFO": "-O3 -g -DNDEBUG -finline-functions -Wno-error=mismatched-new-delete",
+        "CMAKE_C_COMPILER": "gcc",
+        "CMAKE_CXX_COMPILER": "g++",
+        "CMAKE_CXX_STANDARD": "17",
+        "CMAKE_CXX_STANDARD_REQUIRED": "ON"
+      }
+    },
+    {
       "name": "release_gcc",
       "inherits": "user_default",
       "cacheVariables": {
@@ -54,6 +69,38 @@
         "CMAKE_CXX_COMPILER": "g++",
         "CMAKE_CXX_STANDARD": "17",
         "CMAKE_CXX_STANDARD_REQUIRED": "ON"
+      }
+    },
+    {
+      "name": "release_gcc_avx2",
+      "inherits": "user_default",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "RelWithDebInfo",
+        "CMAKE_C_FLAGS": "-fdiagnostics-color=always -Wno-int-conversion -Wno-incompatible-pointer-types -Wno-implicit-function-declaration",
+        "CMAKE_CXX_FLAGS": "-fdiagnostics-color=always",
+        "CMAKE_C_FLAGS_RELWITHDEBINFO": "-O2 -g -DNDEBUG -finline-functions -Wno-error=mismatched-new-delete",
+        "CMAKE_CXX_FLAGS_RELWITHDEBINFO": "-O2 -g -DNDEBUG -finline-functions -Wno-error=mismatched-new-delete",
+        "CMAKE_C_COMPILER": "gcc",
+        "CMAKE_CXX_COMPILER": "g++",
+        "CMAKE_CXX_STANDARD": "17",
+        "CMAKE_CXX_STANDARD_REQUIRED": "ON",
+        "FAISS_SIMD_MODE": "AVX2"
+      }
+    },
+    {
+      "name": "profile_gcc_avx2",
+      "inherits": "user_default",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "RelWithDebInfo",
+        "CMAKE_C_FLAGS": "-fdiagnostics-color=always -Wno-int-conversion -Wno-incompatible-pointer-types -Wno-implicit-function-declaration",
+        "CMAKE_CXX_FLAGS": "-fdiagnostics-color=always",
+        "CMAKE_C_FLAGS_RELWITHDEBINFO": "-O2 -g -pg -DNDEBUG -finline-functions -Wno-error=mismatched-new-delete",
+        "CMAKE_CXX_FLAGS_RELWITHDEBINFO": "-O2 -g -pg -DNDEBUG -finline-functions -Wno-error=mismatched-new-delete",
+        "CMAKE_C_COMPILER": "gcc",
+        "CMAKE_CXX_COMPILER": "g++",
+        "CMAKE_CXX_STANDARD": "17",
+        "CMAKE_CXX_STANDARD_REQUIRED": "ON",
+        "FAISS_SIMD_MODE": "AVX2"
       }
     },
     {
@@ -219,8 +266,20 @@
       "configurePreset": "release_gcc_Ofast"
     },
     {
+      "name": "release_gcc_O3",
+      "configurePreset": "release_gcc_O3"
+    },
+    {
       "name": "release_gcc",
       "configurePreset": "release_gcc"
+    },
+    {
+      "name": "release_gcc_avx2",
+      "configurePreset": "release_gcc_avx2"
+    },
+    {
+      "name": "profile_gcc_avx2",
+      "configurePreset": "profile_gcc_avx2"
     },
     {
       "name": "debug_gcc",

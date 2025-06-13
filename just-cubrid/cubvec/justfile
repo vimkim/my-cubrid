@@ -38,3 +38,15 @@ load-1536-150000:
 load-1536-300000:
     csql -u dba testdb -S -c 'create table tbl_1536_300000 (id int, vec vector(1536));'
     cubrid loaddb --no-statistics -c 10240 -S -l -u dba -d out/loaddb_1536_300000.object --estimated-size=300000 --no-logging testdb
+
+perf-record:
+    ./record_perf.sh
+
+perf-record-2:
+    perf record -F 99 -a --call-graph dwarf -g -o perf.data ./collect_stats.sh 10 100000 testdb tbl_256_300000
+
+perf-report:
+    perf report --stdio
+
+perf-script:
+    perf script | inferno-collapse-perf | flamelens

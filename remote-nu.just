@@ -1,44 +1,14 @@
 _default:
     @just --choose
 
-ssh216:
-    LANG=en_US.utf8 TERM=xterm ssh -Y cubrid@192.168.2.216
-
-ssh217:
-    LANG=en_US.utf8 TERM=xterm ssh -Y cubrid@192.168.2.217
-
-ssh218:
-    LANG=en_US.utf8 TERM=xterm ssh -Y cubrid@192.168.2.218
-
 dev2-server:
-    LANG=en_US.utf8 TERM=xterm ssh -Y vimkim@192.168.2.252
+    LANG=en_US.utf8 TERM=xterm ssh -Y vimkim@192.168.4.2
 
 dev2-container-1:
-    with-env { LANG : "en_US.utf8" } { ssh -Y vimkim@192.168.2.120 }
+    with-env { LANG : "en_US.utf8" } { ssh -Y vimkim@192.168.2.151 }
 
 dev2-container-2:
-    ssh -Y vimkim@192.168.2.121
-
-dev2-container-3:
-    ssh -Y vimkim@192.168.2.122
-
-dev2-container-4:
-    ssh -Y dhkim@192.168.2.123
-
-dev2-fedora-systemd-1:
-    LANG=en_US.utf8 ssh -Y vimkim-fedora-1@192.168.4.100
-
-dev2-rocky-systemd-1:
-    LANG=en_US.utf8 ssh -Y vimkim-r8@192.168.4.108
-
-dev3-server:
-    LANG=en_US.utf8 TERM=xterm ssh -Y dhkim@192.168.2.253
-
-dev3-container-rocky8:
-    LANG=en_US.utf8 ssh -Y vimkim@192.168.2.253 -p 2222
-
-dev3-container-arch:
-    ssh -Y vimkim@192.168.2.253 -p 2223
+    with-env { LANG : "en_US.utf8" } { ssh -Y vimkim@192.168.2.152 }
 
 vpn:
     sudo openfortivpn cubrid1.fortiddns.com:10443 --username=

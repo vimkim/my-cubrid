@@ -66,15 +66,27 @@ summarize() {
     done
     avg=$((sum / ${#values[@]}))
     med=$(get_median "${values[@]}")
-    echo "$label -> avg, min, max, median"
-    echo "$avg"
-    echo "$min"
-    echo "$max"
-    echo "$med"
+    # echo "$avg"
+    # echo "$min"
+    # echo "$max"
+    # echo "$med"
+
+    echo "{\"repeat\":${REPEAT},\"limit\":${LIMIT},\"dbname\":\"${DBNAME}\",\"tablename\":\"${TABLENAME}\",\"metric\":\"${label}\",\"stat\":\"avg\",\"value\":${avg}}"
+    echo "{\"repeat\":${REPEAT},\"limit\":${LIMIT},\"dbname\":\"${DBNAME}\",\"tablename\":\"${TABLENAME}\",\"metric\":\"${label}\",\"stat\":\"min\",\"value\":${min}}"
+    echo "{\"repeat\":${REPEAT},\"limit\":${LIMIT},\"dbname\":\"${DBNAME}\",\"tablename\":\"${TABLENAME}\",\"metric\":\"${label}\",\"stat\":\"max\",\"value\":${max}}"
+    echo "{\"repeat\":${REPEAT},\"limit\":${LIMIT},\"dbname\":\"${DBNAME}\",\"tablename\":\"${TABLENAME}\",\"metric\":\"${label}\",\"stat\":\"median\",\"value\":${med}}"
+
 }
 
-echo ""
+echo "$label -> avg, min, max, median"
 summarize "SELECT TIME" "${select_times[@]}"
 summarize "SELECT FETCH" "${select_fetches[@]}"
 summarize "SCAN TIME" "${scan_times[@]}"
 summarize "SCAN FETCH" "${scan_fetches[@]}"
+
+{
+summarize "SELECT TIME" "${select_times[@]}"
+summarize "SELECT FETCH" "${select_fetches[@]}"
+summarize "SCAN TIME" "${scan_times[@]}"
+summarize "SCAN FETCH" "${scan_fetches[@]}"
+} >> results.jsonl

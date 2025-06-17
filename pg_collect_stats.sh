@@ -8,13 +8,14 @@ REPEAT=${1:-10}
 LIMIT=${2:-10000}
 DATABASE_NAME=${3:-vimkimdb}
 TABLE_NAME=${4:-vimkim}
+DIMENSION=${5:-9999999}
 
 declare -a nested_times seq_times shared_hits exec_times # ← explicit arrays
 
 for i in $(seq 1 $REPEAT); do
 	echo "Run $i..."
 	RESULT=$(psql -d $DATABASE_NAME -At -c "
-    CREATE TEMP TABLE query_vector(vec vector(256)) ON COMMIT DROP;
+    CREATE TEMP TABLE query_vector(vec vector($DIMENSION)) ON COMMIT DROP;
     INSERT INTO query_vector SELECT vec FROM $TABLE_NAME LIMIT 1;
 
     -- warm-up (not collected)
@@ -79,3 +80,29 @@ summary_stats "${shared_hits[@]}"
 echo
 echo "==== Total Execution Time (ms) ===="
 summary_stats "${exec_times[@]}"
+
+summary_stats_json() {
+	local metric="$1"
+	shift
+	local arr=("$@")
+	local sorted=($(printf '%s\n' "${arr[@]}" | sort -n))
+	local count=${#sorted[@]}
+	local total=0
+	for val in "${sorted[@]}"; do total=$(echo "$total + $val" | bc); done
+	avg=$(echo "$total / $count" | bc -l)
+	median=${sorted[$((count / 2))]}
+
+	# Output each stat as a separate JSON line
+	echo "{\"repeat\":$REPEAT,\"limit\":$LIMIT,\"dbname\":\"$DATABASE_NAME\",\"tablename\":\"$TABLE_NAME\",\"metric\":\"$metric\",\"stat\":\"avg\",\"value\":$avg}" >>pg_results.jsonl
+	echo "{\"repeat\":$REPEAT,\"limit\":$LIMIT,\"dbname\":\"$DATABASE_NAME\",\"tablename\":\"$TABLE_NAME\",\"metric\":\"$metric\",\"stat\":\"min\",\"value\":${sorted[0]}}" >>pg_results.jsonl
+	echo "{\"repeat\":$REPEAT,\"limit\":$LIMIT,\"dbname\":\"$DATABASE_NAME\",\"tablename\":\"$TABLE_NAME\",\"metric\":\"$metric\",\"stat\":\"max\",\"value\":${sorted[$((count - 1))]}}" >>pg_results.jsonl
+	echo "{\"repeat\":$REPEAT,\"limit\":$LIMIT,\"dbname\":\"$DATABASE_NAME\",\"tablename\":\"$TABLE_NAME\",\"metric\":\"$metric\",\"stat\":\"median\",\"value\":$median}" >>pg_results.jsonl
+}
+
+# Export each metric to JSONL in the desired format
+summary_stats_json "NESTED LOOP TIME" "${nested_times[@]}"
+summary_stats_json "SEQ SCAN TIME" "${seq_times[@]}"
+summary_stats_json "SHARED BUFFERS HIT" "${shared_hits[@]}"
+summary_stats_json "TOTAL EXECUTION TIME" "${exec_times[@]}"
+
+echo "Results exported to pg_results.jsonl"

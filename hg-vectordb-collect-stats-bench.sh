@@ -24,13 +24,15 @@ for i in $(seq 1 $REPEAT); do
     echo "Run $i..."
 
     OUTPUT=$(
-        csql -u dba $DBNAME <<EOF
-select vec into :tmp from nytimes_256_angular_train limit 1;
-select count(*) from (select /*+ NO_MERGE */ cosine_distance (vec, :tmp) from $TABLENAME LIMIT $LIMIT);
+        csql -u dba $DBNAME --no-pager <<EOF
+select vec into :tmp from $TABLENAME limit 1;
+select /*+ recompile */ count(*) from (select /*+ NO_MERGE */ inner_product (vec, :tmp) from $TABLENAME LIMIT $LIMIT);
 ;trace on
-select count(*) from (select /*+ NO_MERGE */ cosine_distance (vec, :tmp) from $TABLENAME LIMIT $LIMIT);
+select /*+ recompile */ count(*) from (select /*+ NO_MERGE */ inner_product (vec, :tmp) from $TABLENAME LIMIT $LIMIT);
 EOF
     )
+
+    echo "$OUTPUT"
 
     SELECT_LINE=$(echo "$OUTPUT" | grep -A 1 "SUBQUERY" | grep "SELECT (time")
     SCAN_LINE=$(echo "$OUTPUT" | grep -A 2 "SUBQUERY" | grep "SCAN (table:")
@@ -40,6 +42,11 @@ EOF
 
     SCAN_TIME=$(echo "$SCAN_LINE" | sed -n 's/.*heap time: \([0-9]*\), fetch: \([0-9]*\).*/\1/p')
     SCAN_FETCH=$(echo "$SCAN_LINE" | sed -n 's/.*heap time: \([0-9]*\), fetch: \([0-9]*\).*/\2/p')
+
+    echo "$SELECT_TIME"
+    echo "$SELECT_FETCH"
+    echo "$SCAN_TIME"
+    echo "$SCAN_FETCH"
 
     select_times+=("$SELECT_TIME")
     select_fetches+=("$SELECT_FETCH")

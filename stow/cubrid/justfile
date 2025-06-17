@@ -534,26 +534,26 @@ check-size:
 load-3-1:
     csql.sh -c 'create table tbl_3_1 (id int, vec vector(3));'
     # cubrid loaddb -S -u dba -d out/loaddb_3_1.object testdb
-    cubrid loaddb --no-statistics -c 10240 -S -l -u dba -d out/loaddb_3_1.object --estimated-size=150000 --no-logging testdb
+    cubrid loaddb -c 10240 -u dba -d out/loaddb_3_1.object --estimated-size=150000 testdb
 
 load-3-1-check:
     csql.sh -c 'select * from tbl_3_1;'
 
 load-256-zeroes:
     csql.sh -c 'create table tbl_256_zeroes (id int, vec vector(256));'
-    cubrid loaddb --no-statistics -c 10240 -S -l -u dba -d out/loaddb_256_zeroes.object --estimated-size=75000 --no-logging testdb
+    cubrid loaddb -c 10240 -u dba -d out/loaddb_256_zeroes.object --estimated-size=75000 testdb
 
 load-256-75000:
     csql.sh -c 'create table tbl_256_75000 (id int, vec vector(256));'
-    cubrid loaddb --no-statistics -c 10240 -S -l -u dba -d out/loaddb_256_75000.object --estimated-size=75000 --no-logging testdb
+    cubrid loaddb -c 10240 -u dba -d out/loaddb_256_75000.object --estimated-size=75000 testdb
 
 load-256-75000-9:
     csql.sh -c 'create table tbl_256_75000 (id int, vec vector(256));'
-    cubrid loaddb --no-statistics -c 10240 -S -l -u dba -d out/loaddb_256_75000_limit_9.object --estimated-size=75000 --no-logging testdb
+    cubrid loaddb -c 10240 -u dba -d out/loaddb_256_75000_limit_9.object --estimated-size=75000 testdb
 
 load-even:
     csql.sh -c 'create table tbl_even (id int, vec vector);'
-    cubrid loaddb --no-statistics -c 10240 -S -l -u dba -d out/even.object --estimated-size=75000 --no-logging testdb
+    cubrid loaddb -c 10240 -u dba -d out/even.object --estimated-size=75000 testdb
 
 select-all-tbl_even:
     csql.sh -c 'select * from tbl_even;'
@@ -563,35 +563,35 @@ select-all-load-256-75000:
 
 load-256-150000:
     csql.sh -c 'create table tbl_256_150000 (id int, vec vector(256));'
-    cubrid loaddb --no-statistics -c 10240 -S -l -u dba -d out/loaddb_256_150000.object --estimated-size=150000 --no-logging testdb
+    cubrid loaddb -c 10240 -u dba -d out/loaddb_256_150000.object --estimated-size=150000 testdb
 
 load-256-300000:
     csql.sh -c 'create table tbl_256_300000 (id int, vec vector(256));'
-    cubrid loaddb --no-statistics -c 10240 -S -l -u dba -d out/loaddb_256_300000.object --estimated-size=300000 --no-logging testdb
+    cubrid loaddb -c 10240 -u dba -d out/loaddb_256_300000.object --estimated-size=300000 testdb
 
 load-768-75000:
     csql.sh -c 'create table tbl_768_75000 (id int, vec vector(768));'
-    cubrid loaddb --no-statistics -c 10240 -S -l -u dba -d out/loaddb_768_75000.object --estimated-size=75000 --no-logging testdb
+    cubrid loaddb -c 10240 -u dba -d out/loaddb_768_75000.object --estimated-size=75000 testdb
 
 load-768-150000:
     csql.sh -c 'create table tbl_768_150000 (id int, vec vector(768));'
-    cubrid loaddb --no-statistics -c 10240 -S -l -u dba -d out/loaddb_768_150000.object --estimated-size=150000 --no-logging testdb
+    cubrid loaddb -c 10240 -u dba -d out/loaddb_768_150000.object --estimated-size=150000 testdb
 
 load-768-300000:
     csql.sh -c 'create table tbl_768_300000 (id int, vec vector(768));'
-    cubrid loaddb --no-statistics -c 10240 -S -l -u dba -d out/loaddb_768_300000.object --estimated-size=300000 --no-logging testdb
+    cubrid loaddb -c 10240 -u dba -d out/loaddb_768_300000.object --estimated-size=300000 testdb
 
 load-1536-75000:
     csql.sh -c 'create table tbl_1536_75000 (id int, vec vector(1536));'
-    cubrid loaddb --no-statistics -c 10240 -S -l -u dba -d out/loaddb_1536_75000.object --estimated-size=75000 --no-logging testdb
+    cubrid loaddb -c 10240 -u dba -d out/loaddb_1536_75000.object --estimated-size=75000 testdb
 
 load-1536-150000:
     csql.sh -c 'create table tbl_1536_150000 (id int, vec vector(1536));'
-    cubrid loaddb --no-statistics -c 10240 -S -l -u dba -d out/loaddb_1536_150000.object --estimated-size=150000 --no-logging testdb
+    cubrid loaddb -c 10240 -u dba -d out/loaddb_1536_150000.object --estimated-size=150000 testdb
 
 load-1536-300000:
     csql.sh -c 'create table tbl_1536_300000 (id int, vec vector(1536));'
-    cubrid loaddb --no-statistics -c 10240 -S -l -u dba -d out/loaddb_1536_300000.object --estimated-size=300000 --no-logging testdb
+    cubrid loaddb -c 10240 -u dba -d out/loaddb_1536_300000.object --estimated-size=300000 testdb
 
 csql: paramdump-testdb
     csql.sh

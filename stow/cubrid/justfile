@@ -33,7 +33,7 @@ server-stop-demodb:
     cubrid server stop demodb
 
 server-start-testdb:
-    cubrid server start testdb || true
+    cubrid server start testdb
 
 server-restart-testdb:
     cubrid server restart testdb
@@ -107,6 +107,8 @@ build-update: cmake-build-install-all update-cubrid-conf
 update-cubrid-conf:
     sed -i 's/data_buffer_size=512M/data_buffer_size=32G/' $"($env.CUBRID)/conf/cubrid.conf"
     sed -i 's/log_buffer_size=512M/data_buffer_size=4G/' $"($env.CUBRID)/conf/cubrid.conf"
+
+update-restart-testdb: update-cubrid-conf server-restart-testdb
 
 cmake-build-install-3rdparty:
     cmake --build --preset $env.PRESET_MODE --target 3rdparty/install
@@ -592,6 +594,31 @@ load-1536-150000:
 load-1536-300000:
     csql.sh -c 'create table tbl_1536_300000 (id int, vec vector(1536));'
     cubrid loaddb -c 10240 -u dba -d out/loaddb_1536_300000.object --estimated-size=300000 testdb
+
+collect-data-all: collect-256 collect-768 collect-1536
+
+collect-256:
+    ./collect-stats.sh 10 50000 testdb tbl_256_300000
+    ./collect-stats.sh 10 100000 testdb tbl_256_300000
+    ./collect-stats.sh 10 150000 testdb tbl_256_300000
+    ./collect-stats.sh 10 250000 testdb tbl_256_300000
+    ./collect-stats.sh 10 300000 testdb tbl_256_300000
+
+collect-768:
+    ./collect-stats.sh 10 50000 testdb tbl_768_300000
+    ./collect-stats.sh 10 100000 testdb tbl_768_300000
+    ./collect-stats.sh 10 150000 testdb tbl_768_300000
+    ./collect-stats.sh 10 200000 testdb tbl_768_300000
+    ./collect-stats.sh 10 250000 testdb tbl_768_300000
+    ./collect-stats.sh 10 300000 testdb tbl_768_300000
+
+collect-1536:
+    ./collect-stats.sh 10 50000 testdb tbl_1536_150000
+    ./collect-stats.sh 10 100000 testdb tbl_1536_150000
+    ./collect-stats.sh 10 150000 testdb tbl_1536_150000
+
+filter-data:
+    open results.jsonl | lines | each { from json } | where stat == 'avg' | where metric has "SCAN TIME" | to csv | clip
 
 csql: paramdump-testdb
     csql.sh

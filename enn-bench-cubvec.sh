@@ -85,8 +85,8 @@ summarize "SCAN TIME" "${scan_times[@]}"
 summarize "SCAN FETCH" "${scan_fetches[@]}"
 
 {
-summarize "SELECT TIME" "${select_times[@]}"
-summarize "SELECT FETCH" "${select_fetches[@]}"
-summarize "SCAN TIME" "${scan_times[@]}"
-summarize "SCAN FETCH" "${scan_fetches[@]}"
-} >> benchmarks/cubvec_"$REPEAT"_"$LIMIT"_"$TABLENAME".jsonl
+    summarize "SELECT TIME" "${select_times[@]}"
+    summarize "SELECT FETCH" "${select_fetches[@]}"
+    summarize "SCAN TIME" "${scan_times[@]}"
+    summarize "SCAN FETCH" "${scan_fetches[@]}"
+} >benchmarks/cubvec_"$REPEAT"_"$LIMIT"_"$TABLENAME".jsonl

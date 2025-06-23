@@ -26,9 +26,9 @@ for i in $(seq 1 $REPEAT); do
     OUTPUT=$(
         csql -u dba $DBNAME --no-pager <<EOF
 select vec into :tmp from $TABLENAME limit 1;
-select /*+ recompile */ count(*) from (select /*+ NO_MERGE */ inner_product (vec, :tmp) from $TABLENAME LIMIT $LIMIT);
+select /*+ RECOMPILE NO_MERGE PARALLEL(0) */ count(*) from (select /*+ RECOMPILE NO_MERGE PARALLEL(0) */ inner_product (vec, :tmp) from $TABLENAME LIMIT $LIMIT);
 ;trace on
-select /*+ recompile */ count(*) from (select /*+ NO_MERGE */ inner_product (vec, :tmp) from $TABLENAME LIMIT $LIMIT);
+select /*+ RECOMPILE NO_MERGE PARALLEL(0) */ count(*) from (select /*+ RECOMPILE NO_MERGE PARALLEL(0) */ inner_product (vec, :tmp) from $TABLENAME LIMIT $LIMIT);
 EOF
     )
 

@@ -601,6 +601,7 @@ collect-256:
     ./collect-stats.sh 10 50000 testdb tbl_256_300000
     ./collect-stats.sh 10 100000 testdb tbl_256_300000
     ./collect-stats.sh 10 150000 testdb tbl_256_300000
+    ./collect-stats.sh 10 200000 testdb tbl_256_300000
     ./collect-stats.sh 10 250000 testdb tbl_256_300000
     ./collect-stats.sh 10 300000 testdb tbl_256_300000
 

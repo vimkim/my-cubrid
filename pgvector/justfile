@@ -197,25 +197,25 @@ check-dimensions:
     psql -tAqd vimkimdb -c 'select count(*) from tbl_1536_300000;'
 
 collect-256:
-    ./pg_collect_stats.sh 10 50000 vimkimdb tbl_256_300000 256
-    ./pg_collect_stats.sh 10 100000 vimkimdb tbl_256_300000 256
-    ./pg_collect_stats.sh 10 150000 vimkimdb tbl_256_300000 256
-    ./pg_collect_stats.sh 10 200000 vimkimdb tbl_256_300000 256
-    ./pg_collect_stats.sh 10 250000 vimkimdb tbl_256_300000 256
-    ./pg_collect_stats.sh 10 300000 vimkimdb tbl_256_300000 256
+    ./enn-bench-pgvector.sh 10 50000 vimkimdb tbl_256_300000 256
+    ./enn-bench-pgvector.sh 10 100000 vimkimdb tbl_256_300000 256
+    ./enn-bench-pgvector.sh 10 150000 vimkimdb tbl_256_300000 256
+    ./enn-bench-pgvector.sh 10 200000 vimkimdb tbl_256_300000 256
+    ./enn-bench-pgvector.sh 10 250000 vimkimdb tbl_256_300000 256
+    ./enn-bench-pgvector.sh 10 300000 vimkimdb tbl_256_300000 256
 
 collect-768:
-    ./pg_collect_stats.sh 10 50000 vimkimdb tbl_768_300000 768
-    ./pg_collect_stats.sh 10 100000 vimkimdb tbl_768_300000 768
-    ./pg_collect_stats.sh 10 150000 vimkimdb tbl_768_300000 768
-    ./pg_collect_stats.sh 10 200000 vimkimdb tbl_768_300000 768
-    ./pg_collect_stats.sh 10 250000 vimkimdb tbl_768_300000 768
-    ./pg_collect_stats.sh 10 300000 vimkimdb tbl_768_300000 768
+    ./enn-bench-pgvector.sh 10 50000 vimkimdb tbl_768_300000 768
+    ./enn-bench-pgvector.sh 10 100000 vimkimdb tbl_768_300000 768
+    ./enn-bench-pgvector.sh 10 150000 vimkimdb tbl_768_300000 768
+    ./enn-bench-pgvector.sh 10 200000 vimkimdb tbl_768_300000 768
+    ./enn-bench-pgvector.sh 10 250000 vimkimdb tbl_768_300000 768
+    ./enn-bench-pgvector.sh 10 300000 vimkimdb tbl_768_300000 768
 
 collect-1536:
-    ./pg_collect_stats.sh 10 50000 vimkimdb tbl_1536_150000 1536
-    ./pg_collect_stats.sh 10 100000 vimkimdb tbl_1536_150000 1536
-    ./pg_collect_stats.sh 10 150000 vimkimdb tbl_1536_150000 1536
+    ./enn-bench-pgvector.sh 10 50000 vimkimdb tbl_1536_150000 1536
+    ./enn-bench-pgvector.sh 10 100000 vimkimdb tbl_1536_150000 1536
+    ./enn-bench-pgvector.sh 10 150000 vimkimdb tbl_1536_150000 1536
 
 collect-data: collect-256 collect-768 collect-1536
 

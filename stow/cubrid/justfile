@@ -598,25 +598,25 @@ load-1536-300000:
 collect-data-all: collect-256 collect-768 collect-1536
 
 collect-256:
-    ./collect-stats.sh 10 50000 testdb tbl_256_300000
-    ./collect-stats.sh 10 100000 testdb tbl_256_300000
-    ./collect-stats.sh 10 150000 testdb tbl_256_300000
-    ./collect-stats.sh 10 200000 testdb tbl_256_300000
-    ./collect-stats.sh 10 250000 testdb tbl_256_300000
-    ./collect-stats.sh 10 300000 testdb tbl_256_300000
+    ./enn-bench-cubvec.sh 10 50000 testdb tbl_256_300000
+    ./enn-bench-cubvec.sh 10 100000 testdb tbl_256_300000
+    ./enn-bench-cubvec.sh 10 150000 testdb tbl_256_300000
+    ./enn-bench-cubvec.sh 10 200000 testdb tbl_256_300000
+    ./enn-bench-cubvec.sh 10 250000 testdb tbl_256_300000
+    ./enn-bench-cubvec.sh 10 300000 testdb tbl_256_300000
 
 collect-768:
-    ./collect-stats.sh 10 50000 testdb tbl_768_300000
-    ./collect-stats.sh 10 100000 testdb tbl_768_300000
-    ./collect-stats.sh 10 150000 testdb tbl_768_300000
-    ./collect-stats.sh 10 200000 testdb tbl_768_300000
-    ./collect-stats.sh 10 250000 testdb tbl_768_300000
-    ./collect-stats.sh 10 300000 testdb tbl_768_300000
+    ./enn-bench-cubvec.sh 10 50000 testdb tbl_768_300000
+    ./enn-bench-cubvec.sh 10 100000 testdb tbl_768_300000
+    ./enn-bench-cubvec.sh 10 150000 testdb tbl_768_300000
+    ./enn-bench-cubvec.sh 10 200000 testdb tbl_768_300000
+    ./enn-bench-cubvec.sh 10 250000 testdb tbl_768_300000
+    ./enn-bench-cubvec.sh 10 300000 testdb tbl_768_300000
 
 collect-1536:
-    ./collect-stats.sh 10 50000 testdb tbl_1536_150000
-    ./collect-stats.sh 10 100000 testdb tbl_1536_150000
-    ./collect-stats.sh 10 150000 testdb tbl_1536_150000
+    ./enn-bench-cubvec.sh 10 50000 testdb tbl_1536_150000
+    ./enn-bench-cubvec.sh 10 100000 testdb tbl_1536_150000
+    ./enn-bench-cubvec.sh 10 150000 testdb tbl_1536_150000
 
 filter-data:
     open results.jsonl | lines | each { from json } | where stat == 'avg' | where metric has "SCAN TIME" | to csv | clip

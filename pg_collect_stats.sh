@@ -81,6 +81,9 @@ echo
 echo "==== Total Execution Time (ms) ===="
 summary_stats "${exec_times[@]}"
 
+mkdir -p benchmarks
+RESULT_FILE=benchmarks/pgvector_"$REPEAT"_"$LIMIT"_"$TABLE_NAME".jsonl
+
 summary_stats_json() {
 	local metric="$1"
 	shift
@@ -93,10 +96,10 @@ summary_stats_json() {
 	median=${sorted[$((count / 2))]}
 
 	# Output each stat as a separate JSON line
-	echo "{\"repeat\":$REPEAT,\"limit\":$LIMIT,\"dbname\":\"$DATABASE_NAME\",\"tablename\":\"$TABLE_NAME\",\"metric\":\"$metric\",\"stat\":\"avg\",\"value\":$avg}" >>pg_results.jsonl
-	echo "{\"repeat\":$REPEAT,\"limit\":$LIMIT,\"dbname\":\"$DATABASE_NAME\",\"tablename\":\"$TABLE_NAME\",\"metric\":\"$metric\",\"stat\":\"min\",\"value\":${sorted[0]}}" >>pg_results.jsonl
-	echo "{\"repeat\":$REPEAT,\"limit\":$LIMIT,\"dbname\":\"$DATABASE_NAME\",\"tablename\":\"$TABLE_NAME\",\"metric\":\"$metric\",\"stat\":\"max\",\"value\":${sorted[$((count - 1))]}}" >>pg_results.jsonl
-	echo "{\"repeat\":$REPEAT,\"limit\":$LIMIT,\"dbname\":\"$DATABASE_NAME\",\"tablename\":\"$TABLE_NAME\",\"metric\":\"$metric\",\"stat\":\"median\",\"value\":$median}" >>pg_results.jsonl
+	echo "{\"repeat\":$REPEAT,\"limit\":$LIMIT,\"dbname\":\"$DATABASE_NAME\",\"tablename\":\"$TABLE_NAME\",\"metric\":\"$metric\",\"stat\":\"avg\",\"value\":$avg}" >>"$RESULT_FILE"
+	echo "{\"repeat\":$REPEAT,\"limit\":$LIMIT,\"dbname\":\"$DATABASE_NAME\",\"tablename\":\"$TABLE_NAME\",\"metric\":\"$metric\",\"stat\":\"min\",\"value\":${sorted[0]}}" >>"$RESULT_FILE"
+	echo "{\"repeat\":$REPEAT,\"limit\":$LIMIT,\"dbname\":\"$DATABASE_NAME\",\"tablename\":\"$TABLE_NAME\",\"metric\":\"$metric\",\"stat\":\"max\",\"value\":${sorted[$((count - 1))]}}" >>"$RESULT_FILE"
+	echo "{\"repeat\":$REPEAT,\"limit\":$LIMIT,\"dbname\":\"$DATABASE_NAME\",\"tablename\":\"$TABLE_NAME\",\"metric\":\"$metric\",\"stat\":\"median\",\"value\":$median}" >>"$RESULT_FILE"
 }
 
 # Export each metric to JSONL in the desired format

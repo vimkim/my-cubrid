@@ -1,0 +1,57 @@
+_default:
+    just --choose
+
+create-website:
+    mkdir "websites/temp"
+    sudo $"(pwd)/.venv/bin/python" create_website.py --outputdir "websites/temp" --scatter
+
+run-nytimes-p-10:
+    python run.py --dataset nytimes-256-angular --parallelism 10
+    curl -d 'run-nytimes-p-10' ntfy.sh/cubvec
+
+run-nytimes:
+    python run.py --dataset nytimes-256-angular
+    curl -d 'run-nytimes' ntfy.sh/cubvec
+
+run-nytimes-cubrid:
+    sudo $"(pwd)/.venv/bin/python" run.py --dataset nytimes-256-angular --algorithm cubrid
+    curl -d 'run-nytimes cubrid' ntfy.sh/cubvec
+
+run-nytimes-pgvector:
+    sudo $"(pwd)/.venv/bin/python" run.py --dataset nytimes-256-angular --algorithm pgvector
+    curl -d 'run nytimes pgvector' ntfy.sh/cubvec
+
+run-nytimes-faiss-hnsw:
+    sudo $"(pwd)/.venv/bin/python" run.py --dataset nytimes-256-angular --algorithm 'hnsw(faiss)'
+    curl -d 'run nytimes hnsw(faiss)' ntfy.sh/cubvec
+
+run-coco-i2i-cubrid:
+    sudo $"(pwd)/.venv/bin/python" run.py --dataset coco-i2i-512-angular --algorithm cubrid
+    curl -d 'run coco i2i cubrid' ntfy.sh/cubvec
+
+run-glove-cubrid:
+    sudo $"(pwd)/.venv/bin/python" run.py --dataset glove-25-angular --algorithm cubrid
+    curl -d 'run-glove cubrid' ntfy.sh/cubvec
+
+backup:
+    mv results $"results-(date now | format date "%Y%m%d-%H%M%S")"
+
+run-mnist:
+    python run.py --dataset mnist-784-euclidean
+    curl -d 'run-mnist' ntfy.sh/cubvec
+
+run-mnist-cubrid:
+    python run.py --dataset mnist-784-euclidean --algorithm cubrid
+    curl -d 'run-mnist cubrid' ntfy.sh/cubvec
+
+build-dockerfiles-faiss-hnsw:
+    sudo $"(pwd)/.venv/bin/python" install.py --algorithm faiss_hnsw
+    curl -d 'build dockerfile faiss hnsw' ntfy.sh/cubvec
+
+build-dockerfiles-pgvector:
+    sudo $"(pwd)/.venv/bin/python" install.py --algorithm pgvector
+    curl -d 'build dockerfile pgvector' ntfy.sh/cubvec
+
+build-dockerfiles-cubrid:
+    sudo $"(pwd)/.venv/bin/python" install.py --algorithm cubrid
+    curl -d 'build dockerfile cubrid' ntfy.sh/cubvec

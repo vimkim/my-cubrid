@@ -4,6 +4,7 @@ _default:
 create-website:
     mkdir "websites/temp"
     sudo $"(pwd)/.venv/bin/python" create_website.py --outputdir "websites/temp" --scatter
+    curl -d 'create website' ntfy.sh/cubvec
 
 run-nytimes-p-10:
     python run.py --dataset nytimes-256-angular --parallelism 10
@@ -17,8 +18,16 @@ run-nytimes-cubrid:
     sudo $"(pwd)/.venv/bin/python" run.py --dataset nytimes-256-angular --algorithm cubrid
     curl -d 'run-nytimes cubrid' ntfy.sh/cubvec
 
+run-nytimes-cubrid-runs-1:
+    sudo $"(pwd)/.venv/bin/python" run.py --dataset nytimes-256-angular --algorithm cubrid --runs 1
+    curl -d 'run-nytimes cubrid' ntfy.sh/cubvec
+
 run-nytimes-pgvector:
     sudo $"(pwd)/.venv/bin/python" run.py --dataset nytimes-256-angular --algorithm pgvector
+    curl -d 'run nytimes pgvector' ntfy.sh/cubvec
+
+run-nytimes-pgvector-runs-1:
+    sudo $"(pwd)/.venv/bin/python" run.py --dataset nytimes-256-angular --algorithm pgvector --runs 1
     curl -d 'run nytimes pgvector' ntfy.sh/cubvec
 
 run-nytimes-faiss-hnsw:
@@ -28,6 +37,10 @@ run-nytimes-faiss-hnsw:
 run-coco-i2i-cubrid:
     sudo $"(pwd)/.venv/bin/python" run.py --dataset coco-i2i-512-angular --algorithm cubrid
     curl -d 'run coco i2i cubrid' ntfy.sh/cubvec
+
+run-coco-i2i-pgvector:
+    sudo $"(pwd)/.venv/bin/python" run.py --dataset coco-i2i-512-angular --algorithm pgvector
+    curl -d 'run coco i2i pgvector' ntfy.sh/cubvec
 
 run-glove-cubrid:
     sudo $"(pwd)/.venv/bin/python" run.py --dataset glove-25-angular --algorithm cubrid

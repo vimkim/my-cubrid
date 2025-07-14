@@ -105,8 +105,8 @@ build: cmake-build-install-all
 build-update: cmake-build-install-all update-cubrid-conf
 
 update-cubrid-conf:
-    sed -i 's/data_buffer_size=512M/data_buffer_size=32G/' $"($env.CUBRID)/conf/cubrid.conf"
-    sed -i 's/log_buffer_size=512M/data_buffer_size=4G/' $"($env.CUBRID)/conf/cubrid.conf"
+    # sed -i 's/log_buffer_size=512M/log_buffer_size=4G/' $"($env.CUBRID)/conf/cubrid.conf"
+    sed -i 's/data_buffer_size=512M/data_buffer_size=16G/' $"($env.CUBRID)/conf/cubrid.conf"
 
 update-restart-testdb: update-cubrid-conf server-restart-testdb
 
@@ -191,7 +191,8 @@ list-dbtype-function:
 
 db-create-testdb:
     ^mkdir -p $"($env.CUBRID_DATABASES)/testdb"
-    cubrid createdb --db-page-size=8K --db-volume-size=20M --log-volume-size=20M testdb en_US.utf8 -F $"($env.CUBRID_DATABASES)/testdb"
+    # cubrid createdb --db-page-size=8K --db-volume-size=20M --log-volume-size=20M testdb en_US.utf8 -F $"($env.CUBRID_DATABASES)/testdb"
+    cubrid createdb --db-volume-size=20M --log-volume-size=20M testdb en_US.utf8 -F $"($env.CUBRID_DATABASES)/testdb"
 
 db-delete-testdb:
     cubrid deletedb testdb
@@ -641,3 +642,14 @@ bare-lazygit:
 
 bare-nvim:
     with-env { GIT_DIR: ./bare.git.out, GIT_WORK_TREE: . } { v }
+
+prepare-ann:
+    ./prepare-ann.sh
+
+db-delete-ann:
+    cubrid deletedb ann
+
+db-create-ann:
+    ^mkdir -p $"($env.CUBRID_DATABASES)/ann"
+    cubrid createdb --db-volume-size=100M --log-volume-size=100M ann en_US.utf8 -F $"($env.CUBRID_DATABASES)/ann"
+

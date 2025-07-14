@@ -3,25 +3,40 @@
 ##############################################################################
 
 # PRESET_MODE=profile_clang
-PRESET_MODE=debug_clang
+# PRESET_MODE=debug_clang
+# PRESET_MODE=release_clang
+PRESET_MODE=release
 # PRESET_MODE=release_gcc
 # SOURCE_DIR=$HOME/gh/cb/23-create-index-fix-with/
 # SOURCE_DIR=/home/vimkim/gh/cb/62-db-value-float-array
-# SOURCE_DIR=/home/vimkim/gh/cb/cubvec
+SOURCE_DIR=/home/vimkim/gh/cb/cubvec
 # SOURCE_DIR=/home/vimkim/gh/cb/66-cosine-operator
-SOURCE_DIR=/home/vimkim/gh/cb/68-l1-op
+# SOURCE_DIR=/home/vimkim/gh/cb/68-l1-op
 
 ##############################################################################
 # Do not change below
 ##############################################################################
 
 CURRENT_DIR=$(basename $SOURCE_DIR)
-export CUBRID="$HOME/.cub/install/$CURRENT_DIR/$PRESET_MODE"
-export CUBRID_DATABASES="$HOME/.cub/db/$CURRENT_DIR/$PRESET_MODE"
+# export CUBRID="$HOME/.cub/install/$CURRENT_DIR/$PRESET_MODE"
+export CUBRID="/tmp/CUBRID"
+# export CUBRID_DATABASES="$HOME/.cub/db/$CURRENT_DIR/$PRESET_MODE"
+export CUBRID_DATABASES="$HOME/.cub/db/commondb"
 export CUBRID_BUILD_DIR="$SOURCE_DIR/build_preset_$PRESET_MODE"
 export PATH="$CUBRID/bin:$PATH"
 export LD_LIBRARY_PATH="$CUBRID/cci/lib:$CUBRID/lib:$HOME/CUB3LIB/lib:/usr/local/lib:$LD_LIBRARY_PATH"
 export CUBRID_BUILD_DIR="$SOURCE_DIR/build_preset_$PRESET_MODE"
+
+export ANN_BENCHMARKS_CUB_USER=ann
+export ANN_BENCHMARKS_CUB_PASSWORD=ann
+export ANN_BENCHMARKS_CUB_DBNAME=ann
+# export ANN_BENCHMARKS_CUB_HOST=192.168.4.2
+export ANN_BENCHMARKS_CUB_HOST=localhost
+export ANN_BENCHMARKS_CUB_PORT=30004
+export ANN_BENCHMARKS_CUB_SERVER_PORT=5560
+
+export ANN_BENCHMARKS_CUB_NUM_CAS=1
+export OPENBLAS_NUM_THREADS=1
 
 PATH="$(pwd)/CTP/bin:$PATH"
 export PATH

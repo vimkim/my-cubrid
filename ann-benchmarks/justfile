@@ -14,7 +14,7 @@ run-nytimes:
     python run.py --dataset nytimes-256-angular
     curl -d 'run-nytimes' ntfy.sh/cubvec
 
-run-nytimes-cubrid:
+run-nytimes-cubrid_faiss:
     sudo $"(pwd)/.venv/bin/python" run.py --dataset nytimes-256-angular --algorithm cubrid
     curl -d 'run-nytimes cubrid' ntfy.sh/cubvec
 
@@ -23,7 +23,7 @@ run-nytimes-cubrid_usearch-runs-1:
     curl -d 'run-nytimes cubrid' ntfy.sh/cubvec
 
 run-nytimes-cubrid-runs-1:
-    sudo $"(pwd)/.venv/bin/python" run.py --dataset nytimes-256-angular --algorithm cubrid --runs 1
+    sudo $"(pwd)/.venv/bin/python" run.py --dataset nytimes-256-angular --algorithm cubrid_faiss --runs 1
     curl -d 'run-nytimes cubrid' ntfy.sh/cubvec
 
 run-nytimes-pgvector:
@@ -38,8 +38,8 @@ run-nytimes-faiss-hnsw:
     sudo $"(pwd)/.venv/bin/python" run.py --dataset nytimes-256-angular --algorithm 'hnsw(faiss)'
     curl -d 'run nytimes hnsw(faiss)' ntfy.sh/cubvec
 
-run-coco-i2i-cubrid:
-    sudo $"(pwd)/.venv/bin/python" run.py --dataset coco-i2i-512-angular --algorithm cubrid --runs 1
+run-coco-i2i-cubrid_faiss:
+    sudo $"(pwd)/.venv/bin/python" run.py --dataset coco-i2i-512-angular --algorithm cubrid_faiss --runs 1
     curl -d 'run coco i2i cubrid' ntfy.sh/cubvec
 
 run-coco-t2i-cubrid_usearch:
@@ -54,8 +54,8 @@ run-s-angular-cubrid_usearch:
     sudo $"(pwd)/.venv/bin/python" run.py --dataset random-s-100-angular --algorithm cubrid_usearch --runs 1
     curl -d 'run xs-angular cubrid_usearch' ntfy.sh/cubvec
 
-run-xs-angular-cubrid:
-    sudo $"(pwd)/.venv/bin/python" run.py --dataset random-xs-20-angular --algorithm cubrid --runs 1
+run-xs-angular-cubrid_faiss:
+    sudo $"(pwd)/.venv/bin/python" run.py --dataset random-xs-20-angular --algorithm cubrid_faiss --runs 1
     curl -d 'run xs-angular cubrid' ntfy.sh/cubvec
 
 run-xs-angular-cubrid_usearch:
@@ -63,11 +63,11 @@ run-xs-angular-cubrid_usearch:
     curl -d 'run xs-angular cubrid_usearch' ntfy.sh/cubvec
 
 run-xs-angular-cubrid_usearch-local:
-    .venv/bin/python run.py --dataset random-xs-20-angular --algorithm cubrid_usearch --runs 1 --local
+    taskset -c 2 .venv/bin/python run.py --dataset random-xs-20-angular --algorithm cubrid_usearch --runs 1 --local
     curl -d 'run xs-angular cubrid_usearch local' ntfy.sh/cubvec
 
 run-xs-angular-cubrid-local:
-    .venv/bin/python run.py --dataset random-xs-20-angular --algorithm cubrid --runs 1 --local
+    .venv/bin/python run.py --dataset random-xs-20-angular --algorithm cubrid_faiss --runs 1 --local
     curl -d 'run xs-angular cubrid local' ntfy.sh/cubvec
 
 run-xs-angular-pgvector:
@@ -78,7 +78,7 @@ run-s-angular-pgvector:
     sudo $"(pwd)/.venv/bin/python" run.py --dataset random-s-100-angular --algorithm pgvector --runs 1
     curl -d 'run xs-angular pgvector' ntfy.sh/cubvec
 
-run-glove-cubrid:
+run-glove-cubrid_faiss:
     sudo $"(pwd)/.venv/bin/python" run.py --dataset glove-25-angular --algorithm cubrid
     curl -d 'run-glove cubrid' ntfy.sh/cubvec
 
@@ -89,7 +89,7 @@ run-mnist:
     python run.py --dataset mnist-784-euclidean
     curl -d 'run-mnist' ntfy.sh/cubvec
 
-run-mnist-cubrid:
+run-mnist-cubrid_faiss:
     python run.py --dataset mnist-784-euclidean --algorithm cubrid
     curl -d 'run-mnist cubrid' ntfy.sh/cubvec
 
@@ -101,7 +101,7 @@ build-dockerfiles-pgvector:
     sudo $"(pwd)/.venv/bin/python" install.py --algorithm pgvector
     curl -d 'build dockerfile pgvector' ntfy.sh/cubvec
 
-build-dockerfiles-cubrid:
+build-dockerfiles-cubrid_faiss:
     sudo $"(pwd)/.venv/bin/python" install.py --algorithm cubrid
     # curl -d 'build dockerfile cubrid' ntfy.sh/cubvec
 

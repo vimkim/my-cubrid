@@ -9,7 +9,8 @@ PRESET_MODE=release
 # PRESET_MODE=release_gcc
 # SOURCE_DIR=$HOME/gh/cb/23-create-index-fix-with/
 # SOURCE_DIR=/home/vimkim/gh/cb/62-db-value-float-array
-SOURCE_DIR=/home/vimkim/gh/cb/cubvec
+# SOURCE_DIR=/home/vimkim/gh/cb/cubvec
+SOURCE_DIR=/home/vimkim/gh/cb/experiment
 # SOURCE_DIR=/home/vimkim/gh/cb/66-cosine-operator
 # SOURCE_DIR=/home/vimkim/gh/cb/68-l1-op
 
@@ -18,8 +19,7 @@ SOURCE_DIR=/home/vimkim/gh/cb/cubvec
 ##############################################################################
 
 CURRENT_DIR=$(basename $SOURCE_DIR)
-# export CUBRID="$HOME/.cub/install/$CURRENT_DIR/$PRESET_MODE"
-export CUBRID="/tmp/CUBRID"
+export CUBRID="$HOME/.cub/install/$CURRENT_DIR/$PRESET_MODE"
 # export CUBRID_DATABASES="$HOME/.cub/db/$CURRENT_DIR/$PRESET_MODE"
 export CUBRID_DATABASES="$HOME/.cub/db/commondb"
 export CUBRID_BUILD_DIR="$SOURCE_DIR/build_preset_$PRESET_MODE"

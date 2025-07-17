@@ -43,6 +43,9 @@ server-stop-testdb:
 
 get-server-config: paramdump-testdb
 
+paramdump-ann:
+    cubrid paramdump ann | grep 'buffer'
+
 paramdump-testdb:
     cubrid paramdump testdb | grep 'buffer'
 
@@ -100,7 +103,10 @@ cmake-preset-mode-select:
 
 configure-build: configure build
 
-build: cmake-build-install-all
+build: cmake-build-install-all cubrid-stop
+
+cubrid-stop:
+    cubrid broker stop
 
 build-update: cmake-build-install-all update-cubrid-conf
 

@@ -11,7 +11,6 @@ export ANN_BENCHMARKS_CUB_SERVER_PORT=5560
 export ANN_BENCHMARKS_CUB_NUM_CAS=1
 export OPENBLAS_NUM_THREADS=1
 
-echo "[ann]" >> $CUBRID/conf/cubrid.conf && \
 echo "data_buffer_size=16G" >> $CUBRID/conf/cubrid.conf
 
 sed -i "s/^cubrid_port_id *= *.*/cubrid_port_id = ${ANN_BENCHMARKS_CUB_SERVER_PORT}/" $CUBRID/conf/cubrid.conf && \

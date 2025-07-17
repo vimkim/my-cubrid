@@ -56,23 +56,22 @@ run-s-angular-cubrid_usearch:
 
 run-xs-angular-cubrid_faiss:
     sudo $"(pwd)/.venv/bin/python" run.py --dataset random-xs-20-angular --algorithm cubrid_faiss --runs 1
-    curl -d 'run xs-angular cubrid' ntfy.sh/cubvec
 
 run-xs-angular-cubrid_usearch:
     sudo $"(pwd)/.venv/bin/python" run.py --dataset random-xs-20-angular --algorithm cubrid_usearch --runs 1
-    curl -d 'run xs-angular cubrid_usearch' ntfy.sh/cubvec
+
+run-nytimes-cubrid_usearch-local:
+    taskset -c 2 .venv/bin/python run.py --dataset nytimes-256-angular --algorithm cubrid_usearch --runs 1 --local
+    curl -d 'run nytimes-angular cubrid usearch local' ntfy.sh/cubvec
 
 run-xs-angular-cubrid_usearch-local:
     taskset -c 2 .venv/bin/python run.py --dataset random-xs-20-angular --algorithm cubrid_usearch --runs 1 --local
-    curl -d 'run xs-angular cubrid_usearch local' ntfy.sh/cubvec
 
 run-xs-angular-cubrid-local:
     .venv/bin/python run.py --dataset random-xs-20-angular --algorithm cubrid_faiss --runs 1 --local
-    curl -d 'run xs-angular cubrid local' ntfy.sh/cubvec
 
 run-xs-angular-pgvector:
     sudo $"(pwd)/.venv/bin/python" run.py --dataset random-xs-20-angular --algorithm pgvector --runs 1
-    curl -d 'run xs-angular pgvector' ntfy.sh/cubvec
 
 run-s-angular-pgvector:
     sudo $"(pwd)/.venv/bin/python" run.py --dataset random-s-100-angular --algorithm pgvector --runs 1
@@ -114,4 +113,4 @@ reset:
     sudo /bin/rm -rf websites/temp
 
 usearch-diff:
-    diff -ur ./ann_benchmarks/algorithms/cubrid/ ./ann_benchmarks/algorithms/cubrid_usearch/ | delta
+    diff -ur ./ann_benchmarks/algorithms/cubrid_faiss/ ./ann_benchmarks/algorithms/cubrid_usearch/ | delta

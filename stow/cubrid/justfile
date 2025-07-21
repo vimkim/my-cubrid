@@ -602,9 +602,9 @@ load-1536-300000:
     csql.sh -c 'create table tbl_1536_300000 (id int, vec vector(1536));'
     cubrid loaddb -c 10240 -u dba -d out/loaddb_1536_300000.object --estimated-size=300000 testdb
 
-collect-data-all: collect-256 collect-768 collect-1536
+enn-collect-data-all: enn-collect-256 enn-collect-768 enn-collect-1536
 
-collect-256:
+enn-collect-256:
     ./enn-bench-cubvec.sh 10 50000 testdb tbl_256_300000
     ./enn-bench-cubvec.sh 10 100000 testdb tbl_256_300000
     ./enn-bench-cubvec.sh 10 150000 testdb tbl_256_300000
@@ -612,7 +612,7 @@ collect-256:
     ./enn-bench-cubvec.sh 10 250000 testdb tbl_256_300000
     ./enn-bench-cubvec.sh 10 300000 testdb tbl_256_300000
 
-collect-768:
+enn-collect-768:
     ./enn-bench-cubvec.sh 10 50000 testdb tbl_768_300000
     ./enn-bench-cubvec.sh 10 100000 testdb tbl_768_300000
     ./enn-bench-cubvec.sh 10 150000 testdb tbl_768_300000
@@ -620,10 +620,18 @@ collect-768:
     ./enn-bench-cubvec.sh 10 250000 testdb tbl_768_300000
     ./enn-bench-cubvec.sh 10 300000 testdb tbl_768_300000
 
-collect-1536:
+enn-collect-1536:
     ./enn-bench-cubvec.sh 10 50000 testdb tbl_1536_150000
     ./enn-bench-cubvec.sh 10 100000 testdb tbl_1536_150000
     ./enn-bench-cubvec.sh 10 150000 testdb tbl_1536_150000
+
+enn-collect-256-nytimes:
+    ./enn-bench-cubvec.sh 10 50000 ann angular_24_200_256 embedding ann ann
+    ./enn-bench-cubvec.sh 10 100000 ann angular_24_200_256 embedding ann ann
+    ./enn-bench-cubvec.sh 10 150000 ann angular_24_200_256 embedding ann ann
+    ./enn-bench-cubvec.sh 10 200000 ann angular_24_200_256 embedding ann ann
+    ./enn-bench-cubvec.sh 10 250000 ann angular_24_200_256 embedding ann ann
+    ./enn-bench-cubvec.sh 10 290000 ann angular_24_200_256 embedding ann ann
 
 filter-data:
     open results.jsonl | lines | each { from json } | where stat == 'avg' | where metric has "SCAN TIME" | to csv | clip

@@ -4,6 +4,9 @@ REPEAT=${1:-5}
 LIMIT=${2:-10000}
 DBNAME=${3}
 TABLENAME=${4}
+VEC_COLNAME=${5:-vec}
+USERNAME=${6:-dba}
+PASSWORD=${7:-}
 
 select_times=()
 select_fetches=()
@@ -24,11 +27,11 @@ for i in $(seq 1 $REPEAT); do
     echo "Run $i..."
 
     OUTPUT=$(
-        csql -u dba $DBNAME --no-pager <<EOF
-select vec into :tmp from $TABLENAME limit 1;
-select /*+ RECOMPILE NO_MERGE PARALLEL(0) */ count(*) from (select /*+ RECOMPILE NO_MERGE PARALLEL(0) */ inner_product (vec, :tmp) from $TABLENAME LIMIT $LIMIT);
+        csql -u $USERNAME $DBNAME -p $PASSWORD --no-pager <<EOF
+select $VEC_COLNAME into :tmp from $TABLENAME limit 1;
+select /*+ RECOMPILE NO_MERGE PARALLEL(0) */ count(*) from (select /*+ RECOMPILE NO_MERGE PARALLEL(0) */ inner_product ($VEC_COLNAME, :tmp) from $TABLENAME LIMIT $LIMIT);
 ;trace on
-select /*+ RECOMPILE NO_MERGE PARALLEL(0) */ count(*) from (select /*+ RECOMPILE NO_MERGE PARALLEL(0) */ inner_product (vec, :tmp) from $TABLENAME LIMIT $LIMIT);
+select /*+ RECOMPILE NO_MERGE PARALLEL(0) */ count(*) from (select /*+ RECOMPILE NO_MERGE PARALLEL(0) */ inner_product ($VEC_COLNAME, :tmp) from $TABLENAME LIMIT $LIMIT);
 EOF
     )
 
@@ -79,13 +82,13 @@ summarize() {
 }
 
 echo "$label -> avg, min, max, median"
-summarize "SELECT TIME" "${select_times[@]}"
+summarize "TOTAL TIME" "${select_times[@]}"
 summarize "SELECT FETCH" "${select_fetches[@]}"
 summarize "SCAN TIME" "${scan_times[@]}"
 summarize "SCAN FETCH" "${scan_fetches[@]}"
 
 {
-    summarize "SELECT TIME" "${select_times[@]}"
+    summarize "TOTAL TIME" "${select_times[@]}"
     summarize "SELECT FETCH" "${select_fetches[@]}"
     summarize "SCAN TIME" "${scan_times[@]}"
     summarize "SCAN FETCH" "${scan_fetches[@]}"

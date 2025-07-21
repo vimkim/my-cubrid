@@ -73,6 +73,9 @@ run-xs-angular-cubrid-local:
 run-xs-angular-pgvector:
     sudo $"(pwd)/.venv/bin/python" run.py --dataset random-xs-20-angular --algorithm pgvector --runs 1
 
+run-xs-angular-pgvector-local:
+    taskset -c 2 .venv/bin/python run.py --dataset random-xs-20-angular --algorithm pgvector --runs 1 --local
+
 run-s-angular-pgvector:
     sudo $"(pwd)/.venv/bin/python" run.py --dataset random-s-100-angular --algorithm pgvector --runs 1
     curl -d 'run xs-angular pgvector' ntfy.sh/cubvec
@@ -114,3 +117,16 @@ reset:
 
 usearch-diff:
     diff -ur ./ann_benchmarks/algorithms/cubrid_faiss/ ./ann_benchmarks/algorithms/cubrid_usearch/ | delta
+
+ulimit-n-increase:
+    ulimit -Sn 500000
+
+perf-stat-cub_server:
+    perf stat -p $"(^ps aux | rg vimkim | rg cub_server | fzf | awk '{print $2}')"
+
+perf-top-cub_server:
+    perf top -p (^ps aux | rg vimkim | rg cub_server | fzf | awk '{print $2}')
+
+perf-record-cub_server:
+    sudo perf record -F max -g -a -p (^ps aux | rg vimkim | rg cub_server | fzf | awk '{print $2}')
+

@@ -101,9 +101,14 @@ configure:
 cmake-preset-mode-select:
     cmake-preset-mode-select.sh
 
-configure-build: configure build
+prepare-build:
+    if (which cubrid | is-not-empty) {
+    cubrid service stop | ignore
+    }
 
-build: cmake-build-install-all cubrid-stop
+configure-build: prepare-build configure build
+
+build: prepare-build cmake-build-install-all cubrid-stop
 
 cubrid-stop:
     cubrid broker stop
@@ -626,12 +631,15 @@ enn-collect-1536:
     ./enn-bench-cubvec.sh 10 150000 testdb tbl_1536_150000
 
 enn-collect-256-nytimes:
-    ./enn-bench-cubvec.sh 10 50000 ann angular_24_200_256 embedding ann ann
-    ./enn-bench-cubvec.sh 10 100000 ann angular_24_200_256 embedding ann ann
-    ./enn-bench-cubvec.sh 10 150000 ann angular_24_200_256 embedding ann ann
-    ./enn-bench-cubvec.sh 10 200000 ann angular_24_200_256 embedding ann ann
-    ./enn-bench-cubvec.sh 10 250000 ann angular_24_200_256 embedding ann ann
-    ./enn-bench-cubvec.sh 10 290000 ann angular_24_200_256 embedding ann ann
+    ./enn-bench-cubvec.sh 10 50000 ann angular_24_100_290000_256 embedding ann ann
+    ./enn-bench-cubvec.sh 10 100000 ann angular_24_100_290000_256 embedding ann ann
+    ./enn-bench-cubvec.sh 10 150000 ann angular_24_100_290000_256 embedding ann ann
+    ./enn-bench-cubvec.sh 10 200000 ann angular_24_100_290000_256 embedding ann ann
+    ./enn-bench-cubvec.sh 10 250000 ann angular_24_100_290000_256 embedding ann ann
+    ./enn-bench-cubvec.sh 10 260000 ann angular_24_100_290000_256 embedding ann ann
+    ./enn-bench-cubvec.sh 10 270000 ann angular_24_100_290000_256 embedding ann ann
+    ./enn-bench-cubvec.sh 10 280000 ann angular_24_100_290000_256 embedding ann ann
+    ./enn-bench-cubvec.sh 10 290000 ann angular_24_100_290000_256 embedding ann ann
 
 filter-data:
     open results.jsonl | lines | each { from json } | where stat == 'avg' | where metric has "SCAN TIME" | to csv | clip
@@ -667,3 +675,5 @@ db-create-ann:
     ^mkdir -p $"($env.CUBRID_DATABASES)/ann"
     cubrid createdb --db-volume-size=100M --log-volume-size=100M ann en_US.utf8 -F $"($env.CUBRID_DATABASES)/ann"
 
+check-simd-native:
+    objdump -d $"($env.CUBRID)/lib/libcubrid.so" | rg metric_cos_gt -A 5 | rg ymm | wc -l

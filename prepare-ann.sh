@@ -29,11 +29,14 @@ sed -i "s/^cubrid_port_id *= *.*/cubrid_port_id = ${ANN_BENCHMARKS_CUB_SERVER_PO
       sed -i "s/^MIN_NUM_APPL_SERVER[ \t]*=.*/MIN_NUM_APPL_SERVER = ${ANN_BENCHMARKS_CUB_NUM_CAS}/" $CUBRID/conf/cubrid_broker.conf && \
       sed -i "s/^MAX_NUM_APPL_SERVER[ \t]*=.*/MAX_NUM_APPL_SERVER = ${ANN_BENCHMARKS_CUB_NUM_CAS}/" $CUBRID/conf/cubrid_broker.conf && \
       sed -i "s/^BROKER_PORT[ \t]*=.*/BROKER_PORT = ${ANN_BENCHMARKS_CUB_PORT}/" $CUBRID/conf/cubrid_broker.conf && \
+      sed -i "s/^APPL_SERVER_SHM_ID[ \t]*=.*/APPL_SERVER_SHM_ID = 32345/" $CUBRID/conf/cubrid_broker.conf && \
+      sed -i "s/^MASTER_SHM_ID[ \t]*=.*/MASTER_SHM_ID = 31234/" $CUBRID/conf/cubrid_broker.conf && \
       cubrid broker restart && \
       until cubrid broker status | grep -q "% broker1"; do \
       echo "Waiting for broker1 to start..."; \
       sleep 1; \
-      done && \
-      csql -u dba ann -c "CREATE USER ann;" && \
-      csql -u dba ann -c "ALTER USER ann PASSWORD 'ann';"
+      done
+
+csql -u dba ann -c "CREATE USER ann;"
+csql -u dba ann -c "ALTER USER ann PASSWORD 'ann';"
 

@@ -203,7 +203,8 @@ list-dbtype-function:
 db-create-testdb:
     ^mkdir -p $"($env.CUBRID_DATABASES)/testdb"
     # cubrid createdb --db-page-size=8K --db-volume-size=20M --log-volume-size=20M testdb en_US.utf8 -F $"($env.CUBRID_DATABASES)/testdb"
-    cubrid createdb --db-volume-size=20M --log-volume-size=20M testdb en_US.utf8 -F $"($env.CUBRID_DATABASES)/testdb"
+    # cubrid createdb --db-volume-size=20M --log-volume-size=20M testdb en_US.utf8 -F $"($env.CUBRID_DATABASES)/testdb"
+    cubrid createdb --db-page-size=8K --db-volume-size=100M --log-volume-size=100M testdb en_US.utf8 -F $"($env.CUBRID_DATABASES)/testdb"
 
 db-delete-testdb:
     cubrid deletedb testdb
@@ -580,8 +581,8 @@ load-256-150000:
     cubrid loaddb -c 10240 -u dba -d out/loaddb_256_150000.object --estimated-size=150000 testdb
 
 load-256-300000:
-    csql.sh -c 'create table tbl_256_300000 (id int, vec vector(256));'
-    cubrid loaddb -c 10240 -u dba -d out/loaddb_256_300000.object --estimated-size=300000 testdb
+    csql.sh -c 'create table if not exists tbl_256_300000 (id int, vec vector(256));'
+    cubrid loaddb -C -c 10240 -u dba -d out/loaddb_256_300000.object --estimated-size=300000 testdb
 
 load-768-75000:
     csql.sh -c 'create table tbl_768_75000 (id int, vec vector(768));'
@@ -592,7 +593,7 @@ load-768-150000:
     cubrid loaddb -c 10240 -u dba -d out/loaddb_768_150000.object --estimated-size=150000 testdb
 
 load-768-300000:
-    csql.sh -c 'create table tbl_768_300000 (id int, vec vector(768));'
+    csql.sh -c 'create table if not exists tbl_768_300000 (id int, vec vector(768));'
     cubrid loaddb -c 10240 -u dba -d out/loaddb_768_300000.object --estimated-size=300000 testdb
 
 load-1536-75000:
@@ -615,6 +616,10 @@ enn-collect-256:
     ./enn-bench-cubvec.sh 10 150000 testdb tbl_256_300000
     ./enn-bench-cubvec.sh 10 200000 testdb tbl_256_300000
     ./enn-bench-cubvec.sh 10 250000 testdb tbl_256_300000
+    ./enn-bench-cubvec.sh 10 260000 testdb tbl_256_300000
+    ./enn-bench-cubvec.sh 10 270000 testdb tbl_256_300000
+    ./enn-bench-cubvec.sh 10 280000 testdb tbl_256_300000
+    ./enn-bench-cubvec.sh 10 290000 testdb tbl_256_300000
     ./enn-bench-cubvec.sh 10 300000 testdb tbl_256_300000
 
 enn-collect-768:
@@ -640,6 +645,9 @@ enn-collect-256-nytimes:
     ./enn-bench-cubvec.sh 10 270000 ann angular_24_100_290000_256 embedding ann ann
     ./enn-bench-cubvec.sh 10 280000 ann angular_24_100_290000_256 embedding ann ann
     ./enn-bench-cubvec.sh 10 290000 ann angular_24_100_290000_256 embedding ann ann
+
+enn-jsonl-combine:
+    open benchmarks/*.jsonl | save combined.jsonl
 
 filter-data:
     open results.jsonl | lines | each { from json } | where stat == 'avg' | where metric has "SCAN TIME" | to csv | clip
@@ -674,6 +682,10 @@ db-delete-ann:
 db-create-ann:
     ^mkdir -p $"($env.CUBRID_DATABASES)/ann"
     cubrid createdb --db-volume-size=100M --log-volume-size=100M ann en_US.utf8 -F $"($env.CUBRID_DATABASES)/ann"
+
+db-create-ann-initdb:
+    mkdir /tmp/ann/initdb
+    cubrid createdb --db-volume-size=100M --log-volume-size=100M ann en_US.utf8 -F /tmp/ann/initdb
 
 check-simd-native:
     objdump -d $"($env.CUBRID)/lib/libcubrid.so" | rg metric_cos_gt -A 5 | rg ymm | wc -l

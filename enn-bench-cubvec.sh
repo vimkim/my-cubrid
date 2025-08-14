@@ -27,7 +27,7 @@ for i in $(seq 1 $REPEAT); do
     echo "Run $i..."
 
     OUTPUT=$(
-        csql -u $USERNAME $DBNAME -p $PASSWORD --no-pager <<EOF
+        csql -u $USERNAME $DBNAME --no-pager <<EOF
 select $VEC_COLNAME into :tmp from $TABLENAME limit 1;
 select /*+ RECOMPILE NO_MERGE PARALLEL(0) */ count(*) from (select /*+ RECOMPILE NO_MERGE PARALLEL(0) */ inner_product ($VEC_COLNAME, :tmp) from $TABLENAME LIMIT $LIMIT);
 ;trace on

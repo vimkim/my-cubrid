@@ -5,7 +5,8 @@
 # PRESET_MODE=profile_clang
 # PRESET_MODE=debug_clang
 # PRESET_MODE=release_clang
-PRESET_MODE=release
+PRESET_MODE=release_gcc
+# PRESET_MODE=release_gcc_vec
 # PRESET_MODE=release_gcc
 # SOURCE_DIR=$HOME/gh/cb/23-create-index-fix-with/
 # SOURCE_DIR=/home/vimkim/gh/cb/62-db-value-float-array

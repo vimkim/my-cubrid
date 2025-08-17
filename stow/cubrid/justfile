@@ -674,7 +674,7 @@ bare-nvim:
     with-env { GIT_DIR: ./bare.git.out, GIT_WORK_TREE: . } { v }
 
 prepare-ann:
-    ./prepare-ann.sh
+    $"($env.HOME)/my-cubrid/prepare-ann.sh"
 
 db-delete-ann:
     cubrid deletedb ann
@@ -689,3 +689,7 @@ db-create-ann-initdb:
 
 check-simd-native:
     objdump -d $"($env.CUBRID)/lib/libcubrid.so" | rg metric_cos_gt -A 5 | rg ymm | wc -l
+
+clang-tidy:
+    fd '(\.h$)|(\.cpp$)|(\.c$)' src | entr -cr clang-tidy /_
+

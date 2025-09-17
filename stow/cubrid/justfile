@@ -1,4 +1,4 @@
-mod? local '.just/justfile'
+mod? local 'local.just'
 
 set shell := ["nu", "-c"]
 
@@ -86,10 +86,7 @@ database-remove: _gum-confirm-no
 
 prepare: stow-create
     git submodule update --init cubrid-cci
-    open ($env.MY_CUBRID | path join developer-patch.diff) | patch -N -r rej.rej -p1
-    just allow-direnv
-
-allow-direnv:
+    open ($env.MY_CUBRID | path join developer-patch.diff) | patch -N -r rej.rej -p1 | true
     direnv allow
 
 cpptrace:
@@ -128,7 +125,7 @@ cmake-build-install-csql-util: cmake-build-install-3rdparty
     cmake --build --preset $env.PRESET_MODE --target util/install
 
 cmake-build-install-all:
-    cmake --build --preset $env.PRESET_MODE --target install
+    cmake --build --preset $env.PRESET_MODE --target install | rg -i -A 3 'error|warning'
 
 build-debug:
     cmake --build --preset mydebug --target install
@@ -174,6 +171,12 @@ cgdb-csql-testdb-sa:
 
 cgdb-csql-testdb-sa-vector-insert:
     cgdb --args csql.sh -c "insert into vt values ('[1, 2, 3]');"
+
+print-current-server:
+    ps -l | where command has 'cub_server' | where cwd has 'vimkim'
+
+cgdb-cub-server-testdb: print-current-server
+    cgdb -p (ps -l | where command has 'cub_server testdb' | where cwd has 'vimkim' | get pid | first) $"($env.CUBRID_BUILD_DIR)/bin/cub_server"
 
 core csql CORE:
     cgdb csql core {{ CORE }}
@@ -333,8 +336,20 @@ asdf-java-global:
 asdf-java-local:
     asdf local java $(asdf list java | fzf)
 
-uftrace-dump:
-    uftrace dump --chrome > "uftrace-$(date +%Y%m%d_%H%M%S).json"
+uftrace-record:
+    uftrace record -- csql -u dba testdb -S ???
+
+uftrace-record-start_csql:
+    uftrace record -F start_csql -- csql -u dba testdb -S ???
+
+uftrace-dump-chrome:
+    uftrace dump --chrome o> $"uftrace-chrome-(^date '+%Y%m%d_%H%M%S').json"
+
+uftrace-dump-flamegraph:
+    uftrace dump --flame-graph --sample-time=1us o> $"uftrace-flame-(^date '+%Y%m%d_%H%M%S').log"
+
+uftrace-preview:
+    uftrace dump --flame-graph --sample-time=1us | flamelens
 
 uftrace-serve-trace:
     trace_processor --httpd ./uftrace-*.json
@@ -674,7 +689,7 @@ bare-nvim:
     with-env { GIT_DIR: ./bare.git.out, GIT_WORK_TREE: . } { v }
 
 prepare-ann:
-    $"($env.HOME)/my-cubrid/prepare-ann.sh"
+    ^$"($env.HOME)/my-cubrid/prepare-ann.sh"
 
 db-delete-ann:
     cubrid deletedb ann
@@ -692,4 +707,15 @@ check-simd-native:
 
 clang-tidy:
     fd '(\.h$)|(\.cpp$)|(\.c$)' src | entr -cr clang-tidy /_
+
+edit-databases-txt:
+    v $"($env.CUBRID_DATABASES)/databases.txt"
+
+report-256-data:
+    open benchmarks/*.jsonl | save combined.jsonl -f
+    python enn-json-to-csv.py
+    cp output.csv /home/vimkim/gh/enn-plots/cubvec.csv
+
+extract-functions-heap_attrinfo:
+    nm -C build_preset_debug_clang/cubrid/libcubrid.so | rg ' T ' | rg heap_attrinfo | rg -o 'heap_attrinfo[^(]*'
 

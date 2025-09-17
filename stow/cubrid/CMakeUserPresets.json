@@ -61,8 +61,8 @@
       "inherits": "user_default",
       "cacheVariables": {
         "CMAKE_BUILD_TYPE": "RelWithDebInfo",
-        "CMAKE_C_FLAGS": "-fdiagnostics-color=always -Wno-int-conversion -Wno-incompatible-pointer-types -Wno-implicit-function-declaration",
-        "CMAKE_CXX_FLAGS": "-fdiagnostics-color=always",
+        "CMAKE_C_FLAGS": "-fdiagnostics-color=always -Wno-int-conversion -Wno-incompatible-pointer-types -Wno-implicit-function-declaration -Wno-error=maybe-uninitialized",
+        "CMAKE_CXX_FLAGS": "-fdiagnostics-color=always -Wno-error=maybe-uninitialized",
         "CMAKE_C_FLAGS_RELWITHDEBINFO": "-O2 -g -DNDEBUG -finline-functions -Wno-error=mismatched-new-delete",
         "CMAKE_CXX_FLAGS_RELWITHDEBINFO": "-O2 -g -DNDEBUG -finline-functions -Wno-error=mismatched-new-delete",
         "CMAKE_C_COMPILER": "gcc",

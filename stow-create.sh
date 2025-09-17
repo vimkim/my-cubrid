@@ -13,7 +13,7 @@ proj_name="$(basename "$(pwd)")"
 proj_dir="$MY_CUBRID/just-cubrid/$proj_name"
 
 mkdir -p "$proj_dir"
-touch "$proj_dir/justfile"
+touch "$proj_dir/local.just"
 
 # Create symlink
-ln -sf "$proj_dir" .just
+ln -sf "$proj_dir" local.just

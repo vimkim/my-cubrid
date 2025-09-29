@@ -125,7 +125,7 @@ cmake-build-install-csql-util: cmake-build-install-3rdparty
     cmake --build --preset $env.PRESET_MODE --target util/install
 
 cmake-build-install-all:
-    cmake --build --preset $env.PRESET_MODE --target install | rg -i -A 3 'error|warning'
+    cmake --build --preset $env.PRESET_MODE --target install | tee { save -f --raw build.log } | rg -i -A 3 'error'
 
 build-debug:
     cmake --build --preset mydebug --target install

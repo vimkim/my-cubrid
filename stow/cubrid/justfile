@@ -86,7 +86,7 @@ database-remove: _gum-confirm-no
 
 prepare: stow-create
     git submodule update --init cubrid-cci
-    open ($env.MY_CUBRID | path join developer-patch.diff) | patch -N -r rej.rej -p1 | true
+    open ($env.MY_CUBRID | path join developer-patch.diff) | patch -N -r rej.rej -p1 | ignore
     direnv allow
 
 cpptrace:

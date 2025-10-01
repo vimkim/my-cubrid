@@ -124,8 +124,9 @@ cmake-build-install-3rdparty:
 cmake-build-install-csql-util: cmake-build-install-3rdparty
     cmake --build --preset $env.PRESET_MODE --target util/install
 
+# tip: ninja above 1.10 understands export CLICOLOR_FORCE=1 and prints color even when piped
 cmake-build-install-all:
-    cmake --build --preset $env.PRESET_MODE --target install | tee { save -f --raw build.log } | rg -i -A 3 'error'
+    cmake --build --preset $env.PRESET_MODE --target install | tee { save -f --raw build.log } | rg -i -A 3 'error:|success|install'
 
 build-debug:
     cmake --build --preset mydebug --target install

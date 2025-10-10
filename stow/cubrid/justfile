@@ -95,7 +95,8 @@ database-remove: _gum-confirm-no
 
 prepare: stow-create
     git submodule update --init cubrid-cci
-    open ($env.MY_CUBRID | path join developer-patch.diff) | patch -N -r rej.rej -p1 | ignore
+    # open ($env.MY_CUBRID | path join developer-patch.diff) | patch -N -r rej.rej -p1 | ignore
+    open ($env.MY_CUBRID | path join clang20.diff) | patch -N -r rej.rej -p1 | ignore
     direnv allow
 
 cpptrace:
@@ -109,15 +110,12 @@ cmake-preset-mode-select:
 
 prepare-build:
     if (which cubrid | is-not-empty) {
-    cubrid service stop | ignore
+    cubrid service stop | ignore; cubrid broker stop | ignore
     }
 
 configure-build: prepare-build configure build
 
-build: prepare-build cmake-build-install-all cubrid-stop
-
-cubrid-stop:
-    cubrid broker stop
+build: prepare-build cmake-build-install-all
 
 build-update: cmake-build-install-all update-cubrid-conf
 

@@ -80,6 +80,9 @@ stow-delete:
     stow --dir=$MY_CUBRID/stow --target=. -D cubrid
     stow --dir=$MY_CUBRID/stow --target=. -D gdb
 
+stow-cb:
+    stow -d ~/my-cubrid -t ~/gh/cb stow-cb
+
 # install
 
 install-dir-remove: _gum-confirm-no

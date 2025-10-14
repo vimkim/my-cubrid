@@ -16,17 +16,18 @@ set breakpoint pending on
 # continue
 
 # set args -u dba testdb -S -c "select L2_DISTANCE('[1, 2, 3]', '[2, 3, 4]') from dual;"
-start
+# start
 del br
-b csql
-continue
+# b csql
+# continue
 
 # important main breakpoint
-b start_csql
-b pt_compile
-b db_execute_statement
+# b start_csql
+# b pt_compile
+# b db_execute_statement
 
-so br
-continue
+rb heap_attrinfo_transform_
+rb heap_attrinfo_read_
+rb heap_insert_
 
 set pagination on

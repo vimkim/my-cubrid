@@ -727,3 +727,8 @@ report-256-data:
 extract-functions-heap_attrinfo:
     nm -C build_preset_debug_clang/cubrid/libcubrid.so | rg ' T ' | rg heap_attrinfo | rg -o 'heap_attrinfo[^(]*'
 
+build-log:
+    tspin -f build.log
+
+run-log:
+    tspin -f csql.access csql.err

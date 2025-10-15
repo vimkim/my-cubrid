@@ -38,3 +38,17 @@ vim.api.nvim_create_autocmd("FileType", {
 vim.filetype.add({
 	extension = { i = "c" },
 })
+
+local conform = require("conform")
+
+-- install indent <= 2.2.11
+-- for example, nix indent 2.2.10 is
+-- nix profile install nixpkgs/22f65339f3773f5b691f55b8b3a139e5582ae85b#indent
+conform.formatters.cubrid_c = {
+	command = "format-cubrid.sh",
+	args = { "$FILENAME" },
+  stdin = false,
+}
+
+conform.formatters_by_ft.c = { "cubrid_c" }
+conform.formatters_by_ft.cpp = { "cubrid_c" }

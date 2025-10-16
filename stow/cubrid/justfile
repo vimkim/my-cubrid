@@ -17,6 +17,17 @@ alias vr := vector-run
 alias brt := build-recreate-test
 alias t := test
 
+git-dir-worktree-nvim-head:
+  git worktree add ../nvim_head -b NVIM_HEAD
+
+git-dir-change-base:
+  $env.GIT_DIR = '../nvim_head/.git'
+  $env.GIT_WORK_TREE = '.'
+
+git-dir-recover-base:
+  $env.GIT_DIR = './.git'
+  $env.GIT_WORK_TREE = '.'
+
 csql-prepare:
     csql -Sudba testdb -i csql-prepare.sql
 

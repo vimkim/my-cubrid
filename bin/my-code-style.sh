@@ -19,6 +19,6 @@ else
     for f in $FILES; do
         echo "for file $f"
         # .github/workflows/codestyle.sh "${f}"
-        format-cubrid.sh "${f}"
+        cubrid-format-codestyle.sh "${f}"
     done
 fi

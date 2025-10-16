@@ -371,10 +371,10 @@ format-git-changed:
     my-code-style.sh
 
 format-one-file:
-    format-cubrid.sh $(fd | fzf)
+    cubrid-format-codestyle.sh $(fd | fzf)
 
 format-cubvec-diff:
-    git diff --name-only origin/cubvec/cubvec | xargs -I {} sh -c 'format-cubrid.sh {}'
+    git diff --name-only origin/cubvec/cubvec | xargs -I {} sh -c 'cubrid-format-codestyle.sh {}'
 
 memleak-build-cubvec-assert-server: build server-start-testdb
     csql.sh -c "drop table if exists vt;"

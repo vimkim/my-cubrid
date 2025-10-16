@@ -55,7 +55,7 @@ local conform = require("conform")
 -- for example, nix indent 2.2.10 is
 -- nix profile install nixpkgs/22f65339f3773f5b691f55b8b3a139e5582ae85b#indent
 conform.formatters.cubrid_c = {
-	command = "format-cubrid.sh",
+	command = "cubrid-format-codestyle.sh",
 	args = { "$FILENAME" },
 	stdin = false,
 }

@@ -363,12 +363,12 @@ uftrace-serve-trace:
     trace_processor --httpd ./uftrace-*.json
 
 format-git-changed-dryrun:
-    my-code-style.sh -d
+    cubrid-format-gitchanged.sh -d
     just format
 
 format-git-changed:
     @gum confirm
-    my-code-style.sh
+    cubrid-format-gitchanged.sh
 
 format-one-file:
     cubrid-format-codestyle.sh $(fd | fzf)

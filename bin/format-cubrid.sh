@@ -17,10 +17,34 @@
 
 f=$1
 
+show_help() {
+    echo "Usage: $(basename "$0") <source_file>"
+    echo
+    echo "Automatically formats a source file based on its extension."
+    echo
+    echo "Supported file types:"
+    echo "  .c, .h, .i     - formatted with indent"
+    echo "  .cpp, .hpp, .ipp - formatted with astyle"
+    echo "  .java          - formatted with google-java-format"
+    echo
+    echo "Examples:"
+    echo "  $(basename "$0") main.c"
+    echo "  $(basename "$0") src/MyClass.java"
+    echo
+    echo "Options:"
+    echo "  -h, --help     Show this help message and exit"
+}
+
+if [[ -z "$f" || "$f" == "-h" || "$f" == "--help" ]]; then
+    show_help
+    exit 0
+fi
+
 ext=$(expr $f : ".*\(\..*\)")
 
 case $ext in
 .c | .h | .i)
+    # install indent <= 2.2.11
     indent -l120 -lc120 ${f}
     ;;
 .cpp | .hpp | .ipp)

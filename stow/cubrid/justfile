@@ -75,10 +75,12 @@ _clang-support:
 
 stow-create:
     ~/my-cubrid/stow-create.sh
+    stow --dir=$"($env.MY_CUBRID)/stow" --target=. cubrid
+    stow --dir=$"($env.MY_CUBRID)/stow" --target=. gdb
 
 stow-delete:
-    stow --dir=$MY_CUBRID/stow --target=. -D cubrid
-    stow --dir=$MY_CUBRID/stow --target=. -D gdb
+    stow -D --dir=$"($env.MY_CUBRID)/stow" --target=. cubrid
+    stow -D --dir=$"($env.MY_CUBRID)/stow" --target=. gdb
 
 stow-cb:
     stow -d ~/my-cubrid -t ~/gh/cb stow-cb

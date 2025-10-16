@@ -2,9 +2,19 @@ local grp = vim.api.nvim_create_augroup("ProjectCStyle", { clear = true })
 
 vim.api.nvim_create_autocmd({ "FileType" }, {
 	group = grp,
-	pattern = { "c", "cpp", "cmake", "sh" },
+	-- pattern = { "c", "cpp", "cmake", "sh" },
+	pattern = { "cmake", "sh" },
 	callback = function()
 		vim.b.autoformat = false
+	end,
+})
+
+vim.api.nvim_create_autocmd({ "FileType" }, {
+	group = grp,
+	-- pattern = { "c", "cpp", "cmake", "sh" },
+	pattern = { "c", "cpp" },
+	callback = function()
+		vim.b.autoformat = true
 	end,
 })
 
@@ -47,7 +57,7 @@ local conform = require("conform")
 conform.formatters.cubrid_c = {
 	command = "format-cubrid.sh",
 	args = { "$FILENAME" },
-  stdin = false,
+	stdin = false,
 }
 
 conform.formatters_by_ft.c = { "cubrid_c" }

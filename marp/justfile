@@ -1,0 +1,12 @@
+marp:
+    marp --theme ./my-marp.css index.md -o docs/index.html
+
+serve:
+    BROWSER=/bin/true live-server --port=8000 --no-browser ./docs/ 
+
+entr:
+    echo 'index.md' 'my-marp.css' | to text | entr -c just marp
+
+marp-pdf:
+    marp --theme ./my-marp.css index.md --pdf
+

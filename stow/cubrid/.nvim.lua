@@ -14,7 +14,7 @@ vim.api.nvim_create_autocmd({ "FileType" }, {
 	-- pattern = { "c", "cpp", "cmake", "sh" },
 	pattern = { "c", "cpp" },
 	callback = function()
-		vim.b.autoformat = true
+		vim.b.autoformat = false
 	end,
 })
 

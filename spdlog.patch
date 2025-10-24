@@ -1,0 +1,16 @@
+diff --git a/CMakeLists.txt b/CMakeLists.txt
+index cdbee43ab..c93650ad8 100644
+--- a/CMakeLists.txt
++++ b/CMakeLists.txt
+@@ -309,6 +309,11 @@ set(LOADER_LEXER_OUTPUT ${CMAKE_BINARY_DIR}/load_lexer.cpp)
+ message("Including Third Party Libraries")
+ add_subdirectory(3rdparty)
+ 
++# Stand-alone build
++find_package(spdlog CONFIG REQUIRED)
++list(APPEND EP_LIBS spdlog::spdlog)
++list(APPEND CMAKE_DL_LIBS spdlog::spdlog)
++
+ # CSQL FLEX/BISON targets
+ # replace old bison directives with new ones
+ # use add_custom_command because we want to regenerate csql_grammar.yy

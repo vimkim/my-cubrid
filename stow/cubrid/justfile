@@ -164,8 +164,7 @@ cmake-build-target:
     cmake-build-target-fuzzy.sh $CUBRID_BUILD_DIR
 
 clear-cache:
-    @gum confirm
-    /bin/rm -rf $CUBRID_BUILD_DIR/CMakeCache.txt $CUBRID_BUILD_DIR/CMakeFiles
+    /bin/rm -rf $"($env.CUBRID_BUILD_DIR)/CMakeCache.txt" $"($env.CUBRID_BUILD_DIR)/CMakeFiles"
 
 build-target:
     cmake --build --preset $env.PRESET_MODE --target help | awk -F': ' '{print $1}' | fzf | xargs -I {} cmake --build --preset $env.PRESET_MODE --target {}

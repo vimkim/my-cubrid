@@ -2,7 +2,7 @@ marp:
     marp --theme ./my-marp.css index.md -o docs/index.html
 
 serve:
-    BROWSER=/bin/true live-server --port=8000 --no-browser ./docs/ 
+    BROWSER=/bin/true live-server --port=8000 --no-browser ./docs/
 
 entr:
     echo 'index.md' 'my-marp.css' | to text | entr -c just marp
@@ -11,7 +11,7 @@ marp-pdf:
     marp --theme ./my-marp.css index.md --pdf
 
 marp-serve-not-secure:
-    PORT=8001 marp --theme ./my-marp.css -s . --allow-local-files
+    PORT=8001 marp --theme ./my-marp.css -s . --allow-local-files -w
 
 marp-publish:
     mkdir docs

@@ -131,7 +131,7 @@ prepare-build:
 
 configure-build: prepare-build configure build
 
-build: prepare-build cmake-build-install-all
+build: prepare-build cmake-build-install-all-rg
 
 build-update: cmake-build-install-all update-cubrid-conf
 
@@ -148,8 +148,11 @@ cmake-build-install-csql-util: cmake-build-install-3rdparty
     cmake --build --preset $env.PRESET_MODE --target util/install
 
 # tip: ninja above 1.10 understands export CLICOLOR_FORCE=1 and prints color even when piped
-cmake-build-install-all:
+cmake-build-install-all-rg:
     cmake --build --preset $env.PRESET_MODE --target install | tee { save -f --raw build.log } | rg -i -A 3 'error:|success|install'
+
+cmake-build-install-all:
+    cmake --build --preset $env.PRESET_MODE --target install
 
 build-debug:
     cmake --build --preset mydebug --target install

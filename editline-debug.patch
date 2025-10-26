@@ -1,0 +1,28 @@
+diff --git a/3rdparty/CMakeLists.txt b/3rdparty/CMakeLists.txt
+index 9889f751c..03e2bd508 100644
+--- a/3rdparty/CMakeLists.txt
++++ b/3rdparty/CMakeLists.txt
+@@ -95,7 +95,7 @@ include(ExternalProject)
+ 
+ set (3RDPARTY_LIBS_DIR ${CMAKE_BINARY_DIR}/3rdparty)
+ set_property(DIRECTORY PROPERTY EP_BASE "${3RDPARTY_LIBS_DIR}")
+-set(DEFAULT_CONFIGURE_OPTS <SOURCE_DIR>/configure --prefix=${CMAKE_BINARY_DIR}/3rdparty --enable-static --disable-shared --with-pic CFLAGS=-w CXXFLAGS=-w)
++set(DEFAULT_CONFIGURE_OPTS <SOURCE_DIR>/configure --prefix=${CMAKE_BINARY_DIR}/3rdparty --enable-static --disable-shared --with-pic)
+ 
+ # For Windows
+ if(WIN32)
+@@ -294,7 +294,13 @@ if(UNIX)
+       LOG_INSTALL          TRUE
+       TIMEOUT              600
+       DOWNLOAD_NO_PROGRESS 1
+-      CONFIGURE_COMMAND    "LDFLAGS=-L${3RDPARTY_LIBS_DIR}" ${DEFAULT_CONFIGURE_OPTS} LIBS=-ldl
++      CONFIGURE_ENV
++        CFLAGS=-O0\ -ggdb3\ -fno-omit-frame-pointer
++        CXXFLAGS=-O0\ -ggdb3\ -fno-omit-frame-pointer
++        LDFLAGS=-L${3RDPARTY_LIBS_DIR}
++        LIBS=-ldl
++      CONFIGURE_COMMAND
++        "LDFLAGS=-L${3RDPARTY_LIBS_DIR}" ${DEFAULT_CONFIGURE_OPTS} LIBS=-ldl
+       BUILD_COMMAND        make all AUTOCONF=: AUTOHEADER=: AUTOMAKE=: ACLOCAL=:
+       INSTALL_COMMAND      make install AUTOCONF=: AUTOHEADER=: AUTOMAKE=: ACLOCAL=:
+       "${LIBEDIT_BYPRODUCTS}"

@@ -80,9 +80,9 @@
 
 section {
   background-image: linear-gradient(to bottom right, #f7f7f7 0%, #d3d3d3 100%);
-  border: 0.7em solid var(--border-color);
-  outline: 0.3em solid #ffffff;
-  outline-offset: -0.5em;
+  /* border: 0.7em solid var(--border-color); */
+  /* outline: 0.3em solid #ffffff; */
+  /* outline-offset: -0.5em; */
   font-size: 20px;
 }
 

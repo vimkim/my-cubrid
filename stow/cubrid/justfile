@@ -2,8 +2,7 @@ mod? local 'local.just'
 
 set shell := ["nu", "-c"]
 
-default:
-    @just --choose --justfile={{ justfile() }} -d {{ invocation_directory() }}
+default: build
 
 alias b := build
 alias c := configure

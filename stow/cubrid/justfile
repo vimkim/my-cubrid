@@ -140,7 +140,13 @@ update-cubrid-conf:
     sed -i 's/data_buffer_size=512M/data_buffer_size=16G/' $"($env.CUBRID)/conf/cubrid.conf"
 
 cubrid-conf-disable-string-compression:
-    crudini --set $"($env.CUBRID)/conf/cubrid.conf" '' enable_string_compression no
+    crudini --set $"($env.CUBRID)/conf/cubrid.conf" 'common' enable_string_compression no
+
+cubrid-conf-get-string-compression:
+    crudini --get $"($env.CUBRID)/conf/cubrid.conf" 'common' enable_string_compression
+
+cubrid-conf-edit:
+    nvim $"($env.CUBRID)/conf/cubrid.conf"
 
 update-restart-testdb: update-cubrid-conf server-restart-testdb
 

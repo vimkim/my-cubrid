@@ -139,6 +139,9 @@ update-cubrid-conf:
     # sed -i 's/log_buffer_size=512M/log_buffer_size=4G/' $"($env.CUBRID)/conf/cubrid.conf"
     sed -i 's/data_buffer_size=512M/data_buffer_size=16G/' $"($env.CUBRID)/conf/cubrid.conf"
 
+cubrid-conf-disable-string-compression:
+    crudini --set $"($env.CUBRID)/conf/cubrid.conf" '' enable_string_compression no
+
 update-restart-testdb: update-cubrid-conf server-restart-testdb
 
 cmake-build-install-3rdparty:

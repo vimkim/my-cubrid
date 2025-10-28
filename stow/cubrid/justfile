@@ -372,16 +372,16 @@ uftrace-record-start_csql:
     uftrace record -F start_csql -- csql -u dba testdb -S ???
 
 uftrace-dump-chrome:
-    uftrace dump --chrome o> $"uftrace-chrome-(^date '+%Y%m%d_%H%M%S').json"
+    uftrace dump --chrome o> $"uftrace/uftrace-chrome-(^date '+%Y%m%d_%H%M%S').json"
 
 uftrace-dump-flamegraph:
-    uftrace dump --flame-graph --sample-time=1us o> $"uftrace-flame-(^date '+%Y%m%d_%H%M%S').log"
+    uftrace dump --flame-graph --sample-time=1us o> $"uftrace/uftrace-flame-(^date '+%Y%m%d_%H%M%S').log"
 
 uftrace-preview:
     uftrace dump --flame-graph --sample-time=1us | flamelens
 
 uftrace-serve-trace:
-    trace_processor --httpd ./uftrace-*.json
+    trace_processor --httpd ./uftrace/uftrace-chrome-*.json
 
 format-git-changed-dryrun:
     cubrid-format-gitchanged.sh -d

@@ -1,0 +1,30 @@
+gpt-select:
+    csql -u dba testdb -i ./gpt-select.sql
+
+gpt-insert:
+    csql -u dba testdb -i ./gpt-insert.sql
+
+rr-record-select:
+    rr record csql -u dba testdb -S -i gpt-select.sql
+
+rr-replay:
+    rr replay -d cgdb
+
+uftrace-record-insert-large:
+    uftrace record -- csql -u dba testdb -S -i insert-large.sql
+
+uftrace-dump-chrome-insert-large:
+    uftrace dump --chrome o> $"uftrace/uftrace-chrome-insert-large.json"
+
+uftrace-serve-trace-insert-large:
+    trace_processor --httpd ./uftrace/uftrace-chrome-insert-large.json
+
+uftrace-record-select-large:
+    uftrace record -- csql -u dba testdb -S -i select-large.sql
+
+uftrace-dump-chrome-select-large:
+    uftrace dump --chrome o> $"uftrace/uftrace-chrome-select-large.json"
+
+uftrace-serve-trace-select-large:
+    trace_processor --httpd ./uftrace/uftrace-chrome-select-large.json
+

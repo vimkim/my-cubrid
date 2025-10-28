@@ -125,9 +125,7 @@ cmake-preset-mode-select:
     cmake-preset-mode-select.sh
 
 prepare-build:
-    if (which cubrid | is-not-empty) {
-    cubrid service stop | ignore; cubrid broker stop | ignore
-    }
+    if (which cubrid | is-not-empty) { cubrid service stop | ignore; cubrid broker stop | ignore }
 
 configure-build: prepare-build configure build
 

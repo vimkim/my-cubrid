@@ -143,6 +143,12 @@ cubrid-conf-disable-string-compression:
 cubrid-conf-get-string-compression:
     crudini --get $"($env.CUBRID)/conf/cubrid.conf" 'common' enable_string_compression
 
+cubrid-conf-get-port:
+    crudini --get $"($env.CUBRID)/conf/cubrid.conf" 'common' cubrid_port_id
+
+cubrid-conf-set-port:
+    crudini --set $"($env.CUBRID)/conf/cubrid.conf" 'common' cubrid_port_id 12345
+
 cubrid-conf-edit:
     nvim $"($env.CUBRID)/conf/cubrid.conf"
 

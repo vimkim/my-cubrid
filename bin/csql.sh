@@ -1,13 +1,15 @@
-#!/bin/bash
+#!/bin/env bash
 
 DB="${DB:-testdb}"
 
 echo "connecting to ... $DB"
 
-if [ "$SA" = "1" ]; then
-    echo "##### SA MODE to db: $DB"
-    csql -u dba "$DB" -S "$@"
-else
+# Check if DB name appears in cubrid server status
+if cubrid server status | rg -q "$DB"; then
     echo "##### CS MODE to db: $DB"
-    csql -u dba "$DB" "$@"
+    exec csql -u dba "$DB" "$@"
+else
+    echo "##### SA MODE to db: $DB"
+    exec csql -u dba "$DB" -S "$@"
 fi
+

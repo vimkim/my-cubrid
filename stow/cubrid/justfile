@@ -17,19 +17,19 @@ alias brt := build-recreate-test
 alias t := test
 
 git-dir-worktree-nvim-head:
-  git worktree add ../nvim-head -b NVIM_HEAD
+    git worktree add ../nvim-head -b NVIM_HEAD
 
 git-dir-worktree-nvim-head-clean:
-  git worktree prune
-  git branch -D NVIM_HEAD
+    git worktree prune
+    git branch -D NVIM_HEAD
 
 git-dir-change-base:
-  $env.GIT_DIR = '../nvim-head/.git'
-  $env.GIT_WORK_TREE = '.'
+    $env.GIT_DIR = '../nvim-head/.git'
+    $env.GIT_WORK_TREE = '.'
 
 git-dir-recover-base:
-  $env.GIT_DIR = './.git'
-  $env.GIT_WORK_TREE = '.'
+    $env.GIT_DIR = './.git'
+    $env.GIT_WORK_TREE = '.'
 
 csql-prepare:
     csql -Sudba testdb -i csql-prepare.sql

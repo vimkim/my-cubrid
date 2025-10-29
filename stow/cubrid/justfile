@@ -203,13 +203,13 @@ cgdb-csql-demodb-sa:
     cgdb --args csql -u dba demodb -S
 
 cgdb-csql-testdb-cs:
-    cgdb --args csql.sh
+    cgdb --args csql.sh --no-pager
 
 cgdb-csql-testdb-sa:
-    cgdb --args csql.sh
+    cgdb --args csql.sh --no-pager
 
 cgdb-csql-testdb-sa-vector-insert:
-    cgdb --args csql.sh -c "insert into vt values ('[1, 2, 3]');"
+    cgdb --args csql.sh --no-pager -c "insert into vt values ('[1, 2, 3]')
 
 print-current-server:
     ps -l | where command has 'cub_server' | where cwd has 'vimkim'

@@ -4,6 +4,39 @@ set shell := ["nu", "-c"]
 
 default: build
 
+n1:
+    csql.sh -i prepare.sql
+
+n2:
+    csql.sh -i insert.sql
+
+n3:
+    csql.sh -i select.sql
+
+n4:
+    csql.sh -i delete.sql
+
+n5:
+    csql.sh -i prepare.sql
+
+n6:
+    csql.sh -i insert.sql
+
+n7:
+    csql.sh -i select.sql
+
+n8:
+    csql.sh -i delete.sql
+
+nb: build
+
+nc:
+    csql.sh
+
+np: cubrid-conf-disable-string-compression cubrid-conf-set-port  cubrid-conf-get-string-compression cubrid-conf-get-port
+
+ns: server-start-testdb
+
 alias b := build
 alias c := configure
 alias bd := build-debug

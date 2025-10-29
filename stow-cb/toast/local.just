@@ -1,3 +1,5 @@
+set shell := ["nu", "-c"]
+
 gpt-select:
     csql -u dba testdb -i ./gpt-select.sql
 
@@ -41,4 +43,3 @@ uftrace-dump-chrome-update-large:
 
 uftrace-serve-trace-update-large:
     trace_processor --httpd ./uftrace/uftrace-chrome-update-large.json
-

@@ -37,6 +37,10 @@ np: cubrid-conf-disable-string-compression cubrid-conf-set-port  cubrid-conf-get
 
 ns: server-start-testdb
 
+nt: ctest
+
+test: ctest
+
 alias b := build
 alias c := configure
 alias bd := build-debug
@@ -45,8 +49,6 @@ alias cc := csql-demodb-cs
 alias cs := csql-demodb-sa
 alias bvr := build-vector-run
 alias brvr := build-recreate-vector-run
-alias vr := vector-run
-alias brt := build-recreate-test
 alias t := test
 
 git-dir-worktree-nvim-head:
@@ -150,6 +152,9 @@ prepare: stow-create
 
 cpptrace:
     open ($env.MY_CUBRID | path join cpptrace.diff) | patch -N -r rej.rej -p1
+
+ctest: build
+    ctest --test-dir $"($env.CUBRID_BUILD_DIR)" --output-on-failure --verbose
 
 configure:
     cmake --preset $env.PRESET_MODE
@@ -378,17 +383,6 @@ git-pull-cub-head:
 
 insert-vectors:
     csql.sh -i ./vector-insert.sql
-
-build-recreate-test: build recreate-testdb test
-
-test: test-vector
-
-build-and-test: build test
-
-test-vector: recreate-testdb insert-vectors test-vector-select
-
-test-vector-select:
-    ./test-vector-select.sh
 
 perfect-error-disable-flags:
     CFLAGS='-Wno-int-conversion -Wno-implicit-function-declaration -w' CXXFLAGS='-Wno-c++11-narrowing -Wno-non-pod-varargs -w' CC=clang CXX=clang++ ./build.sh -m debug build

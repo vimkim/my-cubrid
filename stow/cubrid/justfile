@@ -2,7 +2,7 @@ mod? local 'local.just'
 
 set shell := ["nu", "-c"]
 
-default: build
+default: ctest
 
 n1:
     csql.sh -i prepare.sql
@@ -167,7 +167,7 @@ prepare-build:
 
 configure-build: prepare-build configure build
 
-build: prepare-build cmake-build-install-all-rg
+build: prepare-build cmake-build-install-all
 
 build-update: cmake-build-install-all update-cubrid-conf
 

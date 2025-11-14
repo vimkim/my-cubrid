@@ -14,7 +14,7 @@ n3:
     csql.sh -i select.sql
 
 n4:
-    csql.sh -i delete.sql
+    csql.sh -i insert-large.sql
 
 n5:
     csql.sh -i prepare.sql
@@ -149,6 +149,7 @@ prepare: stow-create
     # open ($env.MY_CUBRID | path join developer-patch.diff) | patch -N -r rej.rej -p1 | ignore
     open ($env.MY_CUBRID | path join clang20.diff) | patch -N -r rej.rej -p1 | ignore
     direnv allow
+    lefthook install
 
 cpptrace:
     open ($env.MY_CUBRID | path join cpptrace.diff) | patch -N -r rej.rej -p1

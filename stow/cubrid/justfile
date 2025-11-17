@@ -6,22 +6,23 @@ set shell := ["nu", "-c"]
 default: ctest
 
 n1:
-    oos-prepare-server
+    just oos-prepare-server
 
 n2:
-    csql.sh -i insert.sql
+    test/oos/check-oos-server.sh
 
 n3:
-    csql.sh -i select.sql
+    gum confirm "Delete tables and rebuild?" --default no
+    just oos::prepare-data # takes long time
 
 n4:
-    csql.sh -i insert-large.sql
+    just oos::gen
 
 n5:
-    csql.sh -i prepare.sql
+    just oos::run-test-interactive
 
 n6:
-    csql.sh -i insert.sql
+    just oos::run-test-all
 
 n7:
     csql.sh -i select.sql
@@ -52,7 +53,7 @@ alias bvr := build-vector-run
 alias brvr := build-recreate-vector-run
 alias t := test
 
-oos-prepare-server: cubrid-conf-disable-string-compression cubrid-conf-set-port  cubrid-conf-get-string-compression cubrid-conf-get-port server-stop-testdb server-start-testdb
+oos-prepare-server: cubrid-conf-disable-string-compression cubrid-conf-set-port cubrid-conf-get-string-compression cubrid-conf-get-port server-stop-testdb server-start-testdb
 
 git-dir-worktree-nvim-head:
     git worktree add ../nvim-head -b NVIM_HEAD

@@ -1,11 +1,12 @@
 mod? local 'local.just'
+mod? oos 'test/oos/oos.just'
 
 set shell := ["nu", "-c"]
 
 default: ctest
 
 n1:
-    csql.sh -i prepare.sql
+    oos-prepare-server
 
 n2:
     csql.sh -i insert.sql
@@ -33,7 +34,7 @@ nb: build
 nc:
     csql.sh
 
-np: cubrid-conf-disable-string-compression cubrid-conf-set-port  cubrid-conf-get-string-compression cubrid-conf-get-port
+np: oos-prepare-server
 
 ns: server-start-testdb
 
@@ -50,6 +51,8 @@ alias cs := csql-demodb-sa
 alias bvr := build-vector-run
 alias brvr := build-recreate-vector-run
 alias t := test
+
+oos-prepare-server: cubrid-conf-disable-string-compression cubrid-conf-set-port  cubrid-conf-get-string-compression cubrid-conf-get-port server-stop-testdb server-start-testdb
 
 git-dir-worktree-nvim-head:
     git worktree add ../nvim-head -b NVIM_HEAD
@@ -285,7 +288,8 @@ db-create-testdb:
     ^mkdir -p $"($env.CUBRID_DATABASES)/testdb"
     # cubrid createdb --db-page-size=8K --db-volume-size=20M --log-volume-size=20M testdb en_US.utf8 -F $"($env.CUBRID_DATABASES)/testdb"
     # cubrid createdb --db-volume-size=20M --log-volume-size=20M testdb en_US.utf8 -F $"($env.CUBRID_DATABASES)/testdb"
-    cubrid createdb --db-page-size=8K --db-volume-size=100M --log-volume-size=100M testdb en_US.utf8 -F $"($env.CUBRID_DATABASES)/testdb"
+    # cubrid createdb --db-page-size=8K --db-volume-size=100M --log-volume-size=100M testdb en_US.utf8 -F $"($env.CUBRID_DATABASES)/testdb"
+    cubrid createdb --db-page-size=16K --db-volume-size=500M --log-volume-size=100M testdb en_US.utf8 -F $"($env.CUBRID_DATABASES)/testdb"
 
 db-delete-testdb:
     cubrid deletedb testdb

@@ -11,10 +11,10 @@ if cubrid server status | rg -q "$DB"; then
   echo "##### MODE    : CS MODE"
   echo "##### running: \$ csql -u dba $DB $*"
 
-  exec csql -u dba "$DB" "$@"
+  exec csql --no-pager -u dba "$DB" "$@"
 else
   echo "##### MODE    : SA MODE"
   echo "##### running : \$ csql -u dba $DB -S $*"
 
-  exec csql -u dba "$DB" -S "$@"
+  exec csql --no-pager -u dba "$DB" -S "$@"
 fi

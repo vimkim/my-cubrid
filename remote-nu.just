@@ -24,3 +24,6 @@ dev2-server-unmount:
 
 sshfs-list:
     findmnt -t fuse.sshfs
+
+uftrace-trace_processor-tunnel:
+    ssh -L 9001:127.0.0.1:9001 vimkim@dev2-server

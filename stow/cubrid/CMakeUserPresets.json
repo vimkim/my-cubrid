@@ -22,6 +22,7 @@
         "ENABLE_CUBVEC_LOG": "ON",
         "VIMKIM_BUILD": "ON",
         "UNIT_TEST_OOS": "ON",
+        "UNIT_TEST_SPAGE": "ON",
         "WITH_CCI": "true"
         // "FAISS_SIMD_MODE": "AVX2"
       },

@@ -37,7 +37,7 @@ nc:
 
 np: oos-prepare-server
 
-ns: server-start-testdb
+ns: cubrid-server-start-testdb
 
 nt: ctest
 
@@ -53,7 +53,7 @@ alias bvr := build-vector-run
 alias brvr := build-recreate-vector-run
 alias t := test
 
-oos-prepare-server: cubrid-conf-disable-string-compression cubrid-conf-set-port cubrid-conf-get-string-compression cubrid-conf-get-port server-stop-testdb server-start-testdb
+oos-prepare-server: cubrid-conf-disable-string-compression cubrid-conf-set-port cubrid-conf-get-string-compression cubrid-conf-get-port cubrid-server-stop-testdb cubrid-server-start-testdb
 
 git-dir-worktree-nvim-head:
     git worktree add ../nvim-head -b NVIM_HEAD
@@ -91,13 +91,13 @@ server-restart-demodb:
 server-stop-demodb:
     cubrid server stop demodb
 
-server-start-testdb:
+cubrid-server-start-testdb:
     cubrid server start testdb
 
-server-restart-testdb:
+cubrid-server-restart-testdb:
     cubrid server restart testdb
 
-server-stop-testdb:
+cubrid-server-stop-testdb:
     cubrid server stop testdb
 
 get-server-config: paramdump-testdb
@@ -192,10 +192,20 @@ cubrid-conf-get-port:
 cubrid-conf-set-port:
     crudini --set $"($env.CUBRID)/conf/cubrid.conf" 'common' cubrid_port_id 12345
 
+cubrid-conf-data-buffer-set-50gb:
+    crudini --get $"($env.CUBRID)/conf/cubrid.conf" 'common' data_buffer_size
+    crudini --set $"($env.CUBRID)/conf/cubrid.conf" 'common' data_buffer_size 50G
+    crudini --get $"($env.CUBRID)/conf/cubrid.conf" 'common' data_buffer_size
+
+cubrid-conf-data-buffer-set-512m:
+    crudini --get $"($env.CUBRID)/conf/cubrid.conf" 'common' data_buffer_size
+    crudini --set $"($env.CUBRID)/conf/cubrid.conf" 'common' data_buffer_size 512m
+    crudini --get $"($env.CUBRID)/conf/cubrid.conf" 'common' data_buffer_size
+
 cubrid-conf-edit:
     nvim $"($env.CUBRID)/conf/cubrid.conf"
 
-update-restart-testdb: update-cubrid-conf server-restart-testdb
+update-restart-testdb: update-cubrid-conf cubrid-server-restart-testdb
 
 cmake-build-install-3rdparty:
     cmake --build --preset $env.PRESET_MODE --target 3rdparty/install
@@ -285,29 +295,29 @@ list-dbtype-function:
 
 # createdb
 
-db-create-testdb:
+cubrid-createdb-testdb:
     ^mkdir -p $"($env.CUBRID_DATABASES)/testdb"
     # cubrid createdb --db-page-size=8K --db-volume-size=20M --log-volume-size=20M testdb en_US.utf8 -F $"($env.CUBRID_DATABASES)/testdb"
     # cubrid createdb --db-volume-size=20M --log-volume-size=20M testdb en_US.utf8 -F $"($env.CUBRID_DATABASES)/testdb"
     # cubrid createdb --db-page-size=8K --db-volume-size=100M --log-volume-size=100M testdb en_US.utf8 -F $"($env.CUBRID_DATABASES)/testdb"
     cubrid createdb --db-page-size=16K --db-volume-size=500M --log-volume-size=100M testdb en_US.utf8 -F $"($env.CUBRID_DATABASES)/testdb"
 
-db-delete-testdb:
+cubrid-deletedb-testdb:
     cubrid deletedb testdb
 
-db-recreate-testdb: db-delete-testdb db-create-testdb
+cubrid-recreate-testdb: cubrid-deletedb-testdb cubrid-createdb-testdb
 
-db-stop-recreate-start-testdb: server-stop-testdb db-recreate-testdb server-start-testdb
+cubrid-stop-recreate-start-testdb: cubrid-server-stop-testdb cubrid-recreate-testdb cubrid-server-start-testdb
 
-db-create-demodb:
-    mkdir -p $CUBRID_DATABASES/demodb
-    cubrid createdb --db-volume-size=20M --log-volume-size=20M demodb en_US.utf8 -F $CUBRID_DATABASES/demodb
-    cubrid loaddb -u dba -s $CUBRID/demo/demodb_schema -d $CUBRID/demo/demodb_objects demodb
+cubrid-createdb-demodb:
+    ^mkdir -p $"($env.CUBRID_DATABASES)/demodb"
+    cubrid createdb --db-page-size=16K --db-volume-size=20M --log-volume-size=20M demodb en_US.utf8 -F $"($env.CUBRID_DATABASES)/demodb"
+    cubrid loaddb -u dba -s $"($env.CUBRID)/demo/demodb_schema" -d $"($env.CUBRID)/demo/demodb_objects" demodb
 
-db-delete-demodb:
+cubrid-deletedb-demodb:
     cubrid deletedb demodb
 
-db-recreate-demodb: db-delete-demodb db-create-demodb
+cubrid-recreate-demodb: cubrid-deletedb-demodb cubrid-createdb-demodb
 
 # vector
 create-vector:
@@ -367,15 +377,15 @@ vector-run: create-vector create-vector-with-args desc-vector-table insert-vecto
 
 build-vector-run: build vector-run
 
-build-create-vector-run: build db-create-testdb vector-run
+build-create-vector-run: build cubrid-createdb-testdb vector-run
 
-recreate-testdb: db-delete-testdb db-create-testdb
+recreate-testdb: cubrid-deletedb-testdb cubrid-createdb-testdb
 
 recreate-vector-run: recreate-testdb vector-run
 
 build-recreate-vector-run: build recreate-testdb vector-run
 
-build-restart-testdb: build server-restart-testdb
+build-restart-testdb: build cubrid-server-restart-testdb
 
 # git
 git-pull-origin-head:
@@ -440,7 +450,7 @@ format-one-file:
 format-cubvec-diff:
     git diff --name-only origin/cubvec/cubvec | xargs -I {} sh -c 'cubrid-format-codestyle.sh {}'
 
-memleak-build-cubvec-assert-server: build server-start-testdb
+memleak-build-cubvec-assert-server: build cubrid-server-start-testdb
     csql.sh -c "drop table if exists vt;"
     csql.sh -c "create table vt (vec vector);"
     csql.sh -c "insert into vt values ('[1, 2, 3]');" 2> trace.log
@@ -464,9 +474,9 @@ cubvec-30-simple-cs:
 cubvec-30-simple-sa:
     csql.sh -c "SELECT L2_DISTANCE('[1, 2, 3]', '[2, 3, 4]') FROM dual;"
 
-build-test-30: build server-restart-testdb cubvec-30-l2-distance
+build-test-30: build cubrid-server-restart-testdb cubvec-30-l2-distance
 
-build-test-30-simple-cs: build server-restart-testdb cubvec-30-simple-cs
+build-test-30-simple-cs: build cubrid-server-restart-testdb cubvec-30-simple-cs
 
 build-test-30-simple-sa: build cubvec-30-simple-sa
 
@@ -763,14 +773,14 @@ bare-nvim:
 prepare-ann:
     ^$"($env.HOME)/my-cubrid/prepare-ann.sh"
 
-db-delete-ann:
+cubrid-deletedb-ann:
     cubrid deletedb ann
 
-db-create-ann:
+cubrid-createdb-ann:
     ^mkdir -p $"($env.CUBRID_DATABASES)/ann"
     cubrid createdb --db-volume-size=100M --log-volume-size=100M ann en_US.utf8 -F $"($env.CUBRID_DATABASES)/ann"
 
-db-create-ann-initdb:
+cubrid-createdb-ann-initdb:
     mkdir /tmp/ann/initdb
     cubrid createdb --db-volume-size=100M --log-volume-size=100M ann en_US.utf8 -F /tmp/ann/initdb
 

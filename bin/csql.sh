@@ -19,6 +19,7 @@ CYAN="\033[36m"
 WHITE="\033[37m"
 BRIGHT_RED="\033[91m"
 
+cubrid_rel | rg "CUBRID"
 printf "${Y}===== Environment Info =====${N}\n"
 printf "  ${G}csql${N}           : %s\n" "$CSQL_BIN"
 printf "  ${G}cubrid${N}         : %s\n" "$CUBRID_BIN"

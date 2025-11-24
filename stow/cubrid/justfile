@@ -180,7 +180,7 @@ update-cubrid-conf:
     # sed -i 's/log_buffer_size=512M/log_buffer_size=4G/' $"($env.CUBRID)/conf/cubrid.conf"
     sed -i 's/data_buffer_size=512M/data_buffer_size=16G/' $"($env.CUBRID)/conf/cubrid.conf"
 
-cubrid-conf-disable-string-compression:
+cubrid-conf-disable-string-compression: cubrid-conf-get-string-compression
     crudini --set $"($env.CUBRID)/conf/cubrid.conf" 'common' enable_string_compression no
 
 cubrid-conf-get-string-compression:
@@ -189,16 +189,17 @@ cubrid-conf-get-string-compression:
 cubrid-conf-get-port:
     crudini --get $"($env.CUBRID)/conf/cubrid.conf" 'common' cubrid_port_id
 
-cubrid-conf-set-port:
+cubrid-conf-set-port: cubrid-conf-get-port
     crudini --set $"($env.CUBRID)/conf/cubrid.conf" 'common' cubrid_port_id 12345
 
-cubrid-conf-data-buffer-set-50gb:
+cubrid-conf-get-data-buffer-size:
     crudini --get $"($env.CUBRID)/conf/cubrid.conf" 'common' data_buffer_size
+
+cubrid-conf-data-buffer-set-50gb: cubrid-conf-get-data-buffer-size
     crudini --set $"($env.CUBRID)/conf/cubrid.conf" 'common' data_buffer_size 50G
     crudini --get $"($env.CUBRID)/conf/cubrid.conf" 'common' data_buffer_size
 
-cubrid-conf-data-buffer-set-512m:
-    crudini --get $"($env.CUBRID)/conf/cubrid.conf" 'common' data_buffer_size
+cubrid-conf-data-buffer-set-512m: cubrid-conf-get-data-buffer-size
     crudini --set $"($env.CUBRID)/conf/cubrid.conf" 'common' data_buffer_size 512m
     crudini --get $"($env.CUBRID)/conf/cubrid.conf" 'common' data_buffer_size
 

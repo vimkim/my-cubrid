@@ -53,7 +53,7 @@ alias bvr := build-vector-run
 alias brvr := build-recreate-vector-run
 alias t := test
 
-oos-prepare-server: cubrid-conf-disable-string-compression cubrid-conf-set-port cubrid-conf-get-string-compression cubrid-conf-get-port cubrid-server-stop-testdb cubrid-server-start-testdb
+oos-prepare-server: cubrid-conf-data-buffer-set-20gb cubrid-conf-disable-string-compression cubrid-conf-set-unfill-factor cubrid-conf-set-port cubrid-conf-get-string-compression cubrid-conf-get-port cubrid-server-stop-testdb cubrid-server-start-testdb
 
 git-dir-worktree-nvim-head:
     git worktree add ../nvim-head -b NVIM_HEAD
@@ -184,7 +184,13 @@ cubrid-conf-disable-string-compression: cubrid-conf-get-string-compression
     crudini --set $"($env.CUBRID)/conf/cubrid.conf" 'common' enable_string_compression no
 
 cubrid-conf-get-string-compression:
-    crudini --get $"($env.CUBRID)/conf/cubrid.conf" 'common' enable_string_compression
+    do -i { crudini --get $"($env.CUBRID)/conf/cubrid.conf" 'common' enable_string_compression }
+
+cubrid-conf-get-unfill-factor:
+    do -i { crudini --get $"($env.CUBRID)/conf/cubrid.conf" 'common' unfill_factor }
+
+cubrid-conf-set-unfill-factor:
+    crudini --set $"($env.CUBRID)/conf/cubrid.conf" 'common' unfill_factor 0.0
 
 cubrid-conf-get-port:
     crudini --get $"($env.CUBRID)/conf/cubrid.conf" 'common' cubrid_port_id
@@ -193,6 +199,10 @@ cubrid-conf-set-port: cubrid-conf-get-port
     crudini --set $"($env.CUBRID)/conf/cubrid.conf" 'common' cubrid_port_id 12345
 
 cubrid-conf-get-data-buffer-size:
+    crudini --get $"($env.CUBRID)/conf/cubrid.conf" 'common' data_buffer_size
+
+cubrid-conf-data-buffer-set-20gb: cubrid-conf-get-data-buffer-size
+    crudini --set $"($env.CUBRID)/conf/cubrid.conf" 'common' data_buffer_size 20G
     crudini --get $"($env.CUBRID)/conf/cubrid.conf" 'common' data_buffer_size
 
 cubrid-conf-data-buffer-set-50gb: cubrid-conf-get-data-buffer-size
@@ -301,7 +311,7 @@ cubrid-createdb-testdb:
     # cubrid createdb --db-page-size=8K --db-volume-size=20M --log-volume-size=20M testdb en_US.utf8 -F $"($env.CUBRID_DATABASES)/testdb"
     # cubrid createdb --db-volume-size=20M --log-volume-size=20M testdb en_US.utf8 -F $"($env.CUBRID_DATABASES)/testdb"
     # cubrid createdb --db-page-size=8K --db-volume-size=100M --log-volume-size=100M testdb en_US.utf8 -F $"($env.CUBRID_DATABASES)/testdb"
-    cubrid createdb --db-page-size=16K --db-volume-size=500M --log-volume-size=100M testdb en_US.utf8 -F $"($env.CUBRID_DATABASES)/testdb"
+    cubrid createdb --db-page-size=16K --db-volume-size=512M testdb en_US.utf8 -F $"($env.CUBRID_DATABASES)/testdb"
 
 cubrid-deletedb-testdb:
     cubrid deletedb testdb
@@ -807,3 +817,13 @@ build-log:
 
 run-log:
     tspin -f csql.access csql.err
+
+perf-record-cub_server:
+    sudo perf record -F max -g -a -p (^ps aux | rg vimkim | rg cub_server | fzf | awk '{print $2}')
+
+perf-report:
+    sudo perf report -g
+
+perf-flamegraph:
+    sudo perf script | inferno-collapse-perf | flamelens
+

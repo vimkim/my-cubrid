@@ -59,6 +59,21 @@
       }
     },
     {
+      "name": "release_gcc8",
+      "inherits": "user_default",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "RelWithDebInfo",
+        "CMAKE_C_FLAGS": "-fdiagnostics-color=always -Wno-int-conversion -Wno-incompatible-pointer-types -Wno-implicit-function-declaration -Wno-error=maybe-uninitialized",
+        "CMAKE_CXX_FLAGS": "-fdiagnostics-color=always -Wno-error=maybe-uninitialized",
+        "CMAKE_C_FLAGS_RELWITHDEBINFO": "-O2 -g -DNDEBUG -finline-functions -Wno-error=stringop-truncation -Wno-error=format-overflow= -Wno-error=format= -Wno-error=format-truncation",
+        "CMAKE_CXX_FLAGS_RELWITHDEBINFO": "-O2 -g -DNDEBUG -finline-functions -Wno-error=stringop-truncation -Wno-error=format-overflow= -Wno-error=format= -Wno-error=format-truncation",
+        "CMAKE_C_COMPILER": "gcc",
+        "CMAKE_CXX_COMPILER": "g++",
+        "CMAKE_CXX_STANDARD": "17",
+        "CMAKE_CXX_STANDARD_REQUIRED": "ON"
+      }
+    },
+    {
       "name": "release_gcc",
       "inherits": "user_default",
       "cacheVariables": {
@@ -288,6 +303,10 @@
     {
       "name": "release_gcc_O3",
       "configurePreset": "release_gcc_O3"
+    },
+    {
+      "name": "release_gcc8",
+      "configurePreset": "release_gcc8"
     },
     {
       "name": "release_gcc",

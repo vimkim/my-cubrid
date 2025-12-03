@@ -198,11 +198,24 @@ check-dimensions:
 
 collect-256:
     ./enn-bench-pgvector.sh 10 50000 vimkimdb tbl_256_300000 256
+    ./enn-bench-pgvector.sh 10 75000 vimkimdb tbl_256_300000 256
     ./enn-bench-pgvector.sh 10 100000 vimkimdb tbl_256_300000 256
+    ./enn-bench-pgvector.sh 10 125000 vimkimdb tbl_256_300000 256
     ./enn-bench-pgvector.sh 10 150000 vimkimdb tbl_256_300000 256
+    ./enn-bench-pgvector.sh 10 175000 vimkimdb tbl_256_300000 256
     ./enn-bench-pgvector.sh 10 200000 vimkimdb tbl_256_300000 256
+    ./enn-bench-pgvector.sh 10 225000 vimkimdb tbl_256_300000 256
     ./enn-bench-pgvector.sh 10 250000 vimkimdb tbl_256_300000 256
+    ./enn-bench-pgvector.sh 10 275000 vimkimdb tbl_256_300000 256
     ./enn-bench-pgvector.sh 10 300000 vimkimdb tbl_256_300000 256
+
+collect-512:
+    ./enn-bench-pgvector.sh 10 50000 vimkimdb tbl_512_300000 512
+    ./enn-bench-pgvector.sh 10 100000 vimkimdb tbl_512_300000 512
+    ./enn-bench-pgvector.sh 10 150000 vimkimdb tbl_512_300000 512
+    ./enn-bench-pgvector.sh 10 200000 vimkimdb tbl_512_300000 512
+    ./enn-bench-pgvector.sh 10 250000 vimkimdb tbl_512_300000 512
+    ./enn-bench-pgvector.sh 10 300000 vimkimdb tbl_512_300000 512
 
 collect-768:
     ./enn-bench-pgvector.sh 10 50000 vimkimdb tbl_768_300000 768
@@ -212,12 +225,20 @@ collect-768:
     ./enn-bench-pgvector.sh 10 250000 vimkimdb tbl_768_300000 768
     ./enn-bench-pgvector.sh 10 300000 vimkimdb tbl_768_300000 768
 
+collect-1024:
+    ./enn-bench-pgvector.sh 10 50000 vimkimdb tbl_1024_300000 1024
+    ./enn-bench-pgvector.sh 10 100000 vimkimdb tbl_1024_300000 1024
+    ./enn-bench-pgvector.sh 10 150000 vimkimdb tbl_1024_300000 1024
+    ./enn-bench-pgvector.sh 10 200000 vimkimdb tbl_1024_300000 1024
+    ./enn-bench-pgvector.sh 10 250000 vimkimdb tbl_1024_300000 1024
+    ./enn-bench-pgvector.sh 10 300000 vimkimdb tbl_1024_300000 1024
+
 collect-1536:
     ./enn-bench-pgvector.sh 10 50000 vimkimdb tbl_1536_150000 1536
     ./enn-bench-pgvector.sh 10 100000 vimkimdb tbl_1536_150000 1536
     ./enn-bench-pgvector.sh 10 150000 vimkimdb tbl_1536_150000 1536
 
-collect-data: collect-256 collect-768 collect-1536
+collect-data: collect-256 collect-512 collect-768 collect-1024 collect-1536
 
 filter-data:
     open pg_results.jsonl | lines | each { from json } | where stat == 'avg' | where metric has "SCAN" | to csv | clip

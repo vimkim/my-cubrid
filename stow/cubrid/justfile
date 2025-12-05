@@ -165,6 +165,7 @@ configure:
     cmake --preset $env.PRESET_MODE
 
 cmake-preset-mode-select:
+    do -i { cubrid service stop }
     cmake-preset-mode-select.sh
 
 prepare-build:
@@ -260,25 +261,28 @@ csql-demodb-cs:
 csql-demodb-sa:
     csql -u dba demodb -S
 
-cgdb-csql-demodb-cs:
+debug-with-cgdb-csql-demodb-cs:
     cgdb --args csql -u dba demodb
 
-cgdb-csql-demodb-sa:
+debug-with-cgdb-csql-demodb-sa:
     cgdb --args csql -u dba demodb -S
 
-cgdb-csql-testdb-cs:
+debug-with-cgdb-csql-testdb-cs:
     cgdb --args csql.sh --no-pager
 
-cgdb-csql-testdb-sa:
+debug-with-cgdb-csql-testdb-sa:
     cgdb --args csql.sh --no-pager
 
-cgdb-csql-testdb-sa-vector-insert:
+debug-with-cgdb-csql-testdb-sa-vector-insert:
     cgdb --args csql.sh --no-pager -c "insert into vt values ('[1, 2, 3]')
 
 print-current-server:
     ps -l | where command has 'cub_server' | where cwd has 'vimkim'
 
-cgdb-cub-server-testdb: print-current-server
+debug-with-cgdb-cub-server-testdb-interactive: print-current-server
+    cgdb -p (^ps aux | rg vimkim | rg cub_server | fzf | awk '{print $2}') $"($env.CUBRID_BUILD_DIR)/bin/cub_server"
+
+debug-with-cgdb-cub-server-testdb: print-current-server
     cgdb -p (ps -l | where command has 'cub_server testdb' | where cwd has 'vimkim' | get pid | first) $"($env.CUBRID_BUILD_DIR)/bin/cub_server"
 
 core csql CORE:

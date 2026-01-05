@@ -23,6 +23,7 @@
         "VIMKIM_BUILD": "ON",
         "UNIT_TEST_OOS": "ON",
         "UNIT_TEST_SPAGE": "ON",
+        "UNIT_TEST_PAGE_BUFFER": "ON",
         "WITH_CCI": "true"
         // "FAISS_SIMD_MODE": "AVX2"
       },

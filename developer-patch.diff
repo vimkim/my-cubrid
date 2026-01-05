@@ -41,7 +41,8 @@ index 2016f8326..1bb480eb9 100644
      set(CMAKE_MODULE_LINKER_FLAGS "${CMAKE_MODULE_LINKER_FLAGS} -Wl,--hash-style=both -static-libstdc++")
  
    elseif (CMAKE_CXX_COMPILER_ID STREQUAL "Clang")
-+    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fopenmp -lopenblas -llapack")
++    # set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fopenmp -lopenblas -llapack")
++    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS}")
    else()
      message(FATAL_ERROR "We currently do not support ${CMAKE_CXX_COMPILER_ID} compiler")
    endif(CMAKE_COMPILER_IS_GNUCC)

@@ -53,6 +53,12 @@ alias bvr := build-vector-run
 alias brvr := build-recreate-vector-run
 alias t := test
 
+ha-node-a-install:
+    cmake --install $env.CUBRID_BUILD_DIR --prefix=$"(pwd)/docker-compose/node-a"
+
+ha-node-b-install:
+    cmake --install $env.CUBRID_BUILD_DIR --prefix=$"(pwd)/docker-compose/node-b"
+
 oos-prepare-server: cubrid-conf-data-buffer-set-20gb cubrid-conf-disable-string-compression cubrid-conf-set-unfill-factor cubrid-conf-set-port cubrid-conf-get-string-compression cubrid-conf-get-port cubrid-server-stop-testdb cubrid-server-start-testdb
 
 git-dir-worktree-nvim-head:
@@ -205,6 +211,8 @@ cubrid-conf-get-data-buffer-size:
 cubrid-conf-data-buffer-set-20gb: cubrid-conf-get-data-buffer-size
     crudini --set $"($env.CUBRID)/conf/cubrid.conf" 'common' data_buffer_size 20G
     crudini --get $"($env.CUBRID)/conf/cubrid.conf" 'common' data_buffer_size
+    do -i { cubrid service stop }
+    do -i { cubrid server start testdb }
 
 cubrid-conf-data-buffer-set-50gb: cubrid-conf-get-data-buffer-size
     crudini --set $"($env.CUBRID)/conf/cubrid.conf" 'common' data_buffer_size 50G
@@ -268,13 +276,19 @@ debug-with-cgdb-csql-demodb-sa:
     cgdb --args csql -u dba demodb -S
 
 debug-with-cgdb-csql-testdb-cs:
-    cgdb --args csql.sh --no-pager
+    cgdb --args csql -udba testdb
 
 debug-with-cgdb-csql-testdb-sa:
-    cgdb --args csql.sh --no-pager
+    cgdb --args csql -udba testdb -S
 
 debug-with-cgdb-csql-testdb-sa-vector-insert:
     cgdb --args csql.sh --no-pager -c "insert into vt values ('[1, 2, 3]')
+
+debug-with-cubrid-unloaddb-cs:
+    cgdb --args cubrid unloaddb testdb -C -t 0 -v
+
+debug-with-cubrid-loaddb-cs:
+    cgdb --args cubrid loaddb -udba -C -v testdb -d ./testdb_objects
 
 print-current-server:
     ps -l | where command has 'cub_server' | where cwd has 'vimkim'
@@ -826,8 +840,7 @@ perf-record-cub_server:
     sudo perf record -F max -g -a -p (^ps aux | rg vimkim | rg cub_server | fzf | awk '{print $2}')
 
 perf-report:
-    sudo perf report -g
+    sudo perf report -M intel
 
 perf-flamegraph:
     sudo perf script | inferno-collapse-perf | flamelens
-

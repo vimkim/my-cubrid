@@ -30,14 +30,21 @@ n7:
 n8:
     csql.sh -i delete.sql
 
-nb: build
+ni:
+    csql.sh -i insert.sql
 
 nc:
-    csql.sh
+    csql.sh -i create.sql
+
+ns:
+    csql.sh -i select.sql
+
+nb: build
+
+prepare-sql:
+    csql.sh -i prepare.sql
 
 np: oos-prepare-server
-
-ns: cubrid-server-start-testdb
 
 nt: ctest
 
@@ -59,7 +66,9 @@ ha-node-a-install:
 ha-node-b-install:
     cmake --install $env.CUBRID_BUILD_DIR --prefix=$"(pwd)/docker-compose/node-b"
 
-oos-prepare-server: cubrid-conf-data-buffer-set-20gb cubrid-conf-disable-string-compression cubrid-conf-set-unfill-factor cubrid-conf-set-port cubrid-conf-get-string-compression cubrid-conf-get-port cubrid-server-stop-testdb cubrid-server-start-testdb
+# oos-prepare-server: cubrid-conf-data-buffer-set-20gb cubrid-conf-disable-string-compression cubrid-conf-set-unfill-factor cubrid-conf-set-port cubrid-conf-get-string-compression cubrid-conf-get-port cubrid-server-stop-testdb-try
+
+oos-prepare-server: cubrid-conf-disable-string-compression cubrid-conf-set-unfill-factor cubrid-conf-set-port cubrid-conf-get-string-compression cubrid-conf-get-port cubrid-server-stop-testdb-try
 
 git-dir-worktree-nvim-head:
     git worktree add ../nvim-head -b NVIM_HEAD
@@ -88,6 +97,13 @@ build-debug-oldway-gcc14:
 build-release-oldway-gcc14:
     CXXFLAGS="-fdiagnostics-color=always" CFLAGS="-fdiagnostics-color=always -Wno-int-conversion -Wno-incompatible-pointer-types -Wno-implicit-function-declaration" ./build.sh -m release -b build_rel -p ./install_rel build
 
+remove-rapidjson:
+    /bin/rm -rf $"($env.CUBRID_BUILD_DIR)/3rdparty/Source/rapidjson"
+    /bin/rm -rf $"($env.CUBRID_BUILD_DIR)/3rdparty/Build/rapidjson"
+    /bin/rm -rf $"($env.CUBRID_BUILD_DIR)/3rdparty/Install/rapidjson"
+    /bin/rm -rf $"($env.CUBRID_BUILD_DIR)/3rdparty/Stamp/rapidjson"
+    /bin/rm -rf $"($env.CUBRID_BUILD_DIR)/3rdparty/tmp/rapidjson"
+
 server-start-demodb:
     cubrid server start demodb
 
@@ -105,6 +121,9 @@ cubrid-server-restart-testdb:
 
 cubrid-server-stop-testdb:
     cubrid server stop testdb
+
+cubrid-server-stop-testdb-try:
+    do -i { cubrid server stop testdb }
 
 get-server-config: paramdump-testdb
 
@@ -164,7 +183,7 @@ prepare: stow-create
 cpptrace:
     open ($env.MY_CUBRID | path join cpptrace.diff) | patch -N -r rej.rej -p1
 
-ctest: build
+ctest: build oos-prepare-server
     ctest --test-dir $"($env.CUBRID_BUILD_DIR)" --output-on-failure --verbose
 
 configure:
@@ -211,8 +230,6 @@ cubrid-conf-get-data-buffer-size:
 cubrid-conf-data-buffer-set-20gb: cubrid-conf-get-data-buffer-size
     crudini --set $"($env.CUBRID)/conf/cubrid.conf" 'common' data_buffer_size 20G
     crudini --get $"($env.CUBRID)/conf/cubrid.conf" 'common' data_buffer_size
-    do -i { cubrid service stop }
-    do -i { cubrid server start testdb }
 
 cubrid-conf-data-buffer-set-50gb: cubrid-conf-get-data-buffer-size
     crudini --set $"($env.CUBRID)/conf/cubrid.conf" 'common' data_buffer_size 50G
@@ -284,8 +301,17 @@ debug-with-cgdb-csql-testdb-sa:
 debug-with-cgdb-csql-testdb-sa-vector-insert:
     cgdb --args csql.sh --no-pager -c "insert into vt values ('[1, 2, 3]')
 
+cubrid-unloaddb-sa:
+    cubrid unloaddb testdb -S -t 0 -v
+
+cubrid-unloaddb-cs:
+    cubrid unloaddb testdb -C -t 0 -v
+
 debug-with-cubrid-unloaddb-cs:
     cgdb --args cubrid unloaddb testdb -C -t 0 -v
+
+debug-with-cubrid-unloaddb-sa:
+    cgdb --args cubrid unloaddb testdb -S -t 0 -v
 
 debug-with-cubrid-loaddb-cs:
     cgdb --args cubrid loaddb -udba -C -v testdb -d ./testdb_objects
@@ -304,6 +330,9 @@ core csql CORE:
 
 coredumpctl-core-csql:
     coredumpctl debug --debugger=cgdb csql
+
+depthlog-print-log:
+    python3 $"($env.HOME)/temp/depthlog-cpp/depthlog_tree.py" $"(ls *.log | sort-by modified -r | get name | to text |  fzf --height=40% --no-sort)" | bat -p -l log
 
 core-delete:
     @gum confirm
@@ -327,12 +356,15 @@ list-dbtype-function:
 cubrid-createdb-testdb:
     ^mkdir -p $"($env.CUBRID_DATABASES)/testdb"
     # cubrid createdb --db-page-size=8K --db-volume-size=20M --log-volume-size=20M testdb en_US.utf8 -F $"($env.CUBRID_DATABASES)/testdb"
-    # cubrid createdb --db-volume-size=20M --log-volume-size=20M testdb en_US.utf8 -F $"($env.CUBRID_DATABASES)/testdb"
+    cubrid createdb --db-volume-size=20M --log-volume-size=20M testdb en_US.utf8 -F $"($env.CUBRID_DATABASES)/testdb"
     # cubrid createdb --db-page-size=8K --db-volume-size=100M --log-volume-size=100M testdb en_US.utf8 -F $"($env.CUBRID_DATABASES)/testdb"
-    cubrid createdb --db-page-size=16K --db-volume-size=512M testdb en_US.utf8 -F $"($env.CUBRID_DATABASES)/testdb"
+    # cubrid createdb --db-page-size=16K --db-volume-size=512M testdb en_US.utf8 -F $"($env.CUBRID_DATABASES)/testdb"
 
 cubrid-deletedb-testdb:
     cubrid deletedb testdb
+
+cubrid-deletedb-all:
+    /bin/rm -rf $"($env.CUBRID_DATABASES)"
 
 cubrid-recreate-testdb: cubrid-deletedb-testdb cubrid-createdb-testdb
 

@@ -5,30 +5,20 @@ set shell := ["nu", "-c"]
 
 default: ctest
 
-n1:
-    just oos-prepare-server
+n1: build-prepare
 
-n2:
-    test/oos/check-oos-server.sh
+n2: cubrid-recreate-testdb
 
 n3:
-    gum confirm "Delete tables and rebuild?" --default no
-    just oos::prepare-data # takes long time
+    cat prepare.sql | csql.sh
 
-n4:
-    just oos::gen
+n4: cubrid-unloaddb-sa
 
-n5:
-    just oos::run-test-interactive
+n5: depthlog-pretty-print-log
 
-n6:
-    just oos::run-test-all
+nd: depthlog-pretty-print-log
 
-n7:
-    csql.sh -i select.sql
-
-n8:
-    csql.sh -i delete.sql
+nl: depthlog-pretty-print-log
 
 ni:
     csql.sh -i insert.sql
@@ -39,18 +29,19 @@ nc:
 ns:
     csql.sh -i select.sql
 
-nb: build
+nb: build-prepare
 
 prepare-sql:
     csql.sh -i prepare.sql
 
 np: oos-prepare-server
 
-nt: ctest
+# nt: ctest
+nt: n1 n2
 
 test: ctest
 
-alias b := build
+alias b := build-prepare
 alias c := configure
 alias bd := build-debug
 alias bp := build-profile
@@ -196,9 +187,13 @@ cmake-preset-mode-select:
 prepare-build:
     if (which cubrid | is-not-empty) { cubrid service stop | ignore; cubrid broker stop | ignore }
 
-configure-build: prepare-build configure build
+configure-build-prepare: prepare-build configure build-prepare
 
 build: prepare-build cmake-build-install-all
+
+build-only: cmake-build-install-all
+
+build-prepare: build oos-prepare-server
 
 build-update: cmake-build-install-all update-cubrid-conf
 
@@ -331,7 +326,7 @@ core csql CORE:
 coredumpctl-core-csql:
     coredumpctl debug --debugger=cgdb csql
 
-depthlog-print-log:
+depthlog-pretty-print-log:
     python3 $"($env.HOME)/temp/depthlog-cpp/depthlog_tree.py" $"(ls *.log | sort-by modified -r | get name | to text |  fzf --height=40% --no-sort)" | bat -p -l log
 
 core-delete:
@@ -365,8 +360,11 @@ cubrid-deletedb-testdb:
 
 cubrid-deletedb-all:
     /bin/rm -rf $"($env.CUBRID_DATABASES)"
+    /bin/rm -rf testdb*
+    ^mkdir -p $"($env.CUBRID_DATABASES)/testdb"
 
-cubrid-recreate-testdb: cubrid-deletedb-testdb cubrid-createdb-testdb
+# cubrid-recreate-testdb: cubrid-deletedb-testdb cubrid-createdb-testdb
+cubrid-recreate-testdb: cubrid-deletedb-all cubrid-createdb-testdb
 
 cubrid-stop-recreate-start-testdb: cubrid-server-stop-testdb cubrid-recreate-testdb cubrid-server-start-testdb
 
@@ -440,7 +438,7 @@ build-vector-run: build vector-run
 
 build-create-vector-run: build cubrid-createdb-testdb vector-run
 
-recreate-testdb: cubrid-deletedb-testdb cubrid-createdb-testdb
+recreate-testdb: cubrid-recreate-testdb
 
 recreate-vector-run: recreate-testdb vector-run
 

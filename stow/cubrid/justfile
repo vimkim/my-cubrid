@@ -5,12 +5,11 @@ set shell := ["nu", "-c"]
 
 default: ctest
 
-n1: build-prepare
+n1: build-prepare-oos
 
 n2: cubrid-recreate-testdb
 
-n3:
-    cat prepare.sql | csql.sh
+# n3: oos-prepare-data-10
 
 n4: cubrid-unloaddb-sa
 
@@ -29,19 +28,35 @@ nc:
 ns:
     csql.sh -i select.sql
 
-nb: build-prepare
-
-prepare-sql:
-    csql.sh -i prepare.sql
+nb: build-prepare-oos
 
 np: oos-prepare-server
+
+# pgbuf-hit-ratio-bugfix
+pgbuf-hit-ratio-bugfix-run:
+    do -i { cubrid server start testdb }
+    cat run.sql | csql.sh
+
+pgbuf-hit-ratio-bugfix-statdump:
+    cubrid statdump testdb -i 1  | rg -C 20 "Data_page_buffer_hit_ratio"
+
+oos-unloaddb-prepare-col-10-size-600-limit-300000:
+    csql.sh -i ./bench/prepare-bench-data-col-10-size-600-limit-300000.sql
 
 # nt: ctest
 nt: n1 n2
 
 test: ctest
 
-alias b := build-prepare
+cmake-refresh-fetchcontent-depthlog:
+    rm -rf $"($env.CUBRID_BUILD_DIR)/_deps/spdlog-src" 
+    rm -rf $"($env.CUBRID_BUILD_DIR)/_deps/spdlog-build"
+    rm -rf $"($env.CUBRID_BUILD_DIR)/_deps/spdlog-subbuild"
+    rm -rf $"($env.CUBRID_BUILD_DIR)/_deps/depthlog-src" 
+    rm -rf $"($env.CUBRID_BUILD_DIR)/_deps/depthlog-build"
+    rm -rf $"($env.CUBRID_BUILD_DIR)/_deps/depthlog-subbuild"
+
+alias b := build-prepare-oos
 alias c := configure
 alias bd := build-debug
 alias bp := build-profile
@@ -187,13 +202,13 @@ cmake-preset-mode-select:
 prepare-build:
     if (which cubrid | is-not-empty) { cubrid service stop | ignore; cubrid broker stop | ignore }
 
-configure-build-prepare: prepare-build configure build-prepare
+configure-build-prepare-oos: prepare-build configure build-prepare-oos
 
 build: prepare-build cmake-build-install-all
 
 build-only: cmake-build-install-all
 
-build-prepare: build oos-prepare-server
+build-prepare-oos: build oos-prepare-server
 
 build-update: cmake-build-install-all update-cubrid-conf
 
@@ -323,11 +338,15 @@ debug-with-cgdb-cub-server-testdb: print-current-server
 core csql CORE:
     cgdb csql core {{ CORE }}
 
+debug-with-cgdb-attach-cubrid-unloaddb: print-current-server
+    cgdb -p (^ps aux | rg vimkim | rg cubrid | fzf | awk '{print $2}') $"($env.CUBRID_BUILD_DIR)/bin/cubrid"
+
 coredumpctl-core-csql:
     coredumpctl debug --debugger=cgdb csql
 
 depthlog-pretty-print-log:
-    python3 $"($env.HOME)/temp/depthlog-cpp/depthlog_tree.py" $"(ls *.log | sort-by modified -r | get name | to text |  fzf --height=40% --no-sort)" | bat -p -l log
+    # python3 $"($env.HOME)/temp/depthlog-cpp/depthlog_tree.py" $"(ls *.log | sort-by modified -r | get name | to text |  fzf --height=40% --no-sort)" | bat -p -l log
+    cat (ls *.log | sort-by modified -r | get name | first ) | FORCE_COLOR=1 ~/temp/depthlog-rust/target/debug/depthlog_pretty | less -r
 
 core-delete:
     @gum confirm
@@ -359,6 +378,7 @@ cubrid-deletedb-testdb:
     cubrid deletedb testdb
 
 cubrid-deletedb-all:
+    gum confirm "delete all db? This is dangerous"
     /bin/rm -rf $"($env.CUBRID_DATABASES)"
     /bin/rm -rf testdb*
     ^mkdir -p $"($env.CUBRID_DATABASES)/testdb"

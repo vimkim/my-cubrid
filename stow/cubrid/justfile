@@ -20,13 +20,16 @@ nd: depthlog-pretty-print-log
 nl: depthlog-pretty-print-log
 
 ni:
-    csql.sh -i insert.sql
+    csql.sh -i sql/insert.sql
 
 nc:
-    csql.sh -i create.sql
+    csql.sh -i sql/create.sql
+
+nu:
+    csql.sh -i sql/update.sql
 
 ns:
-    csql.sh -i select.sql
+    csql.sh -i sql/select.sql
 
 nb: build-prepare-oos
 

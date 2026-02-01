@@ -1,0 +1,32 @@
+diff --git a/src/transaction/boot_sr.c b/src/transaction/boot_sr.c
+index 9c946157a..aa681d611 100644
+--- a/src/transaction/boot_sr.c
++++ b/src/transaction/boot_sr.c
+@@ -2236,11 +2236,11 @@ boot_restart_server (THREAD_ENTRY * thread_p, bool print_restart, const char *db
+    * 3. To enhance PL server initialization reliability, pl_server_init() is called 
+    *    before other modules’ initialization.
+    */
+-  error_code = pl_server_init (db_name);
+-  if (error_code != NO_ERROR)
+-    {
+-      goto error;
+-    }
++  // error_code = pl_server_init (db_name);
++  // if (error_code != NO_ERROR)
++  //   {
++  //     goto error;
++  //   }
+ 
+   pr_Enable_string_compression = prm_get_bool_value (PRM_ID_ENABLE_STRING_COMPRESSION);
+ 
+@@ -2650,8 +2650,10 @@ boot_restart_server (THREAD_ENTRY * thread_p, bool print_restart, const char *db
+   error_code = pl_server_wait_for_ready ();
+   if (error_code != NO_ERROR)
+     {
++      fprintf (stderr, "Failed to initialize PL server module\n");
+       goto error;
+     }
++  fprintf (stdout, "PL server module initialized successfully\n");
+ 
+   session_states_init (thread_p);
+ 

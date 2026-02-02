@@ -1,0 +1,27 @@
+diff --git a/src/executables/csql.c b/src/executables/csql.c
+index 24296df9b..00f4e1217 100644
+--- a/src/executables/csql.c
++++ b/src/executables/csql.c
+@@ -178,8 +179,8 @@ static char csql_Prompt_offline[101];    //  for clear "-Wformat-truncation=" warni
+  * Handles for the various files
+  */
+ FILE *csql_Input_fp = NULL;
+-FILE *csql_Output_fp = NULL;
+-FILE *csql_Error_fp = NULL;
++FILE *csql_Output_fp = stdout;
++FILE *csql_Error_fp = stderr;
+ 
+ /*
+  * Global longjmp environment to terminate the csql() interpreter in the
+@@ -195,9 +196,9 @@ static int csql_Exit_status = EXIT_SUCCESS;
+ /* this is non-zero if there is a dangling connection to a database */
+ static bool csql_Database_connected = false;
+ 
+-static bool csql_Is_interactive = false;
++static bool csql_Is_interactive = true;
+ static bool csql_Is_sigint_caught = false;
+-static bool csql_Is_echo_on = false;
++static bool csql_Is_echo_on = true;
+ enum
+ { HISTO_OFF, HISTO_ON };
+ static int csql_Is_histo_on = HISTO_OFF;

@@ -186,7 +186,8 @@ prepare: stow-create
     git submodule update --init cubrid-cci
     # open ($env.MY_CUBRID | path join developer-patch.diff) | patch -N -r rej.rej -p1 | ignore
     open ($env.MY_CUBRID | path join clang20.diff) | patch -N -r rej.rej -p1 | ignore
-    git apply ($env.MY_CUBRID | path join comment-out-pl-server-init.patch)
+    do -i { git apply ($env.MY_CUBRID | path join comment-out-pl-server-init.patch) }
+    do -i { git apply $"($env.MY_CUBRID)/csql-echo.patch" }
     direnv allow
     lefthook install
 

@@ -209,9 +209,13 @@ prepare-build:
 
 configure-build-prepare-oos: prepare-build configure build-prepare-oos
 
+configure-build-for-ctp: prepare-build configure build-for-ctp
+
 build: prepare-build cmake-build-install-all
 
 build-only: cmake-build-install-all
+
+build-for-ctp: build
 
 build-prepare-oos: build oos-prepare-server
 
@@ -221,8 +225,15 @@ update-cubrid-conf:
     # sed -i 's/log_buffer_size=512M/log_buffer_size=4G/' $"($env.CUBRID)/conf/cubrid.conf"
     sed -i 's/data_buffer_size=512M/data_buffer_size=16G/' $"($env.CUBRID)/conf/cubrid.conf"
 
+cubrid-conf-enable-string-compression: cubrid-conf-get-string-compression
+    crudini --set $"($env.CUBRID)/conf/cubrid.conf" 'common' enable_string_compression yes
+    echo "string compression enabled:"
+    just cubrid-conf-get-string-compression
+
 cubrid-conf-disable-string-compression: cubrid-conf-get-string-compression
+    echo "string compression disabled:"
     crudini --set $"($env.CUBRID)/conf/cubrid.conf" 'common' enable_string_compression no
+    just cubrid-conf-get-string-compression
 
 cubrid-conf-get-string-compression:
     do -i { crudini --get $"($env.CUBRID)/conf/cubrid.conf" 'common' enable_string_compression }

@@ -36,6 +36,11 @@ export PATH="$CUBRID/bin:$PATH"
 export LD_LIBRARY_PATH="$CUBRID/cci/lib:$CUBRID/lib:$HOME/CUB3LIB/lib:/usr/local/lib:$LD_LIBRARY_PATH"
 export CUBRID_BUILD_DIR="$SOURCE_DIR/build_preset_$PRESET_MODE"
 
-PATH_add "$(pwd)/CTP/bin"
 CTP_HOME="$(pwd)/CTP"
 export CTP_HOME
+
+init_path=$CTP_HOME/shell/init_path
+export init_path
+
+PATH_add "$CTP_HOME/common/script"
+PATH_add "$CTP_HOME/bin"

@@ -1,4 +1,4 @@
 pre-commit:
   jobs:
     - name: prevent commit
-      run: cubrid-format-gitchanged.sh -d
+      run: cubrid-format-gitchanged.sh -d >/dev/null 2>&1

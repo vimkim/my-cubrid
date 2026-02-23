@@ -1,0 +1,10 @@
+run:
+    ctp.sh sql --interactive
+
+check-NOK:
+    sh -c 'echo "$(ls -t CTP/sql/log/*.log | head -n1)"'
+    sh -c 'rg NOK "$(ls -t CTP/sql/log/*.log | head -n1)"'
+
+rm-logs:
+    @gum confirm --default=false
+    /bin/rm -rf CTP/sql/log/*.log

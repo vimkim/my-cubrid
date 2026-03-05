@@ -76,8 +76,9 @@ ha-node-b-install:
     cmake --install $env.CUBRID_BUILD_DIR --prefix=$"(pwd)/docker-compose/node-b"
 
 # oos-prepare-server: cubrid-conf-data-buffer-set-20gb cubrid-conf-disable-string-compression cubrid-conf-set-unfill-factor cubrid-conf-set-port cubrid-conf-get-string-compression cubrid-conf-get-port cubrid-server-stop-testdb-try
-
-oos-prepare-server: cubrid-conf-disable-string-compression cubrid-conf-set-unfill-factor cubrid-conf-set-port cubrid-conf-get-string-compression cubrid-conf-get-port cubrid-server-stop-testdb-try
+# oos-prepare-server: cubrid-conf-disable-string-compression cubrid-conf-set-unfill-factor cubrid-conf-set-port cubrid-conf-get-string-compression cubrid-conf-get-port cubrid-server-stop-testdb-try
+# no need to disable string compression anymore due to bit varying
+oos-prepare-server: cubrid-conf-set-port
 
 git-dir-worktree-nvim-head:
     git worktree add ../nvim-head -b NVIM_HEAD

@@ -1,0 +1,15 @@
+#!/usr/bin/env sh
+set -eu
+
+# Wrapper: auto-add -S for `cubrid <command> <db>` only when that DB server isn't running.
+
+dbname="${2:-}"
+
+# Correct running check: status lists all servers; look for "Server <dbname> (...)".
+out="$(cubrid server status 2>&1 || true)"
+
+if printf '%s\n' "$out" | grep -Eq "^[[:space:]]*Server[[:space:]]+${dbname}([[:space:]]|\\()"; then
+  exec cubrid "$@"
+else
+  exec cubrid "$@" -S
+fi

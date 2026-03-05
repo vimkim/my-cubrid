@@ -137,10 +137,10 @@ cubrid-server-stop-testdb-try:
 get-server-config: paramdump-testdb
 
 paramdump-ann:
-    cubrid paramdump ann | grep 'buffer'
+    cub-auto paramdump ann | grep 'buffer'
 
 paramdump-testdb:
-    nu -c "try { cubrid paramdump testdb | rg 'buffer|string' } catch { cubrid paramdump -S testdb | rg 'buffer|string' }"
+    cub-auto paramdump testdb | grep 'buffer|string'
 
 _gum-confirm-no:
     @# asks, the default is "NO"
@@ -235,8 +235,12 @@ cubrid-conf-disable-string-compression: cubrid-conf-get-string-compression
     crudini --set $"($env.CUBRID)/conf/cubrid.conf" 'common' enable_string_compression no
     just cubrid-conf-get-string-compression
 
+cubrid-paramdump-testdb-string-compression:
+    cub-auto paramdump testdb | rg enable_string_compression
+
 cubrid-conf-get-string-compression:
     do -i { crudini --get $"($env.CUBRID)/conf/cubrid.conf" 'common' enable_string_compression }
+    just cubrid-paramdump-testdb-string-compression
 
 cubrid-conf-enable-use-system-malloc: cubrid-conf-get-use-system-malloc
     crudini --set $"($env.CUBRID)/conf/cubrid.conf" 'common' use_system_malloc yes

@@ -140,7 +140,7 @@ paramdump-ann:
     cubrid paramdump ann | grep 'buffer'
 
 paramdump-testdb:
-    cubrid paramdump testdb | grep 'buffer'
+    nu -c "try { cubrid paramdump testdb | rg 'buffer|string' } catch { cubrid paramdump -S testdb | rg 'buffer|string' }"
 
 _gum-confirm-no:
     @# asks, the default is "NO"
@@ -237,6 +237,17 @@ cubrid-conf-disable-string-compression: cubrid-conf-get-string-compression
 
 cubrid-conf-get-string-compression:
     do -i { crudini --get $"($env.CUBRID)/conf/cubrid.conf" 'common' enable_string_compression }
+
+cubrid-conf-enable-use-system-malloc: cubrid-conf-get-use-system-malloc
+    crudini --set $"($env.CUBRID)/conf/cubrid.conf" 'common' use_system_malloc yes
+    just cubrid-conf-get-use-system-malloc
+
+cubrid-conf-disable-use-system-malloc: cubrid-conf-get-use-system-malloc
+    crudini --set $"($env.CUBRID)/conf/cubrid.conf" 'common' use_system_malloc no
+    just cubrid-conf-get-use-system-malloc
+
+cubrid-conf-get-use-system-malloc:
+    do -i { crudini --get $"($env.CUBRID)/conf/cubrid.conf" 'common' use_system_malloc }
 
 cubrid-conf-get-unfill-factor:
     do -i { crudini --get $"($env.CUBRID)/conf/cubrid.conf" 'common' unfill_factor }

@@ -49,7 +49,11 @@ oos-unloaddb-prepare-col-10-size-600-limit-300000:
 # nt: ctest
 nt: n1 n2
 
-test: ctest
+test: ctest test-fail-sql
+
+test-fail-sql:
+    cat tc_CBRD26565_midxkey_oos_overflow.sql | csql -udba testdb -S | tail -n 50
+
 
 cmake-refresh-fetchcontent-depthlog:
     rm -rf $"($env.CUBRID_BUILD_DIR)/_deps/spdlog-src" 
@@ -549,14 +553,13 @@ uftrace-serve-trace:
 
 format-git-changed-dryrun:
     cubrid-format-gitchanged.sh -d
-    just format
 
 format-git-changed:
     @gum confirm
     cubrid-format-gitchanged.sh
 
 format-one-file:
-    cubrid-format-codestyle.sh $(fd | fzf)
+    cubrid-format-codestyle.sh $"(fd | fzf)"
 
 format-cubvec-diff:
     git diff --name-only origin/cubvec/cubvec | xargs -I {} sh -c 'cubrid-format-codestyle.sh {}'

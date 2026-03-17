@@ -26,8 +26,8 @@
         "UNIT_TEST_PAGE_BUFFER": "ON",
         "WITH_CCI": "true"
         // "FAISS_SIMD_MODE": "AVX2"
-      },
-      "environment": { "NINJA_STATUS": "[%f/%t %es]", "CLICOLOR_FORCE": "1" }
+      }
+      // "environment": { "NINJA_STATUS": "[%f/%t %es]", "CLICOLOR_FORCE": "1" }
     },
     {
       "name": "release_gcc_Ofast",

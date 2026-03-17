@@ -4,6 +4,9 @@
 # Variable
 ##############################################################################
 
+# PRESET_MODE=""
+# SOURCE_DIR=""
+
 # Check if PRESET_MODE is set; if not, print a warning and set a default value
 if [ -z "$PRESET_MODE" ]; then
     echo "#################################################################"
@@ -36,7 +39,9 @@ export PATH="$CUBRID/bin:$PATH"
 export LD_LIBRARY_PATH="$CUBRID/cci/lib:$CUBRID/lib:$HOME/CUB3LIB/lib:/usr/local/lib:$LD_LIBRARY_PATH"
 export CUBRID_BUILD_DIR="$SOURCE_DIR/build_preset_$PRESET_MODE"
 
-CTP_HOME="$(pwd)/CTP"
+# CTP_HOME="$(pwd)/CTP"
+# CTP_HOME="$HOME/gh/ctp/oos-revert-replace-oos/CTP"
+CTP_HOME="$HOME/gh/ctp/cubrid-testtools/CTP"
 export CTP_HOME
 
 init_path=$CTP_HOME/shell/init_path

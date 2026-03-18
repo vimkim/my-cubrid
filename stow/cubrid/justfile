@@ -47,7 +47,7 @@ oos-unloaddb-prepare-col-10-size-600-limit-300000:
     csql.sh -i ./bench/prepare-bench-data-col-10-size-600-limit-300000.sql
 
 # nt: ctest
-nt: n1 n2
+nt: build-test
 
 build-test: build test
 

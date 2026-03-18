@@ -5,3 +5,6 @@ alias nr = commandline edit (just.nu -f ~/my-cubrid/remote-nu.just -d . | str tr
 alias nre = nvim ~/my-cubrid/remote-nu.just
 alias ncub = commandline edit (just.nu -f ~/my-cubrid/stow/cubrid/justfile -d . | str trim)
 alias ncube = nvim ~/my-cubrid/stow/cubrid/justfile
+
+alias tcsql = cd ~/gh/tc/cubrid-testcases/
+alias tcshell = cd ~/cubrid-testcases-private-ex/

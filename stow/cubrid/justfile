@@ -1,5 +1,5 @@
 mod? local 'local.just'
-mod? oos 'test/oos/oos.just'
+mod? oos '/home/vimkim/gh/cubrid-oos-test/oos.just'
 
 set shell := ["nu", "-c"]
 

@@ -51,12 +51,24 @@ nt: build-test
 
 build-test: build test
 
-test: ctest test-fail-sql
+test: ctest test-fail-sql test-oos-sql
 
 test-fail-sql:
     # cat tc_CBRD26565_midxkey_oos_overflow.sql | csql -udba testdb -S | tail -n 50
     echo pass
     @echo "TEST passed!"
+
+test-oos-sql:
+    #!/usr/bin/env nu
+    let branch = (git branch --show-current)
+    let base_branch = try { gh pr list -R CUBRID/cubrid --head $branch --json baseRefName -q '.[0].baseRefName' } catch { "" }
+    if ($base_branch | str contains "feat/oos") {
+        cubrid server start testdb
+        try { just oos sql-golden } catch { cubrid server stop testdb; error make { msg: "oos sql failed" } }
+        cubrid server stop testdb
+    } else {
+        print $"Skipping test-oos-sql: base branch '($base_branch)' does not contain 'feat/oos'"
+    }
 
 
 cmake-refresh-fetchcontent-depthlog:

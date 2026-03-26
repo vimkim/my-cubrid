@@ -318,6 +318,7 @@ cmake-build-install-all-rg:
 
 cmake-build-install-all:
     cmake --build --preset $env.PRESET_MODE --target install
+    echo "Build and install completed successfully!"
 
 build-debug:
     cmake --build --preset mydebug --target install

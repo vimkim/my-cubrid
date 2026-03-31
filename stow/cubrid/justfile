@@ -64,7 +64,8 @@ test-oos-sql:
     let base_branch = try { gh pr list -R CUBRID/cubrid --head $branch --json baseRefName -q '.[0].baseRefName' } catch { "" }
     if ($base_branch | str contains "feat/oos") {
         cubrid server start testdb
-        try { just oos sql-golden } catch { cubrid server stop testdb; error make { msg: "oos sql failed" } }
+        # try { just oos sql-golden } catch { cubrid server stop testdb; error make { msg: "oos sql failed" } }
+        try { just oos sql } catch { cubrid server stop testdb; error make { msg: "oos sql failed" } }
         cubrid server stop testdb
     } else {
         print $"Skipping test-oos-sql: base branch '($base_branch)' does not contain 'feat/oos'"
@@ -122,7 +123,7 @@ csql-run:
     csql -Sudba testdb -i csql-run.sql
 
 build-debug-oldway-gcc14:
-    CXXFLAGS="-fdiagnostics-color=always" CFLAGS="-fdiagnostics-color=always -Wno-int-conversion -Wno-incompatible-pointer-types -Wno-implicit-function-declaration" ./build.sh -m debug -b build_debug ./install_debug build
+    CXXFLAGS="-fdiagnostics-color=always" CFLAGS="-fdiagnostics-color=always -Wno-int-conversion -Wno-incompatible-pointer-types -Wno-implicit-function-declaration" ./build.sh -m debug -b build_debug -p ./install_debug build
 
 build-release-oldway-gcc14:
     CXXFLAGS="-fdiagnostics-color=always" CFLAGS="-fdiagnostics-color=always -Wno-int-conversion -Wno-incompatible-pointer-types -Wno-implicit-function-declaration" ./build.sh -m release -b build_rel -p ./install_rel build

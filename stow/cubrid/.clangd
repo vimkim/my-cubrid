@@ -1,7 +1,17 @@
+If:
+  PathExclude: unit_tests/.*
 CompileFlags:
   Add: [-DCS_MODE, -USA_MODE, -DSERVER_MODE, -std=c++17]
-  # Add: [-UCS_MODE, -DSA_MODE, -USERVER_MODE, -std=c++17]
 
 Diagnostics:
   Suppress: [deduced_class_template_ctor_no_viable, ovl_no_viable_function_in_call]
 
+---
+
+If:
+  PathMatch: unit_tests/.*
+CompileFlags:
+  Add: [-UCS_MODE, -DSA_MODE, -USERVER_MODE, -std=c++17]
+
+Diagnostics:
+  Suppress: [deduced_class_template_ctor_no_viable, ovl_no_viable_function_in_call]

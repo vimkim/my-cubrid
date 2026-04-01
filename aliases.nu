@@ -8,3 +8,5 @@ alias ncube = nvim ~/my-cubrid/stow/cubrid/justfile
 
 alias tcsql = cd ~/gh/tc/cubrid-testcases/
 alias tcshell = cd ~/cubrid-testcases-private-ex/
+
+alias ooslog = do { nvim $"($env.CUBRID)/log/oos.log" }

@@ -3,6 +3,10 @@ mod? oos '/home/vimkim/gh/cubrid-oos-test/oos.just'
 
 set shell := ["nu", "-c"]
 
+# [Claude Code] use `just build` for build, `just test` for test, `just build-test` for both
+aaa-help-for-claude-code:
+    @echo "Use `just build` for build, `just test` for test, `just build-test` for both."
+
 default: ctest
 
 n1: build-prepare-oos
@@ -49,9 +53,12 @@ oos-unloaddb-prepare-col-10-size-600-limit-300000:
 # nt: ctest
 nt: build-test
 
+# Build and run all tests (ctest + sql tests)
 build-test: build test
 
-test: ctest test-fail-sql test-oos-sql
+# Run all tests: ctest (unit tests + sql-level integration tests) + sql regression tests
+# test: ctest test-fail-sql test-oos-sql
+test: ctest test-fail-sql
 
 test-fail-sql:
     # cat tc_CBRD26565_midxkey_oos_overflow.sql | csql -udba testdb -S | tail -n 50

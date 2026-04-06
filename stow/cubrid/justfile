@@ -60,6 +60,67 @@ build-test: build test
 # test: ctest test-fail-sql test-oos-sql
 test: ctest test-fail-sql
 
+# Run OOS isolation tests (.ctl) via CTP framework
+test-isolation *ARGS:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    # Usage:
+    #   just test-isolation                        run all OOS isolation tests
+    #   just test-isolation path/to/test.ctl       run a single .ctl file
+    #   just test-isolation path/to/dir/           run all .ctl in a directory
+    #   TIMEOUT=60 just test-isolation             custom timeout (default 120s)
+    CTL_DIR="$HOME/cubrid-testtools/CTP/isolation/ctltool"
+    TC_BASE="$HOME/cubrid-testcases/isolation"
+    TIMEOUT="${TIMEOUT:-120}"
+
+    # Build tools if needed
+    if [ ! -f "$CTL_DIR/qacsql" ] || [ ! -f "$CTL_DIR/qactl" ]; then
+        echo "Building CTP isolation tools..."
+        cd "$CTL_DIR" && make && chmod +x *.sh
+        cd - > /dev/null
+    fi
+
+    # Ensure ctldb exists and server is running
+    if ! cubrid server status 2>/dev/null | grep -q ctldb; then
+        echo "Preparing ctldb..."
+        cd "$CTL_DIR" && sh prepare.sh qacsql ctldb nolog
+        cd - > /dev/null
+    fi
+
+    args="${ARGS:-}"
+
+    # If a specific .ctl file is given, run just that one
+    if [ -n "$args" ] && [ -f "$args" ]; then
+        cd "$CTL_DIR" && sh runone.sh "$args" "$TIMEOUT" 2>&1 | grep -E "flag:|elapse:"
+        exit $?
+    fi
+
+    # If a directory is given, run all .ctl files in it
+    if [ -n "$args" ] && [ -d "$args" ]; then
+        search_dir="$args"
+    else
+        # Default: run all OOS isolation tests
+        search_dir="$TC_BASE/_01_ReadCommitted/issues/cbrd_26517_oos"
+    fi
+
+    pass=0; fail=0; total=0
+    for ctl in "$search_dir"/*.ctl "$TC_BASE"/_02_RepeatableRead/issues/cbrd_26517_oos/*.ctl; do
+        [ -f "$ctl" ] || continue
+        total=$((total + 1))
+        name=$(basename "$ctl" .ctl)
+        result=$(cd "$CTL_DIR" && sh runone.sh "$ctl" "$TIMEOUT" 2>&1 | grep "flag:" | head -1)
+        if echo "$result" | grep -q "OK"; then
+            echo "  OK  $name"
+            pass=$((pass + 1))
+        else
+            echo "  NOK $name"
+            fail=$((fail + 1))
+        fi
+    done
+    echo "---"
+    echo "$pass/$total passed"
+    [ "$fail" -eq 0 ] || exit 1
+
 test-fail-sql:
     # cat tc_CBRD26565_midxkey_oos_overflow.sql | csql -udba testdb -S | tail -n 50
     echo pass

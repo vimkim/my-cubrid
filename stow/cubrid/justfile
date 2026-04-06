@@ -82,10 +82,6 @@ cmake-refresh-fetchcontent-depthlog:
 
 alias b := build-prepare-oos
 alias c := configure
-alias bd := build-debug
-alias bp := build-profile
-alias cc := csql-demodb-cs
-alias cs := csql-demodb-sa
 alias t := test
 
 ha-node-a-install:
@@ -163,14 +159,6 @@ _gum-confirm-no:
     @# asks, the default is "NO"
     @gum confirm --default=false
 
-git-sync-with-upstream:
-    git fetch --all --prune
-    git pull cub HEAD
-
-# Echo
-echo-hello:
-    @echo "Hello, World!"
-
 _3rdparty-cmake-remove:
     rm 3rdparty/CMakeLists.txt
 
@@ -207,9 +195,6 @@ prepare: stow-create
     do -i { git apply $"($env.MY_CUBRID)/csql-echo.patch" }
     direnv allow
     lefthook install
-
-cpptrace:
-    open ($env.MY_CUBRID | path join cpptrace.diff) | patch -N -r rej.rej -p1
 
 ctest:
     ctest --test-dir $"($env.CUBRID_BUILD_DIR)" --output-on-failure --verbose
@@ -308,19 +293,9 @@ cmake-build-install-3rdparty:
 cmake-build-install-csql-util: cmake-build-install-3rdparty
     cmake --build --preset $env.PRESET_MODE --target util/install
 
-# tip: ninja above 1.10 understands export CLICOLOR_FORCE=1 and prints color even when piped
-cmake-build-install-all-rg:
-    cmake --build --preset $env.PRESET_MODE --target install | tee { save -f --raw build.log } | rg -i -A 3 'error:|success|install'
-
 cmake-build-install-all:
     cmake --build --preset $env.PRESET_MODE --target install
     echo "Build and install completed successfully!"
-
-build-debug:
-    cmake --build --preset mydebug --target install
-
-build-profile:
-    cmake --build --preset myprofile --target install
 
 cmake-build-target:
     cmake-build-target-fuzzy.sh $CUBRID_BUILD_DIR
@@ -338,18 +313,6 @@ csql-testdb-cs: paramdump-testdb
 
 csql-testdb-sa:
     csql.sh
-
-csql-demodb-cs:
-    csql -u dba demodb
-
-csql-demodb-sa:
-    csql -u dba demodb -S
-
-debug-with-cgdb-csql-demodb-cs:
-    cgdb --args csql -u dba demodb
-
-debug-with-cgdb-csql-demodb-sa:
-    cgdb --args csql -u dba demodb -S
 
 debug-with-cgdb-csql-testdb-cs:
     cgdb --args csql -udba testdb
@@ -397,14 +360,6 @@ depthlog-pretty-print-log:
 core-delete:
     @gum confirm
     /bin/rm -rf core.*
-
-# gdbserver
-
-gdbserver:
-    gdbserver :9999 csql -u dba demodb -S
-
-gdbserver-i:
-    gdbserver :9999 csql -u dba demodb -S -i run.sql
 
 # utils
 
@@ -467,15 +422,6 @@ cmakecache-delete:
 build-delete: _gum-confirm-no
     /bin/rm -rf $CUBRID_BUILD_DIR
 
-asdf-java:
-    asdf install java $(asdf list all java | fzf)
-
-asdf-java-global:
-    asdf global java $(asdf list java | fzf)
-
-asdf-java-local:
-    asdf local java $(asdf list java | fzf)
-
 uftrace-record:
     uftrace record -- csql -u dba testdb -S ???
 
@@ -530,9 +476,6 @@ clang-tidy:
 
 edit-databases-txt:
     v $"($env.CUBRID_DATABASES)/databases.txt"
-
-extract-functions-heap_attrinfo:
-    nm -C build_preset_debug_clang/cubrid/libcubrid.so | rg ' T ' | rg heap_attrinfo | rg -o 'heap_attrinfo[^(]*'
 
 perf-record-cub_server:
     sudo perf record -F max -g -a -p (^ps aux | rg vimkim | rg cub_server | fzf | awk '{print $2}')

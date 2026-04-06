@@ -440,6 +440,9 @@ uftrace-preview:
 uftrace-serve-trace:
     trace_processor --httpd ./uftrace/uftrace-chrome-*.json
 
+format-pr-diff:
+    cubrid-format-pr-diff.sh
+
 format-git-changed-dryrun:
     cubrid-format-gitchanged.sh -d
 

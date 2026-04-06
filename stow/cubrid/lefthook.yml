@@ -1,4 +1,5 @@
 pre-commit:
-  jobs:
-    - name: prevent commit
+  commands:
+    prevent-commit:
       run: cubrid-format-gitchanged.sh -d >/dev/null 2>&1
+      glob: "*.{c,h,cpp,hpp}"

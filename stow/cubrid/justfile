@@ -363,7 +363,7 @@ cmake-build-install-csql-util: cmake-build-install-3rdparty
 
 cmake-build-install-all:
     cmake --build --preset $env.PRESET_MODE --target install
-    echo "Build and install completed successfully!"
+    ^echo "Build and install completed successfully!"
 
 cmake-build-target:
     cmake-build-target-fuzzy.sh $CUBRID_BUILD_DIR

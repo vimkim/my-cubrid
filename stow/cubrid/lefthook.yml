@@ -1,5 +1,14 @@
 pre-commit:
   commands:
-    prevent-commit:
-      run: cubrid-format-gitchanged.sh -d >/dev/null 2>&1
-      glob: "*.{c,h,cpp,hpp}"
+    codestyle:
+      glob: "*.{c,h,cpp,hpp,i,ipp}"
+      run: |
+        for f in {staged_files}; do
+          .github/workflows/codestyle.sh "$f"
+        done
+        if ! git diff --quiet -- {staged_files}; then
+          echo "Code style violations detected. Files were auto-formatted by .github/workflows/codestyle.sh." >&2
+          echo "Re-stage and commit again:" >&2
+          git --no-pager diff --stat -- {staged_files} >&2
+          exit 1
+        fi

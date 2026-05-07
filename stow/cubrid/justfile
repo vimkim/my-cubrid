@@ -3,7 +3,7 @@ mod? oos '/home/vimkim/gh/cubrid-oos-test/oos.just'
 
 set shell := ["nu", "-c"]
 
-# [Claude Code] use `just build` for build, `just test` for test, `just build-test` for both
+# [Claude Code] use `just build` for build, `just test` for test, `just build-test` for both, `just cubrid-createdb-testdb` to create testdb
 aaa-help-for-claude-code:
     @echo "Use `just build` for build, `just test` for test, `just build-test` for both."
 

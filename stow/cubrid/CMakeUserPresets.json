@@ -225,7 +225,10 @@
         "CMAKE_C_FLAGS": "-fcolor-diagnostics -flto=thin -fno-inline -Xclang -fno-validate-pch -Xclang -fno-pch-timestamp -Wno-everything -Wno-non-pod-varargs -Wno-c++11-narrowing -Wno-int-conversion -Wno-implicit-function-declaration",
         "CMAKE_CXX_FLAGS": "-fcolor-diagnostics -flto=thin -fno-inline -Xclang -fno-validate-pch -Xclang -fno-pch-timestamp -Wno-everything -Wno-non-pod-varargs -Wno-c++11-narrowing -Wno-int-conversion -Wno-implicit-function-declaration",
         "CMAKE_C_FLAGS_DEBUG": "-O1 -ggdb3 -fdebug-macro",
-        "CMAKE_CXX_FLAGS_DEBUG": "-O1 -ggdb3 -fdebug-macro"
+        "CMAKE_CXX_FLAGS_DEBUG": "-O1 -ggdb3 -fdebug-macro",
+        "CMAKE_EXE_LINKER_FLAGS": "-fuse-ld=lld-18",
+        "CMAKE_SHARED_LINKER_FLAGS": "-fuse-ld=lld-18",
+        "CMAKE_MODULE_LINKER_FLAGS": "-fuse-ld=lld-18"
       }
     },
     {
@@ -243,7 +246,10 @@
         "CMAKE_C_FLAGS": "-fcolor-diagnostics -flto=thin -fno-inline -Xclang -fno-validate-pch -Xclang -fno-pch-timestamp -Werror=unused-result -Wno-non-pod-varargs -Wno-c++11-narrowing -Wno-int-conversion -Wno-implicit-function-declaration -fno-omit-frame-pointer -Wno-inline-new-delete",
         "CMAKE_CXX_FLAGS": "-fcolor-diagnostics -flto=thin -fno-inline -Xclang -fno-validate-pch -Xclang -fno-pch-timestamp -Werror=unused-result -Wno-non-pod-varargs -Wno-c++11-narrowing -Wno-int-conversion -Wno-implicit-function-declaration -fno-omit-frame-pointer -Wno-inline-new-delete",
         "CMAKE_C_FLAGS_DEBUG": "-O0 -ggdb3 -fdebug-macro -fno-inline",
-        "CMAKE_CXX_FLAGS_DEBUG": "-O0 -ggdb3 -fdebug-macro -fno-inline"
+        "CMAKE_CXX_FLAGS_DEBUG": "-O0 -ggdb3 -fdebug-macro -fno-inline",
+        "CMAKE_EXE_LINKER_FLAGS": "-fuse-ld=lld-18",
+        "CMAKE_SHARED_LINKER_FLAGS": "-fuse-ld=lld-18",
+        "CMAKE_MODULE_LINKER_FLAGS": "-fuse-ld=lld-18"
       }
     },
     {
@@ -257,7 +263,10 @@
         "CMAKE_C_COMPILER": "clang",
         "CMAKE_CXX_COMPILER": "clang++",
         "CMAKE_C_FLAGS": "-fcolor-diagnostics -O0 -pg -ggdb3 -fdebug-macro -flto=thin -fno-inline -no-pie -Xclang -fno-validate-pch -Xclang -fno-pch-timestamp -Wno-everything -Wno-non-pod-varargs -Wno-c++11-narrowing -Wno-int-conversion -Wno-implicit-function-declaration -Wno-unused-parameter -fno-omit-frame-pointer",
-        "CMAKE_CXX_FLAGS": "-fcolor-diagnostics -O0 -pg -ggdb3 -fdebug-macro -flto=thin -fno-inline -no-pie -Xclang -fno-validate-pch -Xclang -fno-pch-timestamp -Wno-everything -Wno-non-pod-varargs -Wno-c++11-narrowing -Wno-int-conversion -Wno-implicit-function-declaration -Wno-unused-parameter -fno-omit-frame-pointer"
+        "CMAKE_CXX_FLAGS": "-fcolor-diagnostics -O0 -pg -ggdb3 -fdebug-macro -flto=thin -fno-inline -no-pie -Xclang -fno-validate-pch -Xclang -fno-pch-timestamp -Wno-everything -Wno-non-pod-varargs -Wno-c++11-narrowing -Wno-int-conversion -Wno-implicit-function-declaration -Wno-unused-parameter -fno-omit-frame-pointer",
+        "CMAKE_EXE_LINKER_FLAGS": "-fuse-ld=lld-18",
+        "CMAKE_SHARED_LINKER_FLAGS": "-fuse-ld=lld-18",
+        "CMAKE_MODULE_LINKER_FLAGS": "-fuse-ld=lld-18"
       }
     },
     {
@@ -273,7 +282,10 @@
         "CMAKE_C_COMPILER": "clang",
         "CMAKE_CXX_COMPILER": "clang++",
         "CMAKE_C_FLAGS": "-fcolor-diagnostics -O2 -pg -ggdb3 -fdebug-macro -flto=thin -fno-inline -Xclang -fno-validate-pch -Xclang -fno-pch-timestamp -Wno-everything -Wno-non-pod-varargs -Wno-c++11-narrowing -Wno-int-conversion -Wno-implicit-function-declaration",
-        "CMAKE_CXX_FLAGS": "-fcolor-diagnostics -O2 -pg -ggdb3 -fdebug-macro -flto=thin -fno-inline -Xclang -fno-validate-pch -Xclang -fno-pch-timestamp -Wno-everythneing -Wno-non-pod-varargs -Wno-c++11-narrowing -Wno-int-conversion -Wno-implicit-function-declaration"
+        "CMAKE_CXX_FLAGS": "-fcolor-diagnostics -O2 -pg -ggdb3 -fdebug-macro -flto=thin -fno-inline -Xclang -fno-validate-pch -Xclang -fno-pch-timestamp -Wno-everythneing -Wno-non-pod-varargs -Wno-c++11-narrowing -Wno-int-conversion -Wno-implicit-function-declaration",
+        "CMAKE_EXE_LINKER_FLAGS": "-fuse-ld=lld-18",
+        "CMAKE_SHARED_LINKER_FLAGS": "-fuse-ld=lld-18",
+        "CMAKE_MODULE_LINKER_FLAGS": "-fuse-ld=lld-18"
       }
     },
     {
@@ -292,7 +304,10 @@
         "CMAKE_C_FLAGS": "-fcolor-diagnostics -flto=thin -Xclang -fno-validate-pch -Xclang -fno-pch-timestamp -Wno-everything -Wno-non-pod-varargs -Wno-c++11-narrowing -Wno-int-conversion -Wno-implicit-function-declaration -Wno-unused-parameter",
         "CMAKE_CXX_FLAGS": "-fcolor-diagnostics -flto=thin -Xclang -fno-validate-pch -Xclang -fno-pch-timestamp -Wno-everything -Wno-non-pod-varargs -Wno-c++11-narrowing -Wno-int-conversion -Wno-implicit-function-declaration -Wno-unused-parameter -Wno-unused-parameter",
         "CMAKE_C_FLAGS_RELWITHDEBINFO": "-O2 -g -DNDEBUG -finline-functions",
-        "CMAKE_CXX_FLAGS_RELWITHDEBINFO": "-O2 -g -DNDEBUG -finline-functions"
+        "CMAKE_CXX_FLAGS_RELWITHDEBINFO": "-O2 -g -DNDEBUG -finline-functions",
+        "CMAKE_EXE_LINKER_FLAGS": "-fuse-ld=lld-18",
+        "CMAKE_SHARED_LINKER_FLAGS": "-fuse-ld=lld-18",
+        "CMAKE_MODULE_LINKER_FLAGS": "-fuse-ld=lld-18"
       }
     },
     {
@@ -311,7 +326,10 @@
         "CMAKE_C_FLAGS": "-fcolor-diagnostics -flto=thin -Xclang -fno-validate-pch -Xclang -fno-pch-timestamp -Wno-everything -Wno-non-pod-varargs -Wno-c++11-narrowing -Wno-int-conversion -Wno-implicit-function-declaration -Wno-unused-parameter",
         "CMAKE_CXX_FLAGS": "-fcolor-diagnostics -flto=thin -Xclang -fno-validate-pch -Xclang -fno-pch-timestamp -Wno-everything -Wno-non-pod-varargs -Wno-c++11-narrowing -Wno-int-conversion -Wno-implicit-function-declaration -Wno-unused-parameter -Wno-unused-parameter",
         "CMAKE_C_FLAGS_RELWITHDEBINFO": "-O2 -ggdb3 -DNDEBUG -fno-inline -fno-inline-functions -Wno-error -Wno-pessimizing-move",
-        "CMAKE_CXX_FLAGS_RELWITHDEBINFO": "-O2 -ggdb3 -DNDEBUG -fno-inline -fno-inline-functions -Wno-error -Wno-pessimizing-move"
+        "CMAKE_CXX_FLAGS_RELWITHDEBINFO": "-O2 -ggdb3 -DNDEBUG -fno-inline -fno-inline-functions -Wno-error -Wno-pessimizing-move",
+        "CMAKE_EXE_LINKER_FLAGS": "-fuse-ld=lld-18",
+        "CMAKE_SHARED_LINKER_FLAGS": "-fuse-ld=lld-18",
+        "CMAKE_MODULE_LINKER_FLAGS": "-fuse-ld=lld-18"
       }
     }
   ],

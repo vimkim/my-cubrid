@@ -170,6 +170,24 @@
       }
     },
     {
+      "name": "asan_debug_gcc",
+      "inherits": "user_default",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Debug",
+        "CMAKE_C_FLAGS": "-fdiagnostics-color=always",
+        "CMAKE_CXX_FLAGS": "-fdiagnostics-color=always",
+        "CMAKE_C_FLAGS_DEBUG": "-O1 -ggdb3 -fsanitize=address -fno-omit-frame-pointer -fno-optimize-sibling-calls -Wno-int-conversion -Wno-incompatible-pointer-types -Wno-implicit-function-declaration -Wno-error=format -Wno-error -Wno-error=maybe-uninitialized -Wno-error=parentheses",
+        "CMAKE_CXX_FLAGS_DEBUG": "-O1 -ggdb3 -fsanitize=address -fno-omit-frame-pointer -fno-optimize-sibling-calls -Wno-error=format -Wno-error -Wno-error=maybe-uninitialized -Wno-error=parentheses",
+        "CMAKE_EXE_LINKER_FLAGS": "-fsanitize=address -B/usr/libexec/mold",
+        "CMAKE_SHARED_LINKER_FLAGS": "-fsanitize=address -B/usr/libexec/mold",
+        "CMAKE_MODULE_LINKER_FLAGS": "-fsanitize=address -B/usr/libexec/mold",
+        "CMAKE_C_COMPILER": "gcc",
+        "CMAKE_CXX_COMPILER": "g++",
+        "CMAKE_CXX_STANDARD": "17",
+        "CMAKE_CXX_STANDARD_REQUIRED": "ON"
+      }
+    },
+    {
       "name": "debug_gcc_23",
       "inherits": "user_default",
       "cacheVariables": {
@@ -377,6 +395,10 @@
     {
       "name": "debug_gcc_23",
       "configurePreset": "debug_gcc_23"
+    },
+    {
+      "name": "asan_debug_gcc",
+      "configurePreset": "asan_debug_gcc"
     },
     {
       "name": "sanitize_gcc_23",

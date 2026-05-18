@@ -121,6 +121,69 @@ test-isolation *ARGS:
     echo "$pass/$total passed"
     [ "$fail" -eq 0 ] || exit 1
 
+# Run one or a limited range of CTP shell tests against the local build.
+#
+# WHAT THIS DOES
+#   CTP's stock entry point is `~/CTP/bin/ctp.sh shell -c ~/CTP/conf/shell_ci.conf`.
+#   That conf has `scenario=~/cubrid-testcases-private-ex/shell`, i.e. *all* shell
+#   tests. To debug one (or a narrow subtree) we copy the conf to /tmp and rewrite:
+#     - scenario=<TEST_DIR>             # what to run
+#     - testcase_update_yn=false        # don't `git pull` cubrid-testcases-private-ex
+#     - testcase_exclude_from_file=...  # commented out (exclude list lives upstream)
+#   Then invoke ctp.sh against the temp conf. CTP discovers any `cases/*.sh` under
+#   `scenario=` recursively, so the same recipe runs 1 test or 1000.
+#
+# ARG SHAPE
+#   TEST_DIR must be the directory that *contains* `cases/<name>.sh`, NOT the .sh
+#   itself. For bug_1638:
+#     ~/cubrid-testcases-private-ex/shell/_06_issues/_10_1h/bug_1638/             <- yes
+#     ~/cubrid-testcases-private-ex/shell/_06_issues/_10_1h/bug_1638/cases/bug_1638.sh   <- no
+#   Pass any ancestor directory to run a wider subtree (see `shell-debug-many`).
+#
+# FINDING A TEST
+#   ls ~/cubrid-testcases-private-ex/shell                       # top-level buckets
+#   fd -t d -d 4 . ~/cubrid-testcases-private-ex/shell | fzf
+#   rg -l "specific_string" ~/cubrid-testcases-private-ex/shell  # grep into .sh
+#
+# RESULTS
+#   ctp.sh prints `[TESTCASE] ... [OK|NOK]` per case and a summary block
+#   ("Total Success Case", "Total Fail Case"). Per-case logs land in
+#     ~/CTP/result/shell/<timestamp>/
+#   Look there for stdout/stderr of a failing .sh.
+#
+# REQUIREMENTS
+#   CUBRID must be installed and on PATH (`cubrid_rel` should work). CTP runs
+#   against the currently-active install — verify with `which cubrid` before
+#   blaming a test for a "regression" that's actually a stale build.
+#
+# Usage:
+#   just shell-debug ~/cubrid-testcases-private-ex/shell/_06_issues/_10_1h/bug_1638
+shell-debug TEST_DIR:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    SRC=~/CTP/conf/shell_ci.conf
+    CONF=$(mktemp /tmp/shell_single.XXXXXX.conf)
+    cp "$SRC" "$CONF"
+    sed -i "s|^scenario=.*|scenario={{TEST_DIR}}|"              "$CONF"
+    sed -i "s|^testcase_update_yn=.*|testcase_update_yn=false|" "$CONF"
+    sed -i "s|^testcase_exclude_from_file=.*|#&|"               "$CONF"
+    echo "[shell-debug] scenario={{TEST_DIR}}"
+    echo "[shell-debug] conf=$CONF"
+    ~/CTP/bin/ctp.sh shell -c "$CONF"
+
+# Run every shell test under a subtree (e.g. one bucket like _06_issues/_10_1h).
+# Identical to `shell-debug` — just a name that makes intent obvious at the call site.
+# Usage:
+#   just shell-debug-many ~/cubrid-testcases-private-ex/shell/_06_issues/_10_1h
+shell-debug-many SUBTREE: (shell-debug SUBTREE)
+
+# CTP's built-in interactive mode: prompts on stdin for a test case path/name
+# then runs it. Good for one-off poking when you don't want to write a conf.
+# Reads the default conf (~/CTP/conf/shell_ci.conf) for env/port settings but
+# ignores its `scenario=` — your stdin answer is what gets run.
+shell-debug-interactive:
+    ~/CTP/bin/ctp.sh shell --interactive -c ~/CTP/conf/shell_ci.conf
+
 test-fail-sql:
     # cat tc_CBRD26565_midxkey_oos_overflow.sql | csql -udba testdb -S | tail -n 50
     echo pass

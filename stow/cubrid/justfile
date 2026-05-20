@@ -161,6 +161,22 @@ test-isolation *ARGS:
 shell-debug TEST_DIR:
     #!/usr/bin/env bash
     set -euo pipefail
+    # Self-heal CTP's FM snapshot. Test.resetCUBRID_linux wipes $CUBRID/conf/
+    # before every test and restores from ~/.CUBRID_SHELL_FM/conf/. If that
+    # snapshot is empty (botched initial DeployOneNode), each test starts with
+    # no conf — csql/cubrid then log "Can't access ... cubrid.conf" into the
+    # CTP diff and the test goes NOK for env reasons, not engine reasons.
+    FM_CONF=~/.CUBRID_SHELL_FM/conf
+    if [ ! -f "$FM_CONF/cubrid.conf" ]; then
+      mkdir -p "$FM_CONF"
+      if [ -f "${CUBRID:-}/conf/cubrid.conf" ]; then
+        SRC_CONF="$CUBRID/conf"
+      else
+        SRC_CONF="$(pwd)/conf"
+      fi
+      cp -rf "$SRC_CONF"/* "$FM_CONF"/
+      echo "[shell-debug] healed empty FM snapshot from $SRC_CONF"
+    fi
     SRC=~/CTP/conf/shell_ci.conf
     CONF=$(mktemp /tmp/shell_single.XXXXXX.conf)
     cp "$SRC" "$CONF"

@@ -185,7 +185,11 @@ shell-debug TEST_DIR:
     sed -i "s|^testcase_exclude_from_file=.*|#&|"               "$CONF"
     echo "[shell-debug] scenario={{TEST_DIR}}"
     echo "[shell-debug] conf=$CONF"
-    ~/CTP/bin/ctp.sh shell -c "$CONF"
+    # ctp.sh (and its java/ant subprocesses) buffer or drop output when stdout
+    # isn't a TTY. just's bash wrapper inherits a pipe, so direct invocation
+    # from a shell prints more than `just shell-debug` would. Allocate a pty
+    # via script(1) so behavior matches running ctp.sh interactively.
+    script -qefc "$HOME/CTP/bin/ctp.sh shell -c $CONF" /dev/null
 
 # Run every shell test under a subtree (e.g. one bucket like _06_issues/_10_1h).
 # Identical to `shell-debug` — just a name that makes intent obvious at the call site.
@@ -337,9 +341,9 @@ database-remove: _gum-confirm-no
 prepare: stow-create
     git submodule update --init cubrid-cci
     # open ($env.MY_CUBRID | path join developer-patch.diff) | patch -N -r rej.rej -p1 | ignore
-    open ($env.MY_CUBRID | path join clang20.diff) | patch -N -r rej.rej -p1 | ignore
+    # open ($env.MY_CUBRID | path join clang20.diff) | patch -N -r rej.rej -p1 | ignore
     # do -i { git apply ($env.MY_CUBRID | path join comment-out-pl-server-init.patch) } # breaks ctp
-    do -i { git apply $"($env.MY_CUBRID)/csql-echo.patch" }
+    # do -i { git apply $"($env.MY_CUBRID)/csql-echo.patch" }
     direnv allow
     lefthook install
 

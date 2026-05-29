@@ -25,23 +25,22 @@ else
 fi
 
 # ── 2. Enable PSI kernel parameter ───────────────────────────────────
-GRUB_FILE="/etc/default/grub"
+# RHEL/Rocky 9 use BootLoader Spec (BLS, GRUB_ENABLE_BLSCFG=true): the kernel
+# command line lives in the per-kernel `options` line of /boot/loader/entries/*.conf.
+# Editing /etc/default/grub + grub2-mkconfig does NOT update those entries, so the
+# param silently fails to take effect after reboot. `grubby` edits the BLS entries
+# directly, which is what the bootloader actually reads.
 info "Checking PSI kernel boot parameter..."
+
+command -v grubby &>/dev/null || error "grubby not found (expected on RHEL/Rocky 9)"
 
 if grep -q 'psi=1' /proc/cmdline; then
     info "PSI is already active in the running kernel"
-elif grep -q 'psi=1' "$GRUB_FILE"; then
-    warn "psi=1 is in GRUB config but not active yet (reboot required)"
+elif grubby --info=DEFAULT 2>/dev/null | grep -q 'psi=1'; then
+    warn "psi=1 is already staged in the boot entry but not active yet (reboot required)"
 else
-    info "Adding psi=1 to GRUB_CMDLINE_LINUX..."
-    cp "$GRUB_FILE" "${GRUB_FILE}.bak.$(date +%Y%m%d%H%M%S)"
-    sed -i 's/\(GRUB_CMDLINE_LINUX="[^"]*\)/\1 psi=1/' "$GRUB_FILE"
-    info "Regenerating GRUB config..."
-    if [[ -d /sys/firmware/efi ]]; then
-        grub2-mkconfig -o /boot/efi/EFI/rocky/grub.cfg
-    else
-        grub2-mkconfig -o /boot/grub2/grub.cfg
-    fi
+    info "Adding psi=1 to all kernel boot entries via grubby..."
+    grubby --update-kernel=ALL --args="psi=1"
     warn "psi=1 added — REBOOT REQUIRED for PSI to take effect"
 fi
 
@@ -80,8 +79,8 @@ echo "── oomd.conf ──"
 cat /etc/systemd/oomd.conf
 
 echo ""
-echo "── GRUB_CMDLINE_LINUX ──"
-grep GRUB_CMDLINE_LINUX "$GRUB_FILE"
+echo "── Kernel boot args (default entry) ──"
+grubby --info=DEFAULT 2>/dev/null | grep '^args=' || warn "could not read grubby default entry"
 
 echo ""
 if grep -q 'psi=1' /proc/cmdline; then

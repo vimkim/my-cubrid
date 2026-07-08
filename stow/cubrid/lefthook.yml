@@ -22,8 +22,41 @@ pre-push:
           exit 0
         fi
 
-        base_remote="${CUBRID_PR_BASE_REMOTE:-origin}"
-        base_branch="${CUBRID_PR_BASE:-develop}"
+        current_branch="$(git branch --show-current)"
+
+        # Resolve the freshness base in priority order:
+        #   1. explicit environment override
+        #   2. branch-local git config
+        #   3. best-effort GitHub PR metadata (if gh is available)
+        #   4. fallback to origin/develop
+        base_remote="${CUBRID_PR_BASE_REMOTE:-}"
+        base_branch="${CUBRID_PR_BASE:-}"
+
+        if [ -z "$base_remote" ]; then
+          base_remote="$(git config --get "branch.${current_branch}.cubrid-pr-base-remote" || true)"
+        fi
+
+        if [ -z "$base_branch" ]; then
+          base_branch="$(git config --get "branch.${current_branch}.cubrid-pr-base-branch" || true)"
+        fi
+
+        if [ -z "$base_branch" ] && command -v gh >/dev/null 2>&1; then
+          # `gh pr list --head "$current_branch"` matches fork-backed PRs in the
+          # CUBRID/CUBRID base repository; the owner-qualified form did not.
+          base_branch="$(
+            gh pr list --repo CUBRID/CUBRID \
+              --head "$current_branch" \
+              --state open \
+              --json baseRefName \
+              --jq '.[0].baseRefName // empty' 2>/dev/null || true
+          )"
+          if [ -n "$base_branch" ] && [ -z "$base_remote" ]; then
+            base_remote="origin"
+          fi
+        fi
+
+        base_remote="${base_remote:-origin}"
+        base_branch="${base_branch:-develop}"
 
         echo "Checking that HEAD contains latest ${base_remote}/${base_branch}..." >&2
         git fetch --no-tags "$base_remote" "$base_branch"

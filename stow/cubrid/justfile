@@ -150,6 +150,8 @@ test-isolation *ARGS:
 #   ("Total Success Case", "Total Fail Case"). Per-case logs land in
 #     ~/CTP/result/shell/<timestamp>/
 #   Look there for stdout/stderr of a failing .sh.
+#   This wrapper exits nonzero when CTP reports NOK/fail cases, even if ctp.sh
+#   itself exits 0.
 #
 # REQUIREMENTS
 #   CUBRID must be installed and on PATH (`cubrid_rel` should work). CTP runs
@@ -189,7 +191,34 @@ shell-debug TEST_DIR:
     # isn't a TTY. just's bash wrapper inherits a pipe, so direct invocation
     # from a shell prints more than `just shell-debug` would. Allocate a pty
     # via script(1) so behavior matches running ctp.sh interactively.
-    script -qefc "$HOME/CTP/bin/ctp.sh shell -c $CONF" /dev/null
+    LOG=$(mktemp /tmp/shell_single.XXXXXX.log)
+    CLEAN_LOG=$(mktemp /tmp/shell_single.XXXXXX.clean.log)
+    echo "[shell-debug] transcript=$LOG"
+    set +e
+    script -qefc "$HOME/CTP/bin/ctp.sh shell -c $CONF" "$LOG"
+    ctp_rc=$?
+    set -e
+    tr -d '\r' < "$LOG" > "$CLEAN_LOG"
+    if grep -Eq '\[TESTCASE\].*\[NOK\]|Total Fail Case:[[:space:]]*[1-9][0-9]*' "$CLEAN_LOG"; then
+      rm -f "$CLEAN_LOG"
+      echo "[shell-debug] CTP reported failed shell tests; transcript=$LOG" >&2
+      exit 1
+    fi
+    if grep -Eq 'Total Execution Case:[[:space:]]*0' "$CLEAN_LOG"; then
+      rm -f "$CLEAN_LOG"
+      echo "[shell-debug] CTP executed zero shell tests; check TEST_DIR={{TEST_DIR}}; transcript=$LOG" >&2
+      exit 1
+    fi
+    if ! grep -Eq 'Total Execution Case:' "$CLEAN_LOG"; then
+      rm -f "$CLEAN_LOG"
+      echo "[shell-debug] CTP summary was not found; transcript=$LOG" >&2
+      if [ "$ctp_rc" -eq 0 ]; then
+        exit 1
+      fi
+      exit "$ctp_rc"
+    fi
+    rm -f "$CLEAN_LOG"
+    exit "$ctp_rc"
 
 # Run every shell test under a subtree (e.g. one bucket like _06_issues/_10_1h).
 # Identical to `shell-debug` — just a name that makes intent obvious at the call site.

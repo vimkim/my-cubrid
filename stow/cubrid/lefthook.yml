@@ -12,3 +12,27 @@ pre-commit:
           git --no-pager diff --stat -- {staged_files} >&2
           exit 1
         fi
+
+pre-push:
+  commands:
+    pr-base-freshness:
+      run: |
+        if [ "${CUBRID_SKIP_PR_BASE_CHECK:-0}" = "1" ]; then
+          echo "Skipping PR base freshness check because CUBRID_SKIP_PR_BASE_CHECK=1." >&2
+          exit 0
+        fi
+
+        base_remote="${CUBRID_PR_BASE_REMOTE:-origin}"
+        base_branch="${CUBRID_PR_BASE:-develop}"
+
+        echo "Checking that HEAD contains latest ${base_remote}/${base_branch}..." >&2
+        git fetch --no-tags "$base_remote" "$base_branch"
+
+        if ! git merge-base --is-ancestor FETCH_HEAD HEAD; then
+          echo "Current branch is stale against ${base_remote}/${base_branch}." >&2
+          echo "Update it before pushing PR changes:" >&2
+          echo "  git rebase FETCH_HEAD && git push --force-with-lease" >&2
+          echo "or:" >&2
+          echo "  git merge FETCH_HEAD && git push" >&2
+          exit 1
+        fi

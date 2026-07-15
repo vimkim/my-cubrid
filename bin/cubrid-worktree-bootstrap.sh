@@ -68,6 +68,7 @@ shared_justfile="$MY_CUBRID/stow/cubrid/justfile"
 
 required_prepared_files=(
   justfile
+  local.just
   .envrc
   CMakeUserPresets.json
 )

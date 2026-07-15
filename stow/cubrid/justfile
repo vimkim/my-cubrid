@@ -345,10 +345,12 @@ _3rdparty-cmake-remove:
 _clang-support:
     sed -i '/message(FATAL_ERROR "We currently do not support ${CMAKE_CXX_COMPILER_ID} compiler")/d' CMakeLists.txt
 
-stow-create:
-    ~/my-cubrid/stow-create.sh
+stow-shared:
     stow --dir=$"($env.MY_CUBRID)/stow" --target=. cubrid
     stow --dir=$"($env.MY_CUBRID)/stow" --target=. gdb
+
+stow-create: stow-shared
+    CUBRID_SKIP_SHARED_STOW=1 ~/my-cubrid/stow-create.sh
 
 stow-delete:
     stow -D --dir=$"($env.MY_CUBRID)/stow" --target=. cubrid

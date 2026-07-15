@@ -9,6 +9,20 @@ alias ncube = nvim ~/my-cubrid/stow/cubrid/justfile
 alias tcsql = cd ~/gh/tc/cubrid-testcases/
 alias tcshell = cd ~/cubrid-testcases-private-ex/
 
+def --env cc [] {
+  let picker_command = $"($env.MY_CUBRID)/bin/cubrid-dir-picker.sh"
+  let picker = (^$picker_command | complete)
+  if $picker.exit_code != 0 {
+    print -e ($picker.stderr | str trim)
+    return
+  }
+
+  let target = ($picker.stdout | str trim)
+  if ($target | is-not-empty) {
+    cd $target
+  }
+}
+
 alias ooslog = do { nvim $"($env.CUBRID)/log/oos.log" }
 
 # ──────────────────────────────────────────────────────────────────────

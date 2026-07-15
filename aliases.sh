@@ -7,6 +7,12 @@ export MY_CUBRID="$HOME/my-cubrid"
 alias mycubrid='cd $MY_CUBRID'
 alias mycub='mycubrid'
 
+cc() {
+    local target
+    target="$("$MY_CUBRID/bin/cubrid-dir-picker.sh")" || return
+    builtin cd -- "$target"
+}
+
 alias mypg='cd $(fd -t d -p "gh.*pgvector$" $HOME)'
 
 alias cualias='$EDITOR ~/my-cubrid/aliases.sh'
@@ -155,5 +161,4 @@ if [ -n "$MY_CUBRID" ] && [ -d "$MY_CUBRID/bin" ]; then
 else
     echo "Warning: MY_CUBRID is not set or $MY_CUBRID/bin does not exist."
 fi
-
 

@@ -41,7 +41,7 @@ np: oos-prepare-server
 
 # pgbuf-hit-ratio-bugfix
 pgbuf-hit-ratio-bugfix-run:
-    do -i { cubrid server start testdb }
+    do -i { ~/my-cubrid/bin/cubrid-build-coordinator.sh runtime 300 -- cubrid server start testdb }
     cat run.sql | csql.sh
 
 pgbuf-hit-ratio-bugfix-statdump:
@@ -56,9 +56,14 @@ nt: build-test
 # Build and run all tests (ctest + sql tests)
 build-test: build test
 
+# Keep the runtime lock for the complete test sequence so installation cannot
+# begin in a gap between test groups.
+_test-unlocked: _ctest-unlocked test-fail-sql
+
 # Run all tests: ctest (unit tests + sql-level integration tests) + sql regression tests
 # test: ctest test-fail-sql test-oos-sql
-test: ctest test-fail-sql
+test:
+    ~/my-cubrid/bin/cubrid-build-coordinator.sh runtime 300 -- just _test-unlocked
 
 # Run OOS isolation tests (.ctl) via CTP framework
 test-isolation *ARGS:
@@ -243,10 +248,10 @@ test-oos-sql:
     let branch = (git branch --show-current)
     let base_branch = try { gh pr list -R CUBRID/cubrid --head $branch --json baseRefName -q '.[0].baseRefName' } catch { "" }
     if ($base_branch | str contains "feat/oos") {
-        cubrid server start testdb
-        # try { just oos sql-golden } catch { cubrid server stop testdb; error make { msg: "oos sql failed" } }
-        try { just oos sql } catch { cubrid server stop testdb; error make { msg: "oos sql failed" } }
-        cubrid server stop testdb
+        ~/my-cubrid/bin/cubrid-build-coordinator.sh runtime 300 -- cubrid server start testdb
+        # try { just oos sql-golden } catch { just cubrid-server-stop-testdb; error make { msg: "oos sql failed" } }
+        try { just oos sql } catch { just cubrid-server-stop-testdb; error make { msg: "oos sql failed" } }
+        just cubrid-server-stop-testdb
     } else {
         print $"Skipping test-oos-sql: base branch '($base_branch)' does not contain 'feat/oos'"
     }
@@ -310,25 +315,25 @@ remove-rapidjson:
     /bin/rm -rf $"($env.CUBRID_BUILD_DIR)/3rdparty/tmp/rapidjson"
 
 server-start-demodb:
-    cubrid server start demodb
+    ~/my-cubrid/bin/cubrid-build-coordinator.sh runtime 300 -- cubrid server start demodb
 
 server-restart-demodb:
-    cubrid server restart demodb
+    ~/my-cubrid/bin/cubrid-build-coordinator.sh runtime 300 -- cubrid server restart demodb
 
 server-stop-demodb:
-    cubrid server stop demodb
+    ~/my-cubrid/bin/cubrid-build-coordinator.sh runtime 300 -- cubrid server stop demodb
 
 cubrid-server-start-testdb:
-    cubrid server start testdb
+    ~/my-cubrid/bin/cubrid-build-coordinator.sh runtime 300 -- cubrid server start testdb
 
 cubrid-server-restart-testdb:
-    cubrid server restart testdb
+    ~/my-cubrid/bin/cubrid-build-coordinator.sh runtime 300 -- cubrid server restart testdb
 
 cubrid-server-stop-testdb:
-    cubrid server stop testdb
+    ~/my-cubrid/bin/cubrid-build-coordinator.sh runtime 300 -- cubrid server stop testdb
 
 cubrid-server-stop-testdb-try:
-    do -i { cubrid server stop testdb }
+    do -i { ~/my-cubrid/bin/cubrid-build-coordinator.sh runtime 300 -- cubrid server stop testdb }
 
 get-server-config: paramdump-testdb
 
@@ -378,32 +383,50 @@ prepare: stow-create
     direnv allow
     lefthook install
 
-ctest:
+_ctest-unlocked:
     ctest --test-dir $"($env.CUBRID_BUILD_DIR)" --output-on-failure --verbose
 
+ctest:
+    ~/my-cubrid/bin/cubrid-build-coordinator.sh runtime 300 -- ctest --test-dir $"($env.CUBRID_BUILD_DIR)" --output-on-failure --verbose
+
 configure:
-    cmake --preset $env.PRESET_MODE
+    ~/my-cubrid/bin/cubrid-build-coordinator.sh configure
 
 cmake-preset-mode-select:
-    do -i { cubrid service stop }
     cmake-preset-mode-select.sh
 
-prepare-build:
-    if (which cubrid | is-not-empty) { cubrid service stop | ignore; cubrid broker stop | ignore }
+configure-build-prepare-oos: configure build-prepare-oos
 
-configure-build-prepare-oos: prepare-build configure build-prepare-oos
+configure-build-for-ctp: configure build-for-ctp
 
-configure-build-for-ctp: prepare-build configure build-for-ctp
+# Compile first, then install only when this exact CUBRID environment is idle.
+# A busy runtime defers installation with retryable exit status 75.
+build:
+    ~/my-cubrid/bin/cubrid-build-coordinator.sh build 0
 
-build: prepare-build cmake-build-install-all
+compile:
+    ~/my-cubrid/bin/cubrid-build-coordinator.sh compile
 
-build-only: cmake-build-install-all
+install:
+    ~/my-cubrid/bin/cubrid-build-coordinator.sh install 0
+
+build-wait timeout='300':
+    ~/my-cubrid/bin/cubrid-build-coordinator.sh build {{timeout}}
+
+install-wait timeout='300':
+    ~/my-cubrid/bin/cubrid-build-coordinator.sh install {{timeout}}
+
+# Explicitly destructive escape hatch. The confirmation defaults to "no".
+stop-and-build: _gum-confirm-no
+    ~/my-cubrid/bin/cubrid-build-coordinator.sh stop-and-build
+
+build-only: compile
 
 build-for-ctp: build
 
 build-prepare-oos: build oos-prepare-server
 
-build-update: cmake-build-install-all update-cubrid-conf
+build-update: build update-cubrid-conf
 
 update-cubrid-conf:
     # sed -i 's/log_buffer_size=512M/log_buffer_size=4G/' $"($env.CUBRID)/conf/cubrid.conf"
@@ -470,14 +493,12 @@ cubrid-conf-edit:
 update-restart-testdb: update-cubrid-conf cubrid-server-restart-testdb
 
 cmake-build-install-3rdparty:
-    cmake --build --preset $env.PRESET_MODE --target 3rdparty/install
+    ~/my-cubrid/bin/cubrid-build-coordinator.sh install-target 3rdparty/install 0
 
 cmake-build-install-csql-util: cmake-build-install-3rdparty
-    cmake --build --preset $env.PRESET_MODE --target util/install
+    ~/my-cubrid/bin/cubrid-build-coordinator.sh install-target util/install 0
 
-cmake-build-install-all:
-    cmake --build --preset $env.PRESET_MODE --target install
-    ^echo "Build and install completed successfully!"
+cmake-build-install-all: install
 
 cmake-build-target:
     cmake-build-target-fuzzy.sh $CUBRID_BUILD_DIR

@@ -6,6 +6,7 @@ readonly repos=(
   "$HOME/gh/my-cubrid-jira"
   "$HOME/gh/my-cubrid-skills"
   "$HOME/gh/cubrid-oos-context"
+  "$HOME/gh/cb"
 )
 
 readonly preview_cmd='

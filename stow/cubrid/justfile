@@ -164,7 +164,7 @@ test-isolation *ARGS:
 #   blaming a test for a "regression" that's actually a stale build.
 #
 # Usage:
-#   just shell-debug ~/cubrid-testcases-private-ex/shell/_06_issues/_10_1h/bug_1638
+# just shell-debug ~/cubrid-testcases-private-ex/shell/_06_issues/_10_1h/bug_1638
 shell-debug TEST_DIR:
     #!/usr/bin/env bash
     set -euo pipefail
@@ -187,10 +187,10 @@ shell-debug TEST_DIR:
     SRC=~/CTP/conf/shell_ci.conf
     CONF=$(mktemp /tmp/shell_single.XXXXXX.conf)
     cp "$SRC" "$CONF"
-    sed -i "s|^scenario=.*|scenario={{TEST_DIR}}|"              "$CONF"
+    sed -i "s|^scenario=.*|scenario={{ TEST_DIR }}|"              "$CONF"
     sed -i "s|^testcase_update_yn=.*|testcase_update_yn=false|" "$CONF"
     sed -i "s|^testcase_exclude_from_file=.*|#&|"               "$CONF"
-    echo "[shell-debug] scenario={{TEST_DIR}}"
+    echo "[shell-debug] scenario={{ TEST_DIR }}"
     echo "[shell-debug] conf=$CONF"
     # ctp.sh (and its java/ant subprocesses) buffer or drop output when stdout
     # isn't a TTY. just's bash wrapper inherits a pipe, so direct invocation
@@ -211,7 +211,7 @@ shell-debug TEST_DIR:
     fi
     if grep -Eq 'Total Execution Case:[[:space:]]*0' "$CLEAN_LOG"; then
       rm -f "$CLEAN_LOG"
-      echo "[shell-debug] CTP executed zero shell tests; check TEST_DIR={{TEST_DIR}}; transcript=$LOG" >&2
+      echo "[shell-debug] CTP executed zero shell tests; check TEST_DIR={{ TEST_DIR }}; transcript=$LOG" >&2
       exit 1
     fi
     if ! grep -Eq 'Total Execution Case:' "$CLEAN_LOG"; then
@@ -228,7 +228,7 @@ shell-debug TEST_DIR:
 # Run every shell test under a subtree (e.g. one bucket like _06_issues/_10_1h).
 # Identical to `shell-debug` — just a name that makes intent obvious at the call site.
 # Usage:
-#   just shell-debug-many ~/cubrid-testcases-private-ex/shell/_06_issues/_10_1h
+# just shell-debug-many ~/cubrid-testcases-private-ex/shell/_06_issues/_10_1h
 shell-debug-many SUBTREE: (shell-debug SUBTREE)
 
 # CTP's built-in interactive mode: prompts on stdin for a test case path/name
@@ -255,7 +255,6 @@ test-oos-sql:
     } else {
         print $"Skipping test-oos-sql: base branch '($base_branch)' does not contain 'feat/oos'"
     }
-
 
 cmake-refresh-fetchcontent-depthlog:
     rm -rf $"($env.CUBRID_BUILD_DIR)/_deps/spdlog-src" 
@@ -401,7 +400,7 @@ configure-build-for-ctp: configure build-for-ctp
 
 # Compile first, then install only when this exact CUBRID environment is idle.
 # A busy runtime defers installation with retryable exit status 75.
-build:
+build-without-log:
     ~/my-cubrid/bin/cubrid-build-coordinator.sh build 0
 
 compile:
@@ -411,14 +410,27 @@ install:
     ~/my-cubrid/bin/cubrid-build-coordinator.sh install 0
 
 build-wait timeout='300':
-    ~/my-cubrid/bin/cubrid-build-coordinator.sh build {{timeout}}
+    ~/my-cubrid/bin/cubrid-build-coordinator.sh build {{ timeout }}
 
 install-wait timeout='300':
-    ~/my-cubrid/bin/cubrid-build-coordinator.sh install {{timeout}}
+    ~/my-cubrid/bin/cubrid-build-coordinator.sh install {{ timeout }}
 
 # Explicitly destructive escape hatch. The confirmation defaults to "no".
 stop-and-build: _gum-confirm-no
     ~/my-cubrid/bin/cubrid-build-coordinator.sh stop-and-build
+
+# Default build: build and save combined stdout/stderr without masking build failures.
+# Log lands in $CUBRID_BUILD_DIR/build.log (preset-specific, keeps the repo root clean).
+build:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    build_dir="$(direnv exec . bash -c 'echo "${CUBRID_BUILD_DIR:?set PRESET_MODE / allow direnv first}"')"
+    mkdir -p "$build_dir"
+    log_file="$build_dir/build.log"
+    echo "Logging build output to: $log_file"
+    direnv exec . just build-without-log 2>&1 | tee "$log_file"
+
+alias build-with-log := build
 
 build-only: compile
 
@@ -623,6 +635,7 @@ cmakecache-delete:
     /bin/rm -rf $CUBRID_BUILD_DIR/CMakeCache.txt $CUBRID_BUILD_DIR/CMakeFiles
 
 build-delete: _gum-confirm-no
+    #!/bin/bash
     /bin/rm -rf $CUBRID_BUILD_DIR
 
 uftrace-record:

@@ -48,9 +48,12 @@ if [ ! -e "$local_dir/justfile" ]; then
     cat >"$local_dir/justfile" <<EOF
 # Local recipes for $worktree_name.
 # Put helper scripts in ./scripts and SQL snippets in ./sql.
+# Add [working-directory(justfile_directory())] to recipes that must run at the worktree root.
 
-default:
-    @just --list
+set default-list
+set minimum-version := "1.55.0"
+set no-cd
+set shell := ["nu", "-c"]
 EOF
 fi
 

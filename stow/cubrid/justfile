@@ -28,6 +28,10 @@ mod oos '.just/oos.just'
 # Optional ticket or worktree-specific workflows.
 mod? local 'local.just'
 
+# Create a sibling worktree with a new branch based on an existing branch.
+worktree name new_branch branch:
+    cubrid-worktree-add.sh "{{name}}" "{{new_branch}}" "{{branch}}"
+
 # Prepare this worktree's personal build environment.
 prepare: core::prepare
 

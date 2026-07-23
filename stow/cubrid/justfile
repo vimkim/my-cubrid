@@ -60,6 +60,8 @@ install: core::install
 # Compile, install, and capture the complete build log.
 build: core::build
 
+configure-build: core::configure core::build
+
 # Run configured ctest tests while holding the runtime lock.
 ctest: core::ctest
 

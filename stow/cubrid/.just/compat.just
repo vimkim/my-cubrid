@@ -285,7 +285,7 @@ test-isolation TARGET='': (oos::test-isolation TARGET)
 # The former OOS SQL harness disappeared with cubrid-oos-test. Fail honestly instead of reporting a false pass.
 [private]
 test-oos-sql:
-    @print --stderr "test-oos-sql was retired: the cubrid-oos-test SQL harness no longer exists"
+    @printf '%s\n' "test-oos-sql was retired: the cubrid-oos-test SQL harness no longer exists" >&2
     @exit 2
 
 [private]

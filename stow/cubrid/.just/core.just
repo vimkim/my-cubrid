@@ -1,6 +1,6 @@
 set minimum-version := "1.55.0"
 set no-cd
-set shell := ["nu", "-c"]
+set shell := ["sh", "-cu"]
 
 # Prepare this worktree's personal tooling.
 [working-directory(justfile_directory())]
@@ -84,7 +84,7 @@ stop-and-build: confirm-no
 # Run configured ctest tests while holding the runtime lock.
 [working-directory(justfile_directory())]
 ctest:
-    ~/my-cubrid/bin/cubrid-build-coordinator.sh runtime 300 -- ctest --test-dir $"($env.CUBRID_BUILD_DIR)" --output-on-failure --verbose
+    ~/my-cubrid/bin/cubrid-build-coordinator.sh runtime 300 -- ctest --test-dir "$CUBRID_BUILD_DIR" --output-on-failure --verbose
 
 # Run the currently configured test suite. This is intentionally ctest-only.
 [working-directory(justfile_directory())]
@@ -107,33 +107,33 @@ install-csql-util: install-3rdparty
 # Choose and build one CMake target interactively.
 [working-directory(justfile_directory())]
 target:
-    cmake --build --preset $env.PRESET_MODE --target help | awk -F': ' '{print $1}' | fzf | xargs -I {} cmake --build --preset $env.PRESET_MODE --target {}
+    cmake --build --preset "$PRESET_MODE" --target help | awk -F': ' '{print $1}' | fzf | xargs -r -I {} cmake --build --preset "$PRESET_MODE" --target {}
 
 # Choose and build one CMake target with the external fuzzy helper.
 [working-directory(justfile_directory())]
 target-fuzzy:
-    cmake-build-target-fuzzy.sh $CUBRID_BUILD_DIR
+    cmake-build-target-fuzzy.sh "$CUBRID_BUILD_DIR"
 
 # Remove CMake's configure cache after explicit confirmation.
 [working-directory(justfile_directory())]
 clear-cache: confirm-no
-    /bin/rm -rf $"($env.CUBRID_BUILD_DIR)/CMakeCache.txt" $"($env.CUBRID_BUILD_DIR)/CMakeFiles"
+    /bin/rm -rf "$CUBRID_BUILD_DIR/CMakeCache.txt" "$CUBRID_BUILD_DIR/CMakeFiles"
 
 # Remove the selected build directory after explicit confirmation.
 [working-directory(justfile_directory())]
 delete-build: confirm-no
-    /bin/rm -rf $CUBRID_BUILD_DIR
+    /bin/rm -rf "$CUBRID_BUILD_DIR"
 
 # Remove the selected install directory after explicit confirmation.
 [working-directory(justfile_directory())]
 delete-install: confirm-no
-    /bin/rm -rf $CUBRID
+    /bin/rm -rf "$CUBRID"
 
 # Restow shared CUBRID and GDB files into the current worktree.
 [working-directory(justfile_directory())]
 stow-shared:
-    stow --dir=$"($env.MY_CUBRID)/stow" --target=. cubrid
-    stow --dir=$"($env.MY_CUBRID)/stow" --target=. gdb
+    stow --dir="$MY_CUBRID/stow" --target=. cubrid
+    stow --dir="$MY_CUBRID/stow" --target=. gdb
 
 # Restow shared files and create the worktree-local just module.
 [working-directory(justfile_directory())]
@@ -143,8 +143,8 @@ stow-create: stow-shared
 # Remove shared stowed CUBRID and GDB files from the current worktree.
 [working-directory(justfile_directory())]
 stow-delete:
-    stow -D --dir=$"($env.MY_CUBRID)/stow" --target=. cubrid
-    stow -D --dir=$"($env.MY_CUBRID)/stow" --target=. gdb
+    stow -D --dir="$MY_CUBRID/stow" --target=. cubrid
+    stow -D --dir="$MY_CUBRID/stow" --target=. gdb
 
 # Stow the shared cb directory layout.
 [working-directory(justfile_directory())]

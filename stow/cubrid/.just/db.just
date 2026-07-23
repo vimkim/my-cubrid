@@ -1,6 +1,6 @@
 set minimum-version := "1.55.0"
 set no-cd
-set shell := ["nu", "-c"]
+set shell := ["sh", "-cu"]
 
 # Start testdb while holding the runtime lock.
 [working-directory(justfile_directory())]
@@ -20,7 +20,7 @@ stop-testdb:
 # Best-effort stop of testdb.
 [working-directory(justfile_directory())]
 stop-testdb-try:
-    do -i { ~/my-cubrid/bin/cubrid-build-coordinator.sh runtime 300 -- cubrid server stop testdb }
+    ~/my-cubrid/bin/cubrid-build-coordinator.sh runtime 300 -- cubrid server stop testdb || true
 
 # Start demodb while holding the runtime lock.
 [working-directory(justfile_directory())]
@@ -65,8 +65,8 @@ unloaddb-cs:
 # Create testdb.
 [working-directory(justfile_directory())]
 create-testdb:
-    ^mkdir -p $"($env.CUBRID_DATABASES)/testdb"
-    cubrid createdb --db-volume-size=20M --log-volume-size=20M testdb en_US.utf8 -F $"($env.CUBRID_DATABASES)/testdb"
+    mkdir -p "$CUBRID_DATABASES/testdb"
+    cubrid createdb --db-volume-size=20M --log-volume-size=20M testdb en_US.utf8 -F "$CUBRID_DATABASES/testdb"
 
 # Delete testdb through the CUBRID utility.
 [working-directory(justfile_directory())]
@@ -77,9 +77,9 @@ delete-testdb:
 [working-directory(justfile_directory())]
 delete-all:
     gum confirm "delete all db? This is dangerous"
-    /bin/rm -rf $"($env.CUBRID_DATABASES)"
+    /bin/rm -rf "$CUBRID_DATABASES"
     /bin/rm -rf testdb*
-    ^mkdir -p $"($env.CUBRID_DATABASES)/testdb"
+    mkdir -p "$CUBRID_DATABASES/testdb"
 
 # Recreate testdb from an empty local database directory.
 [working-directory(justfile_directory())]
@@ -92,9 +92,9 @@ stop-recreate-start-testdb: stop-testdb recreate-testdb start-testdb
 # Create and load demodb.
 [working-directory(justfile_directory())]
 create-demodb:
-    ^mkdir -p $"($env.CUBRID_DATABASES)/demodb"
-    cubrid createdb --db-page-size=16K --db-volume-size=20M --log-volume-size=20M demodb en_US.utf8 -F $"($env.CUBRID_DATABASES)/demodb"
-    cubrid loaddb -u dba -s $"($env.CUBRID)/demo/demodb_schema" -d $"($env.CUBRID)/demo/demodb_objects" demodb
+    mkdir -p "$CUBRID_DATABASES/demodb"
+    cubrid createdb --db-page-size=16K --db-volume-size=20M --log-volume-size=20M demodb en_US.utf8 -F "$CUBRID_DATABASES/demodb"
+    cubrid loaddb -u dba -s "$CUBRID/demo/demodb_schema" -d "$CUBRID/demo/demodb_objects" demodb
 
 # Delete demodb.
 [working-directory(justfile_directory())]
@@ -108,26 +108,26 @@ recreate-demodb: delete-demodb create-demodb
 # Remove all local databases after explicit confirmation.
 [working-directory(justfile_directory())]
 remove-databases: confirm-no
-    /bin/rm -rf $CUBRID_DATABASES
+    /bin/rm -rf "$CUBRID_DATABASES"
 
 # Show enable_string_compression from the installed config and effective testdb parameters.
 [working-directory(justfile_directory())]
 get-string-compression:
-    do -i { crudini --get $"($env.CUBRID)/conf/cubrid.conf" 'common' enable_string_compression }
+    crudini --get "$CUBRID/conf/cubrid.conf" common enable_string_compression || true
     just db paramdump-string-compression
 
 # Enable string compression.
 [working-directory(justfile_directory())]
 enable-string-compression: get-string-compression
-    crudini --set $"($env.CUBRID)/conf/cubrid.conf" 'common' enable_string_compression yes
-    print "string compression enabled:"
+    crudini --set "$CUBRID/conf/cubrid.conf" common enable_string_compression yes
+    printf '%s\n' "string compression enabled:"
     just db get-string-compression
 
 # Disable string compression.
 [working-directory(justfile_directory())]
 disable-string-compression: get-string-compression
-    print "string compression disabled:"
-    crudini --set $"($env.CUBRID)/conf/cubrid.conf" 'common' enable_string_compression no
+    printf '%s\n' "string compression disabled:"
+    crudini --set "$CUBRID/conf/cubrid.conf" common enable_string_compression no
     just db get-string-compression
 
 # Show effective string-compression configuration for testdb.
@@ -138,72 +138,72 @@ paramdump-string-compression:
 # Show use_system_malloc.
 [working-directory(justfile_directory())]
 get-use-system-malloc:
-    do -i { crudini --get $"($env.CUBRID)/conf/cubrid.conf" 'common' use_system_malloc }
+    crudini --get "$CUBRID/conf/cubrid.conf" common use_system_malloc || true
 
 # Enable system malloc.
 [working-directory(justfile_directory())]
 enable-use-system-malloc: get-use-system-malloc
-    crudini --set $"($env.CUBRID)/conf/cubrid.conf" 'common' use_system_malloc yes
+    crudini --set "$CUBRID/conf/cubrid.conf" common use_system_malloc yes
     just db get-use-system-malloc
 
 # Disable system malloc.
 [working-directory(justfile_directory())]
 disable-use-system-malloc: get-use-system-malloc
-    crudini --set $"($env.CUBRID)/conf/cubrid.conf" 'common' use_system_malloc no
+    crudini --set "$CUBRID/conf/cubrid.conf" common use_system_malloc no
     just db get-use-system-malloc
 
 # Show unfill_factor.
 [working-directory(justfile_directory())]
 get-unfill-factor:
-    do -i { crudini --get $"($env.CUBRID)/conf/cubrid.conf" 'common' unfill_factor }
+    crudini --get "$CUBRID/conf/cubrid.conf" common unfill_factor || true
 
 # Set unfill_factor to zero.
 [working-directory(justfile_directory())]
 set-unfill-factor:
-    crudini --set $"($env.CUBRID)/conf/cubrid.conf" 'common' unfill_factor 0.0
+    crudini --set "$CUBRID/conf/cubrid.conf" common unfill_factor 0.0
 
 # Show cubrid_port_id.
 [working-directory(justfile_directory())]
 get-port:
-    crudini --get $"($env.CUBRID)/conf/cubrid.conf" 'common' cubrid_port_id
+    crudini --get "$CUBRID/conf/cubrid.conf" common cubrid_port_id
 
 # Set cubrid_port_id to the personal test port.
 [working-directory(justfile_directory())]
 set-port: get-port
-    crudini --set $"($env.CUBRID)/conf/cubrid.conf" 'common' cubrid_port_id 12345
+    crudini --set "$CUBRID/conf/cubrid.conf" common cubrid_port_id 12345
 
 # Show data_buffer_size.
 [working-directory(justfile_directory())]
 get-data-buffer-size:
-    crudini --get $"($env.CUBRID)/conf/cubrid.conf" 'common' data_buffer_size
+    crudini --get "$CUBRID/conf/cubrid.conf" common data_buffer_size
 
 # Set data_buffer_size to 20G.
 [working-directory(justfile_directory())]
 set-data-buffer-20g: get-data-buffer-size
-    crudini --set $"($env.CUBRID)/conf/cubrid.conf" 'common' data_buffer_size 20G
+    crudini --set "$CUBRID/conf/cubrid.conf" common data_buffer_size 20G
     just db get-data-buffer-size
 
 # Set data_buffer_size to 50G.
 [working-directory(justfile_directory())]
 set-data-buffer-50g: get-data-buffer-size
-    crudini --set $"($env.CUBRID)/conf/cubrid.conf" 'common' data_buffer_size 50G
+    crudini --set "$CUBRID/conf/cubrid.conf" common data_buffer_size 50G
     just db get-data-buffer-size
 
 # Set data_buffer_size to 512M.
 [working-directory(justfile_directory())]
 set-data-buffer-512m: get-data-buffer-size
-    crudini --set $"($env.CUBRID)/conf/cubrid.conf" 'common' data_buffer_size 512m
+    crudini --set "$CUBRID/conf/cubrid.conf" common data_buffer_size 512m
     just db get-data-buffer-size
 
 # Edit the installed cubrid.conf.
 [working-directory(justfile_directory())]
 edit-config:
-    nvim $"($env.CUBRID)/conf/cubrid.conf"
+    nvim "$CUBRID/conf/cubrid.conf"
 
 # Edit databases.txt.
 [working-directory(justfile_directory())]
 edit-databases:
-    v $"($env.CUBRID_DATABASES)/databases.txt"
+    nvim "$CUBRID_DATABASES/databases.txt"
 
 [private]
 [working-directory(justfile_directory())]

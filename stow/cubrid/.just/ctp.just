@@ -1,6 +1,6 @@
 set minimum-version := "1.55.0"
 set no-cd
-set shell := ["nu", "-c"]
+set shell := ["sh", "-cu"]
 
 # Run one CTP shell test directory against the active local build.
 [working-directory(justfile_directory())]

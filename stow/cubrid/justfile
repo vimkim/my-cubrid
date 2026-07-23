@@ -1,6 +1,6 @@
 set default-list
 set minimum-version := "1.55.0"
-set shell := ["nu", "-c"]
+set shell := ["sh", "-cu"]
 
 import '.just/compat.just'
 

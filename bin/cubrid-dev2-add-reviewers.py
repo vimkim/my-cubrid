@@ -7,7 +7,6 @@ import argparse
 import json
 from pathlib import Path
 import re
-import shutil
 import subprocess
 import sys
 import tomllib
@@ -17,7 +16,7 @@ from urllib.parse import urlsplit
 FALLBACK_TEAMMATES = (
     "hgryoo",
     "hornetmj",
-    "hyahong",
+    # "hyahong",
     "vimkim",
     "H2SU",
     "YeunjunLee",
@@ -37,7 +36,14 @@ def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
         description="Request reviews from all dev2 teammates for a GitHub pull request."
     )
-    parser.add_argument("pr_url", help="GitHub PR URL, e.g. https://github.com/CUBRID/cubrid/pull/1")
+    parser.add_argument(
+        "pr",
+        nargs="?",
+        help=(
+            "PR URL, number, or branch; defaults to the PR associated with "
+            "the current worktree"
+        ),
+    )
     parser.add_argument(
         "--config",
         type=Path,
@@ -47,7 +53,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--dry-run",
         action="store_true",
-        help="show the reviewers and command without contacting GitHub",
+        help="show the reviewers and edit command without modifying GitHub",
     )
     return parser.parse_args()
 
@@ -112,6 +118,31 @@ def run_gh(arguments: list[str]) -> str:
     return result.stdout.strip()
 
 
+def resolve_pr_url(pr: str | None) -> str:
+    if pr is not None:
+        try:
+            validate_pr_url(pr)
+        except UserError:
+            pass
+        else:
+            return pr
+
+    arguments = ["pr", "view"]
+    if pr is not None:
+        arguments.append(pr)
+    arguments.extend(["--json", "url"])
+
+    output = run_gh(arguments)
+    try:
+        pr_url = json.loads(output)["url"]
+    except (json.JSONDecodeError, KeyError, TypeError) as exc:
+        raise UserError("could not determine the PR URL from gh output") from exc
+    if not isinstance(pr_url, str) or not pr_url:
+        raise UserError("could not determine the PR URL from gh output")
+    validate_pr_url(pr_url)
+    return pr_url
+
+
 def get_pr_author(pr_url: str) -> str:
     output = run_gh(["pr", "view", pr_url, "--json", "author"])
     try:
@@ -126,30 +157,28 @@ def get_pr_author(pr_url: str) -> str:
 def main() -> int:
     args = parse_args()
     try:
-        validate_pr_url(args.pr_url)
+        pr_url = resolve_pr_url(args.pr)
         teammates, source = load_teammates(args.config)
 
+        print(f"Pull request: {pr_url}")
         print(f"Reviewer source: {source}")
         print(f"Configured reviewers ({len(teammates)}): {', '.join(teammates)}")
 
         if args.dry_run:
-            command = ["gh", "pr", "edit", args.pr_url, "--add-reviewer", ",".join(teammates)]
+            command = ["gh", "pr", "edit", pr_url, "--add-reviewer", ",".join(teammates)]
             print("Dry run; command:")
             print(" ".join(command))
             print("The PR author will be excluded during an actual run.")
             return 0
 
-        if shutil.which("gh") is None:
-            raise UserError("GitHub CLI ('gh') is not installed or not in PATH")
-
-        author = get_pr_author(args.pr_url)
+        author = get_pr_author(pr_url)
         reviewers = [login for login in teammates if login.casefold() != author.casefold()]
         if not reviewers:
             raise UserError("no eligible reviewers remain after excluding the PR author")
         if len(reviewers) != len(teammates):
             print(f"Skipping PR author: {author}")
 
-        run_gh(["pr", "edit", args.pr_url, "--add-reviewer", ",".join(reviewers)])
+        run_gh(["pr", "edit", pr_url, "--add-reviewer", ",".join(reviewers)])
         print(f"Requested reviews from {len(reviewers)} teammate(s): {', '.join(reviewers)}")
         return 0
     except UserError as exc:

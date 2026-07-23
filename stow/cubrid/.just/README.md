@@ -16,6 +16,7 @@ Shared recipes live in these namespaces:
 - `db`: local database lifecycle, server control, csql, and configuration
 - `ctp`: focused CTP shell-test debugging
 - `debug`: cgdb, core, and rr helpers
+- `github`: pull-request helpers, including dev2 review requests
 - `maint`: formatting and build-tree maintenance
 - `profile`: perf and uftrace helpers
 - `oos`: shared OOS preparation and isolation testing

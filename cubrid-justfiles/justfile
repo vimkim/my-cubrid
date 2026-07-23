@@ -1,0 +1,8 @@
+set default-list
+set minimum-version := "1.55.0"
+
+# Generic CUBRID commands are exposed as top-level recipes.
+import 'global/justfile'
+
+# Dev2-specific commands are exposed as `dev2::<recipe>`.
+mod dev2

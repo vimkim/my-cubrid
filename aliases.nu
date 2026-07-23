@@ -1,10 +1,25 @@
 export-env { $env.MY_CUBRID = $"($env.HOME)/my-cubrid" }
 alias cs = csql.sh
 alias cuali = nvim ~/my-cubrid/aliases.nu
-alias nr = commandline edit (just.nu -f ~/my-cubrid/remote-nu.just -d . | str trim)
+def --env nr [] {
+  let justfile = ($env.MY_CUBRID | path join "remote-nu.just")
+  let recipe = (just-pick-and-print.nu -f $justfile -d . | str trim)
+  if ($recipe | is-not-empty) {
+    commandline edit $"just -f ~/my-cubrid/remote-nu.just -d . ($recipe)"
+  }
+}
 alias nre = nvim ~/my-cubrid/remote-nu.just
-alias ncub = commandline edit (just.nu -f ~/my-cubrid/stow/cubrid/justfile -d . | str trim)
-alias ncube = nvim ~/my-cubrid/stow/cubrid/justfile
+def --env nc [] {
+  let justfile = ($env.MY_CUBRID | path join "cubrid-justfiles/justfile")
+  let recipe = (just-pick-and-print.nu -f $justfile -d . | str trim)
+  if ($recipe | is-not-empty) {
+    commandline edit $"just -f ~/my-cubrid/cubrid-justfiles/justfile -d . ($recipe)"
+  }
+}
+alias ncub = nc
+alias ncube = nvim ~/my-cubrid/cubrid-justfiles/justfile
+
+alias my-cubrid-init = stow --dir=$"($env.MY_CUBRID)/stow" --target=. cubrid
 
 alias tcsql = cd ~/gh/tc/cubrid-testcases/
 alias tcshell = cd ~/cubrid-testcases-private-ex/

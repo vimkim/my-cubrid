@@ -1,0 +1,5 @@
+set no-cd
+
+# Request reviews from the configured CUBRID dev2 teammates.
+add-reviewers:
+    cubrid-dev2-add-reviewers.py

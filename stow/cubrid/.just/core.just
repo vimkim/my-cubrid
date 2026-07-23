@@ -19,6 +19,27 @@ configure:
 select-preset:
     cmake-preset-mode-select.sh
 
+# Set a configure preset non-interactively for this worktree.
+[working-directory(justfile_directory())]
+set-preset $preset:
+    #!/usr/bin/env bash
+    set -euo pipefail
+
+    available_presets="$(
+        cmake --list-presets=configure |
+        sed -n 's/^[[:space:]]*"\([^"]*\)".*/\1/p'
+    )"
+
+    if ! grep -Fxq "$preset" <<<"$available_presets"; then
+        printf 'Unknown configure preset: %s\n' "$preset" >&2
+        printf 'Available presets:\n' >&2
+        sed 's/^/  /' <<<"$available_presets" >&2
+        exit 2
+    fi
+
+    printf 'PRESET_MODE=%s\n' "$preset" >.env
+    printf 'Selected preset: %s\n' "$preset"
+
 # Compile without installing.
 [working-directory(justfile_directory())]
 compile:

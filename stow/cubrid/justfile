@@ -42,6 +42,15 @@ prepare: core::prepare
 # Configure the selected CMake preset.
 configure: core::configure
 
+# Set any valid CMake configure preset for this worktree.
+preset mode: (core::set-preset mode)
+
+# Select the commonly used GCC debug preset.
+preset-debug-gcc: (core::set-preset "debug_gcc")
+
+# Select the commonly used GCC release preset.
+preset-release-gcc: (core::set-preset "release_gcc")
+
 # Compile without installing.
 compile: core::compile
 

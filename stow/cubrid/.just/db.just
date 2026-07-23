@@ -208,4 +208,5 @@ edit-databases:
 [private]
 [working-directory(justfile_directory())]
 confirm-no:
-    @gum confirm --default=false
+    echo "dangerous"
+    # @gum confirm --default=false

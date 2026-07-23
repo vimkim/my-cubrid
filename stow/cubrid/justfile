@@ -82,3 +82,9 @@ install-wait timeout='300': (core::install-wait timeout)
 
 # Stop active CUBRID processes and build after explicit confirmation.
 stop-and-build: core::stop-and-build
+
+dwb-off:
+    ini.sh -s common "$CUBRID/conf/cubrid.conf" double_write_buffer_size 0
+
+dwb-get:
+    ini.sh -s common "$CUBRID/conf/cubrid.conf" double_write_buffer_size

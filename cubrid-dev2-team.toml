@@ -1,9 +1,15 @@
 # cubrid-dev2-pr configuration
 teammates = [
-  "hgryoo", "hornetmj", "hyahong", "vimkim", "H2SU",
-  "YeunjunLee", "youngjun9072", "InChiJun", "lht1199",
+  "hgryoo",
+  "hornetmj",
+  # "hyahong",
+  "vimkim",
+  "H2SU",
+  "YeunjunLee",
+  "youngjun9072",
+  "InChiJun",
+  "lht1199",
 ]
-reviewer = "vimkim"          # whose "my review" state is shown
-repo     = "CUBRID/cubrid"   # target repo
-limit    = 300               # gh pr list --limit
-
+reviewer = "vimkim" # whose "my review" state is shown
+repo = "CUBRID/cubrid" # target repo
+limit = 300 # gh pr list --limit

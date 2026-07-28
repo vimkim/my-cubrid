@@ -16,6 +16,7 @@ Usage:
   cubrid-podman-test.sh status CONTAINER
   cubrid-podman-test.sh sql CONTAINER [SQL]
   cubrid-podman-test.sh exec CONTAINER COMMAND [ARG...]
+  cubrid-podman-test.sh script CONTAINER HOST_SCRIPT [-- SCRIPT_ARGS...]
   cubrid-podman-test.sh shell CONTAINER
   cubrid-podman-test.sh logs CONTAINER
   cubrid-podman-test.sh stop CONTAINER
@@ -46,6 +47,8 @@ Environment contract available to tests:
 
 The CUBRID install tree and test directory are mounted read-only. Tests should
 write under $CUBRID_PODMAN_STATE_DIR, $CUBRID_PODMAN_DB_DIR, /work, or /tmp.
+The script command streams a host shell script to bash in an existing container;
+it does not copy the script into the container or create another container.
 EOF
 }
 
@@ -434,6 +437,28 @@ run_exec()
   podman exec "${container_name}" "$@"
 }
 
+run_script()
+{
+  local container_name=${1:-}
+  [[ -n "${container_name}" ]] || die "script requires CONTAINER"
+  shift
+
+  local host_script=${1:-}
+  [[ -n "${host_script}" ]] || die "script requires HOST_SCRIPT"
+  shift
+  if [[ ${1:-} == -- ]]; then
+    shift
+  fi
+
+  [[ -r "${host_script}" && -f "${host_script}" ]] \
+    || die "host script is not readable: ${host_script}"
+  require_podman
+  require_managed_container "${container_name}"
+  container_running "${container_name}" || die "container is not running: ${container_name}"
+
+  podman exec --interactive "${container_name}" /bin/bash -s -- "$@" < "${host_script}"
+}
+
 open_shell()
 {
   local container_name=${1:-}
@@ -485,6 +510,9 @@ case "${command_name}" in
     ;;
   exec)
     run_exec "$@"
+    ;;
+  script)
+    run_script "$@"
     ;;
   shell)
     open_shell "$@"

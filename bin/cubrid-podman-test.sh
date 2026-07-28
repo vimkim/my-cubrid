@@ -2,6 +2,15 @@
 
 set -euo pipefail
 
+# AI-agent example: start a new persistent CUBRID server container for one TC.
+#
+#   cubrid-podman-test.sh run \
+#     --name cbrd26067-force-outline \
+#     --cubrid-root "$CUBRID" \
+#     --server \
+#     --db-name c26fo16 \
+#     /absolute/path/to/test_force_outline_16b.sh
+
 RUNNER_DIR=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)
 DEFAULT_IMAGE=${CUBRID_PODMAN_TEST_IMAGE:-registry.access.redhat.com/ubi9/ubi-init:latest}
 DEFAULT_TIMEOUT=${CUBRID_PODMAN_TEST_TIMEOUT:-120}
@@ -24,6 +33,14 @@ Usage:
 Run a CUBRID shell test in an isolated Podman container and keep the container
 alive after PASS or FAIL for inspection. Database files are ephemeral and are
 permanently removed only by the explicit stop command.
+
+Example: start a new persistent server container and run one shell TC:
+  cubrid-podman-test.sh run \
+    --name cbrd26067-force-outline \
+    --cubrid-root "$CUBRID" \
+    --server \
+    --db-name c26fo16 \
+    /absolute/path/to/test_force_outline_16b.sh
 
 Run options:
   -n, --name NAME          Container name; generated when omitted.

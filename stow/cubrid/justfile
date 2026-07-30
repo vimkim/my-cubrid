@@ -42,6 +42,9 @@ worktree-as name new_branch base:
 # Prepare this worktree's personal build environment.
 prepare: core::prepare
 
+# Prepare this worktree with the default GCC debug preset.
+prepare-debug-gcc: preset-debug-gcc prepare
+
 # Configure the selected CMake preset.
 configure: core::configure
 

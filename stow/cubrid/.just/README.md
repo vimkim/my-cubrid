@@ -2,7 +2,7 @@
 
 The root `justfile` intentionally exposes only the stable build contract:
 
-- `prepare`, `configure`, `compile`, `install`
+- `prepare`, `prepare-debug-gcc`, `configure`, `compile`, `install`
 - `build`, `ctest`, `test`, `build-test`
 - `build-wait`, `install-wait`, `stop-and-build`
 

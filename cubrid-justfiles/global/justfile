@@ -2,6 +2,7 @@
 
 prepare-build:
     stow --dir="$MY_CUBRID/stow" --target=. cubrid
+    just --justfile ./justfile --working-directory . prepare-debug-gcc
 
 # Start a new isolated CUBRID server container, run a shell TC, and keep it alive.
 # AI-agent example:

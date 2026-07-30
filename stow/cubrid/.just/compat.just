@@ -298,7 +298,7 @@ alias n2 := db::recreate-testdb
 alias n4 := db::unloaddb-sa
 
 [private]
-alias nb := oos::build-prepare
+alias nb := core::build
 
 [private]
 alias np := oos::prepare-server
@@ -314,6 +314,9 @@ alias c := configure
 
 [private]
 alias t := test
+
+[private]
+alias cb := configure-build
 
 # These live only in develop's local module. Recursive dispatch keeps other worktrees parseable.
 [private]

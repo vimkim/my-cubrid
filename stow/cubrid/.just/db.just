@@ -110,6 +110,11 @@ recreate-demodb: delete-demodb create-demodb
 remove-databases: confirm-no
     /bin/rm -rf "$CUBRID_DATABASES"
 
+# Interactively update a CUBRID system parameter in the active runtime.
+[working-directory(justfile_directory())]
+ini database='testdb' section='common':
+    cubrid-ini-fzf --database "{{database}}" --section "{{section}}"
+
 # Show enable_string_compression from the installed config and effective testdb parameters.
 [working-directory(justfile_directory())]
 get-string-compression:

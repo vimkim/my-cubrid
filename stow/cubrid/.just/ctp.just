@@ -16,3 +16,15 @@ shell-debug-many SUBTREE:
 [working-directory(justfile_directory())]
 shell-debug-interactive:
     ~/CTP/bin/ctp.sh shell --interactive -c ~/CTP/conf/shell_ci.conf
+
+# Example:
+#   just ctp podman-test-new cbrd26067-force-outline c26fo16 /absolute/path/to/test_force_outline_16b.sh
+# Start an isolated CUBRID server container, run one shell TC, and keep it alive.
+[working-directory(justfile_directory())]
+podman-test-new container db_name test_script:
+    "$MY_CUBRID/bin/cubrid-podman-test.sh" run \
+        --name "{{container}}" \
+        --cubrid-root "$CUBRID" \
+        --server \
+        --db-name "{{db_name}}" \
+        "{{test_script}}"

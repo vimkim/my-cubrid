@@ -1,5 +1,17 @@
 # Personal CUBRID just modules
 
+## Ownership
+
+`stow/cubrid` is the worktree-local interface for CUBRID server development and
+maintenance. Its recipes may depend on an initialized worktree and environment,
+including `$CUBRID`, `$CUBRID_BUILD_DIR`, `$CUBRID_DATABASES`, and the current
+source-tree layout.
+
+Globally accessible launchers used across CUBRID work contexts belong in
+`cubrid-justfiles`. Put a recipe here when it operates on the active worktree or
+runtime; put it in `cubrid-justfiles` when it helps select, initialize, or
+coordinate work contexts without depending on the stowed worktree interface.
+
 The root `justfile` intentionally exposes only the stable build contract:
 
 - `prepare`, `prepare-debug-gcc`, `configure`, `compile`, `install`

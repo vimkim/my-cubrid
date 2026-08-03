@@ -3,18 +3,3 @@
 prepare-build:
     stow --dir="$MY_CUBRID/stow" --target=. cubrid
     just --justfile ./justfile --working-directory . prepare-debug-gcc
-
-# Interactively update a CUBRID system parameter.
-ini database='testdb' section='common':
-    cubrid-ini-fzf --database "{{database}}" --section "{{section}}"
-
-# Start a new isolated CUBRID server container, run a shell TC, and keep it alive.
-# AI-agent example:
-#   just podman-test-new cbrd26067-force-outline c26fo16 /absolute/path/to/test_force_outline_16b.sh
-podman-test-new container db_name test_script:
-    "$MY_CUBRID/bin/cubrid-podman-test.sh" run \
-        --name "{{container}}" \
-        --cubrid-root "$CUBRID" \
-        --server \
-        --db-name "{{db_name}}" \
-        "{{test_script}}"

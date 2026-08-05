@@ -1,6 +1,7 @@
 # Import generic CUBRID recipes here so they appear without a module prefix.
 
 prepare-build:
+    "{{ source_directory() }}/../../stow-create.sh"
     just --justfile ./justfile --working-directory . prepare-debug-gcc
 
 # Create NEW_BRANCH from BASE_BRANCH in both CUBRID testcase repositories.

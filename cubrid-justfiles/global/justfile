@@ -2,3 +2,7 @@
 
 prepare-build:
     just --justfile ./justfile --working-directory . prepare-debug-gcc
+
+# Create NEW_BRANCH from BASE_BRANCH in both CUBRID testcase repositories.
+tc-branch-create base_branch new_branch:
+    cubrid-tc-branch-create.sh "{{base_branch}}" "{{new_branch}}"

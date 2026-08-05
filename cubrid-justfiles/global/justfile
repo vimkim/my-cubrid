@@ -1,5 +1,4 @@
 # Import generic CUBRID recipes here so they appear without a module prefix.
 
 prepare-build:
-    stow --dir="$MY_CUBRID/stow" --target=. cubrid
     just --justfile ./justfile --working-directory . prepare-debug-gcc

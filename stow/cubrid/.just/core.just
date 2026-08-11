@@ -12,7 +12,18 @@ prepare: stow-create
 # Configure the selected CMake preset.
 [working-directory(justfile_directory())]
 configure:
-    ~/my-cubrid/bin/cubrid-build-coordinator.sh configure
+    #!/usr/bin/env bash
+    set -euo pipefail
+
+    build_dir="$(direnv exec . bash -c 'printf "%s" "${CUBRID_BUILD_DIR:?set PRESET_MODE / allow direnv first}"')"
+    jdk_dir="$build_dir/vm"
+
+    if [[ ! -d "$jdk_dir/jdk8" ]]; then
+      cmake -E make_directory "$jdk_dir"
+      cmake -DJDK_DIR="$jdk_dir" -P pl_engine/cmake/install_jdk.cmake
+    fi
+
+    direnv exec . "$HOME/my-cubrid/bin/cubrid-build-coordinator.sh" configure
 
 # Select a preset interactively. Autonomous workflows should use the bootstrap script instead.
 [working-directory(justfile_directory())]

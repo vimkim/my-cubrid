@@ -9,20 +9,72 @@ prepare: stow-create
     direnv allow
     lefthook install
 
-# Configure the selected CMake preset.
+# Reuse JAVA_HOME at the build-tree path required by CUBRID's CMake files.
+[private]
 [working-directory(justfile_directory())]
-configure:
+ensure-build-jdk:
     #!/usr/bin/env bash
     set -euo pipefail
 
     build_dir="$(direnv exec . bash -c 'printf "%s" "${CUBRID_BUILD_DIR:?set PRESET_MODE / allow direnv first}"')"
+    java_home="$(direnv exec . bash -c 'printf "%s" "${JAVA_HOME:-}"')"
     jdk_dir="$build_dir/vm"
+    jdk_home="$jdk_dir/jdk8"
+    jdk_archive="$jdk_dir/jdk8.tar.gz"
 
-    if [[ ! -d "$jdk_dir/jdk8" ]]; then
-      cmake -E make_directory "$jdk_dir"
-      cmake -DJDK_DIR="$jdk_dir" -P pl_engine/cmake/install_jdk.cmake
+    cmake -E make_directory "$jdk_dir"
+
+    if [[ -n "$java_home" ]]; then
+      for required_path in bin/java bin/javac include/jni.h; do
+        if [[ ! -e "$java_home/$required_path" ]]; then
+          printf 'JAVA_HOME is not a usable JDK (missing %s): %s\n' "$required_path" "$java_home" >&2
+          exit 1
+        fi
+      done
+
+      java_home="$(realpath -e -- "$java_home")"
+      current_jdk=""
+      if [[ -L "$jdk_home" ]]; then
+        current_jdk="$(realpath -e -- "$jdk_home" 2>/dev/null || true)"
+      fi
+
+      if [[ "$current_jdk" != "$java_home" ]]; then
+        if [[ -L "$jdk_home" ]]; then
+          cmake -E remove "$jdk_home"
+        elif [[ -d "$jdk_home" ]]; then
+          cmake -E remove_directory "$jdk_home"
+        fi
+        cmake -E create_symlink "$java_home" "$jdk_home"
+      fi
+
+      # pl_install_jdk checks the archive before the JDK directory. Keep a
+      # marker so its always-run custom target does not download needlessly.
+      cmake -E touch "$jdk_archive"
+      printf 'Using JAVA_HOME JDK: %s\n' "$java_home"
+      exit 0
     fi
 
+    if [[ -d "$jdk_home" ]]; then
+      cmake -E touch "$jdk_archive"
+      printf 'Using existing build JDK: %s\n' "$jdk_home"
+      exit 0
+    fi
+
+    if [[ -L "$jdk_home" ]]; then
+      cmake -E remove "$jdk_home"
+    fi
+    if [[ -e "$jdk_archive" && ! -s "$jdk_archive" ]]; then
+      cmake -E remove "$jdk_archive"
+    fi
+
+    printf 'JAVA_HOME is not set; downloading the bundled Temurin JDK 8\n'
+    cmake -DJDK_DIR="$jdk_dir" -P pl_engine/cmake/install_jdk.cmake
+
+# Configure the selected CMake preset.
+[working-directory(justfile_directory())]
+configure: ensure-build-jdk
+    #!/usr/bin/env bash
+    set -euo pipefail
     direnv exec . "$HOME/my-cubrid/bin/cubrid-build-coordinator.sh" configure
 
 # Select a preset interactively. Autonomous workflows should use the bootstrap script instead.
@@ -53,7 +105,7 @@ set-preset $preset:
 
 # Compile without installing.
 [working-directory(justfile_directory())]
-compile:
+compile: ensure-build-jdk
     ~/my-cubrid/bin/cubrid-build-coordinator.sh compile
 
 # Install an already-compiled tree when its runtime is idle.
@@ -63,12 +115,12 @@ install:
 
 # Compile and install without build-log capture.
 [working-directory(justfile_directory())]
-build-without-log:
+build-without-log: ensure-build-jdk
     ~/my-cubrid/bin/cubrid-build-coordinator.sh build 0
 
 # Compile, install, and capture the complete build log.
 [working-directory(justfile_directory())]
-build:
+build: ensure-build-jdk
     #!/usr/bin/env bash
     set -euo pipefail
     build_dir="$(direnv exec . bash -c 'echo "${CUBRID_BUILD_DIR:?set PRESET_MODE / allow direnv first}"')"
@@ -79,7 +131,7 @@ build:
 
 # Wait up to `timeout` seconds for an idle runtime, then build.
 [working-directory(justfile_directory())]
-build-wait timeout='300':
+build-wait timeout='300': ensure-build-jdk
     ~/my-cubrid/bin/cubrid-build-coordinator.sh build {{ timeout }}
 
 # Wait up to `timeout` seconds for an idle runtime, then install.

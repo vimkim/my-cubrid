@@ -170,8 +170,23 @@ compile_unlocked()
   cmake --build --preset "$PRESET_MODE"
 }
 
+prepare_jdk_install_destination()
+{
+  local build_jdk="$CUBRID_BUILD_DIR/vm/jdk8"
+  local install_jdk="$INSTALL_PREFIX/vm/jdk8"
+
+  if [[ -L "$build_jdk" && -d "$install_jdk" && ! -L "$install_jdk" ]]; then
+    printf 'Replacing bundled install JDK with JAVA_HOME symlink: %s\n' "$install_jdk"
+    cmake -E remove_directory "$install_jdk"
+  elif [[ -d "$build_jdk" && ! -L "$build_jdk" && -L "$install_jdk" ]]; then
+    printf 'Replacing JAVA_HOME install symlink with bundled JDK: %s\n' "$install_jdk"
+    cmake -E remove "$install_jdk"
+  fi
+}
+
 install_unlocked()
 {
+  prepare_jdk_install_destination
   cmake --install "$CUBRID_BUILD_DIR" --prefix "$CUBRID"
   printf 'Build and install completed successfully!\n'
 }

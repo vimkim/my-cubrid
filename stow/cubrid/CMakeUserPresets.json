@@ -157,6 +157,10 @@
     {
       "name": "debug_gcc",
       "inherits": "user_default",
+      "environment": {
+        "CC": "gcc -std=gnu17",
+        "CXX": "g++ -Wno-error=stringop-overflow"
+      },
       "cacheVariables": {
         "CMAKE_BUILD_TYPE": "Debug",
         "CMAKE_C_FLAGS": "-fdiagnostics-color=always",

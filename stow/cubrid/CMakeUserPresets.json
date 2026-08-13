@@ -18,9 +18,6 @@
         "CMAKE_C_COMPILER_LAUNCHER": "ccache",
         "CMAKE_CXX_COMPILER_LAUNCHER": "ccache",
         "CMAKE_COLOR_DIAGNOSTICS": "ON",
-        "CMAKE_EXE_LINKER_FLAGS": "-B/usr/bin",
-        "CMAKE_SHARED_LINKER_FLAGS": "-B/usr/bin",
-        "CMAKE_MODULE_LINKER_FLAGS": "-B/usr/bin",
         "CUBVEC_TEAM_BUILD": "ON",
         "ENABLE_CUBVEC_LOG": "ON",
         "VIMKIM_BUILD": "ON",
@@ -182,9 +179,9 @@
         "CMAKE_CXX_FLAGS": "-fdiagnostics-color=always",
         "CMAKE_C_FLAGS_DEBUG": "-O1 -ggdb3 -fsanitize=address -fno-omit-frame-pointer -fno-optimize-sibling-calls -Wno-int-conversion -Wno-incompatible-pointer-types -Wno-implicit-function-declaration -Wno-error=format -Wno-error -Wno-error=maybe-uninitialized -Wno-error=parentheses",
         "CMAKE_CXX_FLAGS_DEBUG": "-O1 -ggdb3 -fsanitize=address -fno-omit-frame-pointer -fno-optimize-sibling-calls -Wno-error=format -Wno-error -Wno-error=maybe-uninitialized -Wno-error=parentheses",
-        "CMAKE_EXE_LINKER_FLAGS": "-fsanitize=address -B/usr/libexec/mold",
-        "CMAKE_SHARED_LINKER_FLAGS": "-fsanitize=address -B/usr/libexec/mold",
-        "CMAKE_MODULE_LINKER_FLAGS": "-fsanitize=address -B/usr/libexec/mold",
+        "CMAKE_EXE_LINKER_FLAGS": "-fsanitize=address",
+        "CMAKE_SHARED_LINKER_FLAGS": "-fsanitize=address",
+        "CMAKE_MODULE_LINKER_FLAGS": "-fsanitize=address",
         "CMAKE_C_COMPILER": "gcc",
         "CMAKE_CXX_COMPILER": "g++",
         "CMAKE_CXX_STANDARD": "17",
@@ -200,9 +197,9 @@
         "CMAKE_CXX_FLAGS": "-fdiagnostics-color=always",
         "CMAKE_C_FLAGS_DEBUG": "-O1 -ggdb3 -fsanitize=address,undefined -fno-sanitize-recover=all -fno-omit-frame-pointer -fno-optimize-sibling-calls -Wno-int-conversion -Wno-incompatible-pointer-types -Wno-implicit-function-declaration -Wno-error=format -Wno-error -Wno-error=maybe-uninitialized -Wno-error=parentheses",
         "CMAKE_CXX_FLAGS_DEBUG": "-O1 -ggdb3 -fsanitize=address,undefined -fno-sanitize-recover=all -fno-omit-frame-pointer -fno-optimize-sibling-calls -Wno-error=format -Wno-error -Wno-error=maybe-uninitialized -Wno-error=parentheses",
-        "CMAKE_EXE_LINKER_FLAGS": "-fsanitize=address,undefined -B/usr/libexec/mold",
-        "CMAKE_SHARED_LINKER_FLAGS": "-fsanitize=address,undefined -B/usr/libexec/mold",
-        "CMAKE_MODULE_LINKER_FLAGS": "-fsanitize=address,undefined -B/usr/libexec/mold",
+        "CMAKE_EXE_LINKER_FLAGS": "-fsanitize=address,undefined",
+        "CMAKE_SHARED_LINKER_FLAGS": "-fsanitize=address,undefined",
+        "CMAKE_MODULE_LINKER_FLAGS": "-fsanitize=address,undefined",
         "CMAKE_C_COMPILER": "gcc",
         "CMAKE_CXX_COMPILER": "g++",
         "CMAKE_CXX_STANDARD": "17",
@@ -265,13 +262,10 @@
         "CMAKE_CXX_COMPILER": "clang++",
         "CMAKE_CXX_STANDARD": "17",
         "CMAKE_CXX_STANDARD_REQUIRED": "ON",
-        "CMAKE_C_FLAGS": "-fcolor-diagnostics -flto=thin -fno-inline -Xclang -fno-validate-pch -Xclang -fno-pch-timestamp -Wno-everything -Wno-non-pod-varargs -Wno-c++11-narrowing -Wno-int-conversion -Wno-implicit-function-declaration",
-        "CMAKE_CXX_FLAGS": "-fcolor-diagnostics -flto=thin -fno-inline -Xclang -fno-validate-pch -Xclang -fno-pch-timestamp -Wno-everything -Wno-non-pod-varargs -Wno-c++11-narrowing -Wno-int-conversion -Wno-implicit-function-declaration -fdelayed-template-parsing",
+        "CMAKE_C_FLAGS": "-fcolor-diagnostics -fno-inline -Xclang -fno-validate-pch -Xclang -fno-pch-timestamp -Wno-everything -Wno-non-pod-varargs -Wno-c++11-narrowing -Wno-int-conversion -Wno-implicit-function-declaration",
+        "CMAKE_CXX_FLAGS": "-fcolor-diagnostics -fno-inline -Xclang -fno-validate-pch -Xclang -fno-pch-timestamp -Wno-everything -Wno-non-pod-varargs -Wno-c++11-narrowing -Wno-int-conversion -Wno-implicit-function-declaration -fdelayed-template-parsing",
         "CMAKE_C_FLAGS_DEBUG": "-O1 -ggdb3 -fdebug-macro",
-        "CMAKE_CXX_FLAGS_DEBUG": "-O1 -ggdb3 -fdebug-macro",
-        "CMAKE_EXE_LINKER_FLAGS": "-fuse-ld=lld-18",
-        "CMAKE_SHARED_LINKER_FLAGS": "-fuse-ld=lld-18",
-        "CMAKE_MODULE_LINKER_FLAGS": "-fuse-ld=lld-18"
+        "CMAKE_CXX_FLAGS_DEBUG": "-O1 -ggdb3 -fdebug-macro"
       }
     },
     {
@@ -287,8 +281,8 @@
         "UNIT_TEST_OOS": "ON",
         "CMAKE_CXX_STANDARD": "17",
         "CMAKE_CXX_STANDARD_REQUIRED": "ON",
-        "CMAKE_C_FLAGS": "-fcolor-diagnostics -flto=thin -fno-inline -Xclang -fno-validate-pch -Xclang -fno-pch-timestamp -Werror=unused-result -Wno-non-pod-varargs -Wno-c++11-narrowing -Wno-int-conversion -Wno-implicit-function-declaration -fno-omit-frame-pointer -Wno-inline-new-delete -Wno-unknown-warning-option",
-        "CMAKE_CXX_FLAGS": "-fcolor-diagnostics -flto=thin -fno-inline -Xclang -fno-validate-pch -Xclang -fno-pch-timestamp -Werror=unused-result -Wno-non-pod-varargs -Wno-c++11-narrowing -Wno-int-conversion -Wno-implicit-function-declaration -fno-omit-frame-pointer -Wno-inline-new-delete -Wno-unknown-warning-option -fdelayed-template-parsing -isystem ${sourceDir}/.just/include",
+        "CMAKE_C_FLAGS": "-fcolor-diagnostics -fno-inline -Xclang -fno-validate-pch -Xclang -fno-pch-timestamp -Werror=unused-result -Wno-non-pod-varargs -Wno-c++11-narrowing -Wno-int-conversion -Wno-implicit-function-declaration -fno-omit-frame-pointer -Wno-inline-new-delete -Wno-unknown-warning-option",
+        "CMAKE_CXX_FLAGS": "-fcolor-diagnostics -fno-inline -Xclang -fno-validate-pch -Xclang -fno-pch-timestamp -Werror=unused-result -Wno-non-pod-varargs -Wno-c++11-narrowing -Wno-int-conversion -Wno-implicit-function-declaration -fno-omit-frame-pointer -Wno-inline-new-delete -Wno-unknown-warning-option -fdelayed-template-parsing -isystem ${sourceDir}/.just/include",
         "CMAKE_C_FLAGS_DEBUG": "-O0 -ggdb3 -fdebug-macro -fno-inline",
         "CMAKE_CXX_FLAGS_DEBUG": "-O0 -ggdb3 -fdebug-macro -fno-inline"
       }
@@ -303,11 +297,8 @@
         "WITH_CCI": "true",
         "CMAKE_C_COMPILER": "clang",
         "CMAKE_CXX_COMPILER": "clang++",
-        "CMAKE_C_FLAGS": "-fcolor-diagnostics -O0 -pg -ggdb3 -fdebug-macro -flto=thin -fno-inline -no-pie -Xclang -fno-validate-pch -Xclang -fno-pch-timestamp -Wno-everything -Wno-non-pod-varargs -Wno-c++11-narrowing -Wno-int-conversion -Wno-implicit-function-declaration -Wno-unused-parameter -fno-omit-frame-pointer",
-        "CMAKE_CXX_FLAGS": "-fcolor-diagnostics -O0 -pg -ggdb3 -fdebug-macro -flto=thin -fno-inline -no-pie -Xclang -fno-validate-pch -Xclang -fno-pch-timestamp -Wno-everything -Wno-non-pod-varargs -Wno-c++11-narrowing -Wno-int-conversion -Wno-implicit-function-declaration -Wno-unused-parameter -fno-omit-frame-pointer -fdelayed-template-parsing",
-        "CMAKE_EXE_LINKER_FLAGS": "-fuse-ld=lld-18",
-        "CMAKE_SHARED_LINKER_FLAGS": "-fuse-ld=lld-18",
-        "CMAKE_MODULE_LINKER_FLAGS": "-fuse-ld=lld-18"
+        "CMAKE_C_FLAGS": "-fcolor-diagnostics -O0 -pg -ggdb3 -fdebug-macro -fno-inline -no-pie -Xclang -fno-validate-pch -Xclang -fno-pch-timestamp -Wno-everything -Wno-non-pod-varargs -Wno-c++11-narrowing -Wno-int-conversion -Wno-implicit-function-declaration -Wno-unused-parameter -fno-omit-frame-pointer",
+        "CMAKE_CXX_FLAGS": "-fcolor-diagnostics -O0 -pg -ggdb3 -fdebug-macro -fno-inline -no-pie -Xclang -fno-validate-pch -Xclang -fno-pch-timestamp -Wno-everything -Wno-non-pod-varargs -Wno-c++11-narrowing -Wno-int-conversion -Wno-implicit-function-declaration -Wno-unused-parameter -fno-omit-frame-pointer -fdelayed-template-parsing"
       }
     },
     {
@@ -322,11 +313,8 @@
         "WITH_CCI": "true",
         "CMAKE_C_COMPILER": "clang",
         "CMAKE_CXX_COMPILER": "clang++",
-        "CMAKE_C_FLAGS": "-fcolor-diagnostics -O2 -pg -ggdb3 -fdebug-macro -flto=thin -fno-inline -Xclang -fno-validate-pch -Xclang -fno-pch-timestamp -Wno-everything -Wno-non-pod-varargs -Wno-c++11-narrowing -Wno-int-conversion -Wno-implicit-function-declaration",
-        "CMAKE_CXX_FLAGS": "-fcolor-diagnostics -O2 -pg -ggdb3 -fdebug-macro -flto=thin -fno-inline -Xclang -fno-validate-pch -Xclang -fno-pch-timestamp -Wno-everythneing -Wno-non-pod-varargs -Wno-c++11-narrowing -Wno-int-conversion -Wno-implicit-function-declaration -fdelayed-template-parsing",
-        "CMAKE_EXE_LINKER_FLAGS": "-fuse-ld=lld-18",
-        "CMAKE_SHARED_LINKER_FLAGS": "-fuse-ld=lld-18",
-        "CMAKE_MODULE_LINKER_FLAGS": "-fuse-ld=lld-18"
+        "CMAKE_C_FLAGS": "-fcolor-diagnostics -O2 -pg -ggdb3 -fdebug-macro -fno-inline -Xclang -fno-validate-pch -Xclang -fno-pch-timestamp -Wno-everything -Wno-non-pod-varargs -Wno-c++11-narrowing -Wno-int-conversion -Wno-implicit-function-declaration",
+        "CMAKE_CXX_FLAGS": "-fcolor-diagnostics -O2 -pg -ggdb3 -fdebug-macro -fno-inline -Xclang -fno-validate-pch -Xclang -fno-pch-timestamp -Wno-everything -Wno-non-pod-varargs -Wno-c++11-narrowing -Wno-int-conversion -Wno-implicit-function-declaration -fdelayed-template-parsing"
       }
     },
     {
@@ -342,13 +330,10 @@
         "CMAKE_EXPORT_COMPILE_COMMANDS": "ON",
         "CMAKE_C_COMPILER": "clang",
         "CMAKE_CXX_COMPILER": "clang++",
-        "CMAKE_C_FLAGS": "-fcolor-diagnostics -flto=thin -Xclang -fno-validate-pch -Xclang -fno-pch-timestamp -Wno-everything -Wno-non-pod-varargs -Wno-c++11-narrowing -Wno-int-conversion -Wno-implicit-function-declaration -Wno-unused-parameter",
-        "CMAKE_CXX_FLAGS": "-fcolor-diagnostics -flto=thin -Xclang -fno-validate-pch -Xclang -fno-pch-timestamp -Wno-everything -Wno-non-pod-varargs -Wno-c++11-narrowing -Wno-int-conversion -Wno-implicit-function-declaration -Wno-unused-parameter -Wno-unused-parameter -fdelayed-template-parsing",
+        "CMAKE_C_FLAGS": "-fcolor-diagnostics -Xclang -fno-validate-pch -Xclang -fno-pch-timestamp -Wno-everything -Wno-non-pod-varargs -Wno-c++11-narrowing -Wno-int-conversion -Wno-implicit-function-declaration -Wno-unused-parameter",
+        "CMAKE_CXX_FLAGS": "-fcolor-diagnostics -Xclang -fno-validate-pch -Xclang -fno-pch-timestamp -Wno-everything -Wno-non-pod-varargs -Wno-c++11-narrowing -Wno-int-conversion -Wno-implicit-function-declaration -Wno-unused-parameter -Wno-unused-parameter -fdelayed-template-parsing",
         "CMAKE_C_FLAGS_RELWITHDEBINFO": "-O2 -g -DNDEBUG -finline-functions",
-        "CMAKE_CXX_FLAGS_RELWITHDEBINFO": "-O2 -g -DNDEBUG -finline-functions",
-        "CMAKE_EXE_LINKER_FLAGS": "-fuse-ld=lld-18",
-        "CMAKE_SHARED_LINKER_FLAGS": "-fuse-ld=lld-18",
-        "CMAKE_MODULE_LINKER_FLAGS": "-fuse-ld=lld-18"
+        "CMAKE_CXX_FLAGS_RELWITHDEBINFO": "-O2 -g -DNDEBUG -finline-functions"
       }
     },
     {
@@ -364,13 +349,10 @@
         "CMAKE_EXPORT_COMPILE_COMMANDS": "ON",
         "CMAKE_C_COMPILER": "clang",
         "CMAKE_CXX_COMPILER": "clang++",
-        "CMAKE_C_FLAGS": "-fcolor-diagnostics -flto=thin -Xclang -fno-validate-pch -Xclang -fno-pch-timestamp -Wno-everything -Wno-non-pod-varargs -Wno-c++11-narrowing -Wno-int-conversion -Wno-implicit-function-declaration -Wno-unused-parameter",
-        "CMAKE_CXX_FLAGS": "-fcolor-diagnostics -flto=thin -Xclang -fno-validate-pch -Xclang -fno-pch-timestamp -Wno-everything -Wno-non-pod-varargs -Wno-c++11-narrowing -Wno-int-conversion -Wno-implicit-function-declaration -Wno-unused-parameter -Wno-unused-parameter -fdelayed-template-parsing",
+        "CMAKE_C_FLAGS": "-fcolor-diagnostics -Xclang -fno-validate-pch -Xclang -fno-pch-timestamp -Wno-everything -Wno-non-pod-varargs -Wno-c++11-narrowing -Wno-int-conversion -Wno-implicit-function-declaration -Wno-unused-parameter",
+        "CMAKE_CXX_FLAGS": "-fcolor-diagnostics -Xclang -fno-validate-pch -Xclang -fno-pch-timestamp -Wno-everything -Wno-non-pod-varargs -Wno-c++11-narrowing -Wno-int-conversion -Wno-implicit-function-declaration -Wno-unused-parameter -Wno-unused-parameter -fdelayed-template-parsing",
         "CMAKE_C_FLAGS_RELWITHDEBINFO": "-O2 -ggdb3 -DNDEBUG -fno-inline -fno-inline-functions -Wno-error -Wno-pessimizing-move",
-        "CMAKE_CXX_FLAGS_RELWITHDEBINFO": "-O2 -ggdb3 -DNDEBUG -fno-inline -fno-inline-functions -Wno-error -Wno-pessimizing-move",
-        "CMAKE_EXE_LINKER_FLAGS": "-fuse-ld=lld-18",
-        "CMAKE_SHARED_LINKER_FLAGS": "-fuse-ld=lld-18",
-        "CMAKE_MODULE_LINKER_FLAGS": "-fuse-ld=lld-18"
+        "CMAKE_CXX_FLAGS_RELWITHDEBINFO": "-O2 -ggdb3 -DNDEBUG -fno-inline -fno-inline-functions -Wno-error -Wno-pessimizing-move"
       }
     }
   ],

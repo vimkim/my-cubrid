@@ -13,6 +13,8 @@ readonly repos=(
   "$HOME/gh/my-cubrid-jira"
   "$HOME/gh/my-cubrid-skills"
   "$HOME/gh/cubrid-oos-context"
+  "$HOME/.local/share/chezmoi"
+  "$HOME/.config/nvim"
 )
 
 color_reset=''

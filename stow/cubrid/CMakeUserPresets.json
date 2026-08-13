@@ -171,6 +171,14 @@
       }
     },
     {
+      "name": "debug_gcc_fast",
+      "inherits": "debug_gcc",
+      "cacheVariables": {
+        "CMAKE_C_FLAGS": "-fdiagnostics-color=always -pipe",
+        "CMAKE_CXX_FLAGS": "-fdiagnostics-color=always -Wno-template-body -isystem ${sourceDir}/.just/include -pipe"
+      }
+    },
+    {
       "name": "asan_debug_gcc",
       "inherits": "user_default",
       "cacheVariables": {
@@ -388,6 +396,10 @@
     {
       "name": "debug_gcc",
       "configurePreset": "debug_gcc"
+    },
+    {
+      "name": "debug_gcc_fast",
+      "configurePreset": "debug_gcc_fast"
     },
     {
       "name": "debug_clang",

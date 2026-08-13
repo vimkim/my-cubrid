@@ -279,6 +279,10 @@
     {
       "name": "debug_clang",
       "inherits": "user_default",
+      "environment": {
+        "CC": "clang",
+        "CXX": "clang++"
+      },
       "cacheVariables": {
         "CMAKE_BUILD_TYPE": "Debug",
         "CUBVEC_TEAM_BUILD": "ON",

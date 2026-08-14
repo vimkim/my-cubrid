@@ -15,6 +15,9 @@ dev2-container-2:
 dev2-container-9:
     LANG=en_US.UTF-8 TERM=xterm-256color ssh -Y vimkim@192.168.4.159
 
+iusefedorabtw:
+    with-env { LANG : "en_US.UTF-8", TERM : "xterm-256color" } { ssh -Y iusefedorabtw }
+
 vpn:
     sudo openfortivpn cubrid1.fortiddns.com:10443 --username=
 

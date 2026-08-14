@@ -143,21 +143,41 @@ def resolve_pr_url(pr: str | None) -> str:
     return pr_url
 
 
-def get_pr_author(pr_url: str) -> str:
-    output = run_gh(["pr", "view", pr_url, "--json", "author"])
+def get_pr_details(pr_url: str) -> tuple[str, str, bool]:
+    output = run_gh(["pr", "view", pr_url, "--json", "author,state,isDraft"])
     try:
-        author = json.loads(output)["author"]["login"]
+        details = json.loads(output)
+        author = details["author"]["login"]
+        state = details["state"]
+        is_draft = details["isDraft"]
     except (json.JSONDecodeError, KeyError, TypeError) as exc:
-        raise UserError("could not determine the PR author from gh output") from exc
+        raise UserError("could not determine the PR details from gh output") from exc
     if not isinstance(author, str) or not author:
         raise UserError("could not determine the PR author from gh output")
-    return author
+    if not isinstance(state, str) or not state:
+        raise UserError("could not determine the PR state from gh output")
+    if not isinstance(is_draft, bool):
+        raise UserError("could not determine whether the PR is a draft from gh output")
+    return author, state, is_draft
+
+
+def ensure_pr_is_reviewable(state: str, is_draft: bool) -> None:
+    if state != "OPEN":
+        raise UserError(
+            f"pull request is {state.lower()}; reviewers can only be added to an open PR"
+        )
+    if is_draft:
+        raise UserError(
+            "pull request is a draft; mark it ready for review before adding reviewers"
+        )
 
 
 def main() -> int:
     args = parse_args()
     try:
         pr_url = resolve_pr_url(args.pr)
+        author, state, is_draft = get_pr_details(pr_url)
+        ensure_pr_is_reviewable(state, is_draft)
         teammates, source = load_teammates(args.config)
 
         print(f"Pull request: {pr_url}")
@@ -171,7 +191,6 @@ def main() -> int:
             print("The PR author will be excluded during an actual run.")
             return 0
 
-        author = get_pr_author(pr_url)
         reviewers = [login for login in teammates if login.casefold() != author.casefold()]
         if not reviewers:
             raise UserError("no eligible reviewers remain after excluding the PR author")

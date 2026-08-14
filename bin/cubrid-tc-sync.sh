@@ -2,22 +2,25 @@
 
 set -euo pipefail
 
-readonly DEFAULT_PUBLIC_TC_DIR="/home/vimkim/gh/tc/cubrid-testcases"
-readonly DEFAULT_PRIVATE_TC_DIR="/home/vimkim/cubrid-testcases-private-ex"
-
-readonly PUBLIC_TC_DIR="${CUBRID_TESTCASES_DIR:-$DEFAULT_PUBLIC_TC_DIR}"
-readonly PRIVATE_TC_DIR="${CUBRID_TESTCASES_PRIVATE_EX_DIR:-$DEFAULT_PRIVATE_TC_DIR}"
+readonly -a DEFAULT_PUBLIC_TC_DIRS=(
+  "/home/vimkim/gh/cub-tc/cubrid-testcases"
+  "/home/vimkim/gh/tc/cubrid-testcases"
+)
+readonly -a DEFAULT_PRIVATE_TC_DIRS=(
+  "/home/vimkim/gh/cub-tc-private-ex/cubrid-testcases-private-ex"
+  "/home/vimkim/cubrid-testcases-private-ex"
+)
 
 usage ()
 {
   cat <<'EOF'
-Usage: sync-cubrid-tc.sh <CUBRID PR URL>
+Usage: cubrid-tc-sync.sh <CUBRID PR URL>
 
 Fetch both CUBRID testcase repositories, switch each one to the testcase
 branch associated with the PR, and merge origin/develop into that branch.
 
 Example:
-  sync-cubrid-tc.sh https://github.com/CUBRID/cubrid/pull/1234
+  cubrid-tc-sync.sh https://github.com/CUBRID/cubrid/pull/6864
 
 Environment overrides (primarily useful for testing):
   CUBRID_TESTCASES_DIR
@@ -48,6 +51,31 @@ parse_pr_number ()
   die "expected a CUBRID PR URL such as https://github.com/CUBRID/cubrid/pull/1234"
 }
 
+resolve_repository_directory ()
+{
+  local override="$1"
+  shift
+  local directory
+
+  if [[ -n "$override" ]]
+  then
+    printf '%s\n' "$override"
+    return
+  fi
+
+  for directory in "$@"
+  do
+    if git -C "$directory" rev-parse --is-inside-work-tree >/dev/null 2>&1
+    then
+      printf '%s\n' "$directory"
+      return
+    fi
+  done
+
+  # Return the preferred path so ensure_repository reports a useful error.
+  printf '%s\n' "$1"
+}
+
 ensure_repository ()
 {
   local directory="$1"
@@ -57,6 +85,14 @@ ensure_repository ()
     || die "not a Git worktree: $directory"
   git -C "$directory" remote get-url origin >/dev/null 2>&1 \
     || die "Git remote 'origin' is missing: $directory"
+}
+
+ensure_clean_worktree ()
+{
+  local directory="$1"
+
+  [[ -z "$(git -C "$directory" status --porcelain)" ]] \
+    || die "worktree has uncommitted or untracked changes: $directory"
 }
 
 fetch_repository ()
@@ -96,6 +132,9 @@ sync_repository ()
     git -C "$directory" switch --track -c "$branch" "origin/$branch"
   fi
 
+  # Incorporate any commits pushed from another checkout without creating an
+  # accidental merge commit. A diverged local branch stops here for inspection.
+  git -C "$directory" merge --ff-only "origin/$branch"
   git -C "$directory" merge origin/develop
   printf '    %s is now at %s\n' "$branch" \
     "$(git -C "$directory" rev-parse --short HEAD)"
@@ -116,20 +155,28 @@ main ()
 
   local pr_number
   local branch
+  local public_tc_dir
+  local private_tc_dir
   pr_number="$(parse_pr_number "$1")"
   branch="tc/pr-$pr_number"
+  public_tc_dir="$(resolve_repository_directory \
+    "${CUBRID_TESTCASES_DIR:-}" "${DEFAULT_PUBLIC_TC_DIRS[@]}")"
+  private_tc_dir="$(resolve_repository_directory \
+    "${CUBRID_TESTCASES_PRIVATE_EX_DIR:-}" "${DEFAULT_PRIVATE_TC_DIRS[@]}")"
 
-  ensure_repository "$PUBLIC_TC_DIR"
-  ensure_repository "$PRIVATE_TC_DIR"
+  ensure_repository "$public_tc_dir"
+  ensure_repository "$private_tc_dir"
+  ensure_clean_worktree "$public_tc_dir"
+  ensure_clean_worktree "$private_tc_dir"
 
   # Fetch and validate both repositories before changing either worktree.
-  fetch_repository "$PUBLIC_TC_DIR"
-  fetch_repository "$PRIVATE_TC_DIR"
-  ensure_required_refs "$PUBLIC_TC_DIR" "$branch"
-  ensure_required_refs "$PRIVATE_TC_DIR" "$branch"
+  fetch_repository "$public_tc_dir"
+  fetch_repository "$private_tc_dir"
+  ensure_required_refs "$public_tc_dir" "$branch"
+  ensure_required_refs "$private_tc_dir" "$branch"
 
-  sync_repository "$PUBLIC_TC_DIR" "$branch"
-  sync_repository "$PRIVATE_TC_DIR" "$branch"
+  sync_repository "$public_tc_dir" "$branch"
+  sync_repository "$private_tc_dir" "$branch"
 
   printf '\nSynced %s in both testcase repositories.\n' "$branch"
 }

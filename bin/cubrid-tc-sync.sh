@@ -17,7 +17,8 @@ usage ()
 Usage: cubrid-tc-sync.sh <CUBRID PR URL>
 
 Fetch both CUBRID testcase repositories, switch each one to the testcase
-branch associated with the PR, and merge origin/develop into that branch.
+branch associated with the PR, merge origin/develop into that branch, and push
+the updated branch to origin.
 
 Example:
   cubrid-tc-sync.sh https://github.com/CUBRID/cubrid/pull/6864
@@ -140,6 +141,15 @@ sync_repository ()
     "$(git -C "$directory" rev-parse --short HEAD)"
 }
 
+push_repository ()
+{
+  local directory="$1"
+  local branch="$2"
+
+  printf '\n==> Pushing %s from %s\n' "$branch" "$directory"
+  git -C "$directory" push origin "$branch"
+}
+
 main ()
 {
   if [[ "${1:-}" == "-h" || "${1:-}" == "--help" ]]
@@ -178,7 +188,10 @@ main ()
   sync_repository "$public_tc_dir" "$branch"
   sync_repository "$private_tc_dir" "$branch"
 
-  printf '\nSynced %s in both testcase repositories.\n' "$branch"
+  push_repository "$public_tc_dir" "$branch"
+  push_repository "$private_tc_dir" "$branch"
+
+  printf '\nSynced and pushed %s in both testcase repositories.\n' "$branch"
 }
 
 main "$@"

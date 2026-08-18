@@ -24,7 +24,8 @@ Use `tc-sync` after refreshing a CUBRID pull-request branch from `develop`, or
 before rerunning CI when its associated testcase branches need the same
 baseline. The recipe derives `tc/pr-<number>` from the CUBRID PR URL, fetches
 both testcase repositories, and merges `origin/develop` into both local
-testcase branches. It does not push them.
+testcase branches. After both merges succeed, it pushes both updated branches
+to `origin`.
 
 ```bash
 just --justfile ~/my-cubrid/cubrid-justfiles/justfile \

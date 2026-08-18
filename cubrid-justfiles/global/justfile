@@ -8,6 +8,6 @@ prepare-build:
 tc-branch-create base_branch new_branch:
     cubrid-tc-branch-create.sh "{{base_branch}}" "{{new_branch}}"
 
-# Merge origin/develop into the testcase branches associated with CUBRID_PR_URL.
+# Merge and push the testcase branches associated with CUBRID_PR_URL.
 tc-sync cubrid_pr_url:
     cubrid-tc-sync.sh "{{cubrid_pr_url}}"

@@ -79,12 +79,40 @@ configure: ensure-build-jdk
 
 # Select a preset interactively. Autonomous workflows should use the bootstrap script instead.
 [working-directory(justfile_directory())]
-select-preset:
-    cmake-preset-mode-select.sh
+preset-select:
+    #!/usr/bin/env bash
+    set -euo pipefail
+
+    available_presets="$(
+        cmake --list-presets=configure |
+        sed -n 's/^[[:space:]]*"\([^"]*\)".*/\1/p'
+    )"
+
+    if [[ -z "$available_presets" ]]; then
+        printf 'No configure presets found.\n' >&2
+        exit 1
+    fi
+
+    if ! command -v fzf >/dev/null 2>&1; then
+        printf 'fzf is not installed or not in PATH.\n' >&2
+        exit 1
+    fi
+
+    selected="$(printf '%s\n' "$available_presets" | fzf --prompt='Choose preset:')" || {
+        printf 'Preset selection cancelled.\n' >&2
+        exit 1
+    }
+
+    if [[ -z "$selected" ]]; then
+        printf 'No preset selected.\n' >&2
+        exit 1
+    fi
+
+    just core::preset-set "$selected"
 
 # Set a configure preset non-interactively for this worktree.
 [working-directory(justfile_directory())]
-set-preset $preset:
+preset-set $preset:
     #!/usr/bin/env bash
     set -euo pipefail
 

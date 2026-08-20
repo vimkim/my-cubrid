@@ -13,7 +13,7 @@ alias build-only := core::compile
 alias build-for-ctp := core::build
 
 [private]
-alias cmake-preset-mode-select := core::select-preset
+alias cmake-preset-mode-select := core::preset-select
 
 [private]
 alias cmake-build-install-3rdparty := core::install-3rdparty

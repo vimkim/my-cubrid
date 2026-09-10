@@ -13,16 +13,17 @@ import tomllib
 from urllib.parse import urlsplit
 
 
+# DS - Distributed Systems
+# SM - Storage Manager
 FALLBACK_TEAMMATES = (
-    "hgryoo",
-    "hornetmj",
-    # "hyahong",
+    "hgryoo", # DS
+    "hornetmj", # Team Leader
     "vimkim",
-    "H2SU",
-    "YeunjunLee",
-    "youngjun9072",
-    "InChiJun",
-    "lht1199",
+    # "H2SU", # DS
+    "YeunjunLee", # SM
+    "youngjun9072", # DS
+    "InChiJun", # SM
+    "lht1199", # SM
 )
 DEFAULT_CONFIG = Path(__file__).resolve().parent.parent / "cubrid-dev2-team.toml"
 GITHUB_LOGIN_RE = re.compile(r"^[A-Za-z0-9](?:[A-Za-z0-9-]{0,37}[A-Za-z0-9])?$")

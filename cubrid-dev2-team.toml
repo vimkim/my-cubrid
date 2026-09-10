@@ -1,14 +1,15 @@
 # cubrid-dev2-pr configuration
+# DS - Distributed Systems
+# SM - Storage Manager
 teammates = [
-  # "hgryoo",
-  "hornetmj",
-  # "hyahong",
-  "vimkim",
-  "H2SU",
-  "YeunjunLee",
-  # "youngjun9072",
-  "InChiJun",
-  "lht1199",
+  # "hgryoo", # DS
+  "hornetmj", # Team Leader
+  "vimkim", # SM
+  # "H2SU", # DS
+  "YeunjunLee", # SM
+  # "youngjun9072", # DS
+  "InChiJun", # SM
+  "lht1199", # SM
 ]
 reviewer = "vimkim" # whose "my review" state is shown
 repo = "CUBRID/cubrid" # target repo

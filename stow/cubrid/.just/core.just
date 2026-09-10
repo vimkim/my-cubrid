@@ -175,6 +175,7 @@ stop-and-build: confirm-no
 # Run configured ctest tests while holding the runtime lock.
 [working-directory(justfile_directory())]
 ctest:
+    bash ~/my-cubrid/bin/cubrid-test-socket-preflight.sh
     ~/my-cubrid/bin/cubrid-build-coordinator.sh runtime 300 -- ctest --test-dir "$CUBRID_BUILD_DIR" --output-on-failure --verbose
 
 # Run the currently configured test suite. This is intentionally ctest-only.

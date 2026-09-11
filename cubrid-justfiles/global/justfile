@@ -1,5 +1,13 @@
 # Import generic CUBRID recipes here so they appear without a module prefix.
 
+# List the Git repositories used for CUBRID work.
+dir-list:
+    my-cubrid-dir list
+
+# Fast-forward every CUBRID work repository to its configured upstream.
+dir-pull:
+    my-cubrid-dir pull
+
 prepare-build:
     "{{ source_directory() }}/../../stow-create.sh"
     just --justfile ./justfile --working-directory . prepare-debug-gcc

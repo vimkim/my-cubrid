@@ -1,0 +1,119 @@
+#!/usr/bin/env bash
+set -uo pipefail
+
+readonly program_name="${0##*/}"
+readonly script_dir="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd -P)"
+readonly picker="$script_dir/cubrid-dir-picker.sh"
+declare -a repos=()
+
+usage()
+{
+  cat <<EOF
+Usage: $program_name <command>
+
+Keep the repositories configured in cubrid-dir-picker.sh synchronized.
+
+Commands:
+  list    List configured directories
+  pull    Run git pull --ff-only in every configured repository
+  help    Show this help
+EOF
+}
+
+load_repos()
+{
+  local output
+
+  if [[ ! -x "$picker" ]]; then
+    printf '%s: directory picker is not executable: %s\n' "$program_name" "$picker" >&2
+    return 1
+  fi
+
+  if ! output=$("$picker" --list); then
+    printf '%s: failed to read directories from %s\n' "$program_name" "$picker" >&2
+    return 1
+  fi
+  if [[ -z "$output" ]]; then
+    printf '%s: no directories are configured in %s\n' "$program_name" "$picker" >&2
+    return 1
+  fi
+
+  mapfile -t repos <<<"$output"
+}
+
+list_repos()
+{
+  printf '%s\n' "${repos[@]}"
+}
+
+pull_repos()
+{
+  local repo
+  local failures=0
+
+  for repo in "${repos[@]}"; do
+    printf '\n==> %s\n' "$repo"
+
+    if [[ ! -d "$repo" ]]; then
+      printf '%s: missing directory: %s\n' "$program_name" "$repo" >&2
+      failures=$((failures + 1))
+      continue
+    fi
+
+    if ! git -C "$repo" rev-parse --is-inside-work-tree >/dev/null 2>&1; then
+      printf '%s: not a git repository: %s\n' "$program_name" "$repo" >&2
+      failures=$((failures + 1))
+      continue
+    fi
+
+    if ! git -C "$repo" pull --ff-only; then
+      printf '%s: pull failed: %s\n' "$program_name" "$repo" >&2
+      failures=$((failures + 1))
+    fi
+  done
+
+  printf '\n'
+  if ((failures == 0)); then
+    printf '%s: all %d repositories are synchronized\n' "$program_name" "${#repos[@]}"
+    return 0
+  fi
+
+  printf '%s: %d of %d repositories failed\n' \
+    "$program_name" "$failures" "${#repos[@]}" >&2
+  return 1
+}
+
+main()
+{
+  case "${1:-}" in
+    list)
+      [[ $# -eq 1 ]] || {
+        usage >&2
+        return 2
+      }
+      load_repos || return
+      list_repos
+      ;;
+    pull)
+      [[ $# -eq 1 ]] || {
+        usage >&2
+        return 2
+      }
+      load_repos || return
+      pull_repos
+      ;;
+    help|-h|--help)
+      [[ $# -eq 1 ]] || {
+        usage >&2
+        return 2
+      }
+      usage
+      ;;
+    *)
+      usage >&2
+      return 2
+      ;;
+  esac
+}
+
+main "$@"

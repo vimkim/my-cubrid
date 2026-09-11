@@ -9,6 +9,16 @@ readonly repos=(
   "$HOME/gh/cb"
 )
 
+if [[ "${1:-}" == "--list" ]]; then
+  printf '%s\n' "${repos[@]}"
+  exit 0
+fi
+
+if [[ $# -ne 0 ]]; then
+  printf 'usage: cubrid-dir-picker.sh [--list]\n' >&2
+  exit 2
+fi
+
 readonly preview_cmd='
 dir={}
 

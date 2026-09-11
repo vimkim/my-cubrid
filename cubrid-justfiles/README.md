@@ -27,6 +27,11 @@ both testcase repositories, and merges `origin/develop` into both local
 testcase branches. After both merges succeed, it pushes both updated branches
 to `origin`.
 
+If a testcase branch is already checked out in a linked worktree, `tc-sync`
+uses that worktree and leaves the configured checkout on its current branch.
+Both selected worktrees must be clean before synchronization begins. Changes
+in other worktrees do not block synchronization.
+
 ```bash
 just --justfile ~/my-cubrid/cubrid-justfiles/justfile \
   tc-sync https://github.com/CUBRID/cubrid/pull/6864

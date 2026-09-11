@@ -19,6 +19,7 @@ Usage: cubrid-tc-sync.sh <CUBRID PR URL>
 Fetch both CUBRID testcase repositories, switch each one to the testcase
 branch associated with the PR, merge origin/develop into that branch, and push
 the updated branch to origin.
+If the branch is already checked out in a worktree, sync in that worktree.
 
 Example:
   cubrid-tc-sync.sh https://github.com/CUBRID/cubrid/pull/6864
@@ -94,6 +95,27 @@ ensure_clean_worktree ()
 
   [[ -z "$(git -C "$directory" status --porcelain)" ]] \
     || die "worktree has uncommitted or untracked changes: $directory"
+}
+
+resolve_branch_worktree ()
+{
+  local directory="$1"
+  local branch="$2"
+  local field
+  local worktree=""
+
+  while IFS= read -r -d '' field
+  do
+    case "$field" in
+      "worktree "*) worktree="${field#worktree }" ;;
+      "branch refs/heads/$branch")
+        printf '%s\n' "$worktree"
+        return
+        ;;
+    esac
+  done < <(git -C "$directory" worktree list --porcelain -z)
+
+  printf '%s\n' "$directory"
 }
 
 fetch_repository ()
@@ -174,6 +196,10 @@ main ()
   private_tc_dir="$(resolve_repository_directory \
     "${CUBRID_TESTCASES_PRIVATE_EX_DIR:-}" "${DEFAULT_PRIVATE_TC_DIRS[@]}")"
 
+  ensure_repository "$public_tc_dir"
+  ensure_repository "$private_tc_dir"
+  public_tc_dir="$(resolve_branch_worktree "$public_tc_dir" "$branch")"
+  private_tc_dir="$(resolve_branch_worktree "$private_tc_dir" "$branch")"
   ensure_repository "$public_tc_dir"
   ensure_repository "$private_tc_dir"
   ensure_clean_worktree "$public_tc_dir"

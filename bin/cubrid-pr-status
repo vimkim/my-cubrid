@@ -5,6 +5,7 @@ from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timezone
 import json
 import math
+import os
 from pathlib import Path
 import re
 import subprocess
@@ -100,7 +101,7 @@ def priority(state):
 
 def previous_results(pr, limit):
     if limit == 0:
-        return {}, 'History: disabled (--history 0).'
+        return {}, dict(status='disabled', limit=0, searched=0, available=None, truncated=None)
     commits = [item['sha'] for page in api(f"pulls/{pr['number']}/commits?per_page=100") for item in page]
     if pr['headRefOid'] not in commits:
         raise RuntimeError('PR head absent from history (head changed or GitHub history limit reached); retry.')
@@ -111,51 +112,147 @@ def previous_results(pr, limit):
         for results in pool.map(check_results, selected):
             for name, item in results.items():
                 previous.setdefault(name, item)
-    return previous, f'History: searched {len(selected)} of {len(commits)} previous PR commits; limit {limit}. Force-pushed-away commits are unavailable.'
+    return previous, dict(status='complete', limit=limit, searched=len(selected),
+                          available=len(commits), truncated=len(selected) < len(commits))
 
 
-def render(pr, current, expected, previous, history_note):
-    print(f"PR #{pr['number']} {clean(pr['title'])}")
-    print(f"{pr['state']} | {'draft' if pr['isDraft'] else 'ready'} | review: {pr['reviewDecision'] or 'none'} | mergeability: {pr['mergeable']}")
-    print(pr['url'])
-    print(f"PR head: {pr['headRefOid']} | fetched {datetime.now(timezone.utc).isoformat(timespec='seconds')}")
-    print('Freshness means reported for this PR commit, not the CI workflow revision.')
+def history_note(history):
+    if history['status'] == 'disabled':
+        return 'History: disabled (--history 0).'
+    if history['status'] == 'incomplete':
+        return 'INCOMPLETE history: previous results unavailable.'
+    return (f"History: searched {history['searched']} of {history['available']} previous PR commits; "
+            f"limit {history['limit']}. Force-pushed-away commits are unavailable.")
+
+
+def result_record(item):
+    if item is None:
+        return None
+    return dict(state=item['state'], reported_for_sha=item['sha'],
+                detail_url=item['url'] or None, reported_at=item['time'] or None)
+
+
+def snapshot(pr, current, expected, previous, history, errors):
+    rows = []
+    names = set(current) | set(expected) | set(previous)
+    for name in sorted(names, key=lambda n: (provider(n), priority(current.get(n, {}).get('state', 'NOT OBSERVED')), n)):
+        item = current.get(name)
+        rows.append(dict(name=name, provider=provider(name), expected=name in expected,
+                         freshness='current' if item else 'not_observed',
+                         current=result_record(item), previous=result_record(previous.get(name)) if not item else None))
+    return dict(schema_version=1, repository=REPO,
+                fetched_at=datetime.now(timezone.utc).isoformat(timespec='seconds'),
+                complete=not errors,
+                pr=dict(number=pr['number'], title=pr['title'], url=pr['url'], head_sha=pr['headRefOid'],
+                        state=pr['state'], draft=pr['isDraft'], review_decision=pr['reviewDecision'] or None,
+                        mergeability=pr['mergeable']) if pr else None,
+                checks=rows, history=history, errors=errors)
+
+
+def color_enabled():
+    return sys.stdout.isatty() and os.environ.get('TERM') != 'dumb' and not os.environ.get('NO_COLOR')
+
+
+def paint(text, color):
+    return f'\033[{color}m{text}\033[0m' if color_enabled() else text
+
+
+def badge(state):
+    if priority(state) == 0:
+        return '[!]', '31'
+    if state == 'SUCCESS':
+        return '[+]', '32'
+    if state in ('NEUTRAL', 'SKIPPED'):
+        return '[-]', '90'
+    return ('[?]' if state == 'NOT OBSERVED' else '[~]'), '33'
+
+
+def render(data):
+    pr = data['pr']
+    line = '+' + '-' * 86 + '+'
+    print(paint(line, '36'))
+    print(paint(f"PR #{pr['number']} {clean(pr['title'])}", '1'))
+    print(f"{pr['state']} | {'draft' if pr['draft'] else 'ready'} | review: {pr['review_decision'] or 'none'} | mergeability: {pr['mergeability']}")
+    print(clean(pr['url']))
+    print(f"PR head: {pr['head_sha']} | fetched {data['fetched_at']}")
+    counts = {'failed': 0, 'pending': 0, 'passed': 0, 'missing': 0, 'other': 0}
+    for row in data['checks']:
+        item = row['current']
+        key = ('missing' if item is None else 'failed' if priority(item['state']) == 0 else
+               'passed' if item['state'] == 'SUCCESS' else 'other' if priority(item['state']) == 2 else 'pending')
+        counts[key] += 1
+    print(' | '.join(f"{key}: {count}" for key, count in counts.items()))
+    print(paint(line, '36'))
     for group in ('GitHub Actions', 'CircleCI', 'Other checks'):
-        names = [name for name in set(current) | set(expected) | set(previous) if provider(name) == group]
-        if not names:
+        rows = [row for row in data['checks'] if row['provider'] == group]
+        if not rows:
             continue
-        print('\n' + group)
-        for name in sorted(names, key=lambda n: (priority(current.get(n, {}).get('state', 'NOT OBSERVED')), n)):
-            item = current.get(name)
-            print(f"  {item['state'] if item else 'NOT OBSERVED':<14} {clean(name)} | current {pr['headRefOid'][:12]}")
+        print('\n' + paint(group, '1;36'))
+        width = max(len(clean(row['name'])) for row in rows)
+        state_width = max(14, max(len(row['current']['state']) if row['current'] else len('NOT OBSERVED')
+                                  for row in rows))
+        for row in rows:
+            item = row['current']
+            state = item['state'] if item else 'NOT OBSERVED'
+            marker, color = badge(state)
+            label = paint(f'{marker} {state:<{state_width}}', color)
+            print(f"  {label} {clean(row['name']):<{width}} | current {pr['head_sha'][:12]}")
             if item:
-                print(f"    reported: {clean(item['time']) or 'unknown'} ({age(item['time'])})")
-                print('    ' + (clean(item['url']) or 'detail URL unavailable'))
-            elif name in previous:
-                old = previous[name]
-                print(f"    STALE previous: {old['state']} | {old['sha'][:12]} | {clean(old['time'])} ({age(old['time'])})")
-                print('    ' + (clean(old['url']) or 'detail URL unavailable'))
+                print(f"      {age(item['reported_at'])} | reported: {clean(item['reported_at'] or 'unknown')}")
+                print('      ' + (clean(item['detail_url']) if item['detail_url'] else 'detail URL unavailable'))
+            elif row['previous']:
+                old = row['previous']
+                print('      ' + paint(f"STALE previous: {old['state']}", '33') +
+                      f" | {old['reported_for_sha'][:12]} | {age(old['reported_at'])} | {clean(old['reported_at'] or 'unknown')}")
+                print('      ' + (clean(old['detail_url']) if old['detail_url'] else 'detail URL unavailable'))
             else:
-                print('    Previous result unavailable.' if history_note.startswith('INCOMPLETE')
-                      else '    No previous result in searched history.')
-    print('\n' + history_note)
-    print('\nNOT OBSERVED does not mean queued or passed. Timestamps are report times, not durations.')
+                print('      Previous result unavailable.' if data['history']['status'] == 'incomplete'
+                      else '      No previous result in searched history.')
+    print('\n' + history_note(data['history']))
+    for error in data['errors']:
+        print(paint(f"INCOMPLETE {clean(error['stage'])}: {clean(error['message'])}", '31'))
+    print('Freshness = reported for PR head, not CI workflow revision. NOT OBSERVED is not queued or passed.')
+
+
+class Arguments(argparse.ArgumentParser):
+    def error(self, message):
+        raise ValueError(message)
+
+
+def report_error(stage, error, json_mode, watch=False):
+    data = snapshot(None, {}, [], {}, None, [dict(stage=stage, message=str(error))])
+    if json_mode:
+        print(json.dumps(data, indent=None if watch else 2), flush=True)
+    else:
+        print('cubrid-pr-status: INCOMPLETE: ' + clean(error), file=sys.stderr, flush=True)
+    return 2
 
 
 def main():
-    parser = argparse.ArgumentParser(description=__doc__)
+    # Recognize the requested output even when argument validation fails.
+    tokens = sys.argv[1:]
+    options = tokens[:tokens.index('--')] if '--' in tokens else tokens
+    json_mode = '--json' in options
+    watch = '--watch' in options
+    parser = Arguments(description=__doc__, allow_abbrev=False)
     parser.add_argument('pr', nargs='?', help='CUBRID PR URL; otherwise detect from current directory')
     parser.add_argument('--history', type=int, default=5, help='previous PR commits to search (default: 5)')
     parser.add_argument('--config', type=Path, default=Path(__file__).resolve().with_name('cubrid-pr-status.json'))
     parser.add_argument('--watch', action='store_true', help='refresh until Ctrl-C')
     parser.add_argument('--interval', type=float, default=30, help='seconds between watch refreshes (default: 30)')
-    args = parser.parse_args()
-    if args.history < 0 or args.history > 250:
-        parser.error('--history must be between 0 and 250')
-    if not math.isfinite(args.interval) or args.interval <= 0:
-        parser.error('--interval must be a positive finite number')
-    if args.pr and not re.fullmatch(r'https://github\.com/CUBRID/cubrid/pull/[0-9]+/?', args.pr, re.I):
-        parser.error('expected a https://github.com/CUBRID/cubrid/pull/NUMBER URL')
+    modes = parser.add_mutually_exclusive_group()
+    modes.add_argument('--json', action='store_true', help='versioned JSON; one object per line in watch mode')
+    modes.add_argument('--human', action='store_true', help='human-readable terminal output (default)')
+    try:
+        args = parser.parse_args()
+        if args.history < 0 or args.history > 250:
+            parser.error('--history must be between 0 and 250')
+        if not math.isfinite(args.interval) or args.interval <= 0:
+            parser.error('--interval must be a positive finite number')
+        if args.pr and not re.fullmatch(r'https://github\.com/CUBRID/cubrid/pull/[0-9]+/?', args.pr, re.I):
+            parser.error('expected a https://github.com/CUBRID/cubrid/pull/NUMBER URL')
+    except ValueError as exc:
+        return report_error('arguments', exc, json_mode, watch)
     try:
         config = json.loads(args.config.read_text())
         if not isinstance(config, dict) or 'expected_checks' not in config:
@@ -164,30 +261,36 @@ def main():
         if not isinstance(expected, list) or any(not isinstance(name, str) or not name.strip() for name in expected):
             raise ValueError('expected_checks must be a JSON array of nonempty check names.')
     except (RuntimeError, OSError, ValueError, KeyError) as exc:
-        print('cubrid-pr-status: ' + clean(exc), file=sys.stderr)
-        return 2
+        return report_error('configuration', exc, args.json, args.watch)
     target = args.pr
     try:
         while True:
+            stage = 'pr'
             try:
                 pr = read_pr(target)
                 target = pr['url']
+                stage = 'current_checks'
                 current = check_results(pr['headRefOid'])
-                incomplete = False
+                errors = []
                 try:
-                    previous, note = previous_results(pr, args.history)
-                except RuntimeError as exc:
-                    previous, note = {}, 'INCOMPLETE history: ' + clean(exc)
-                    incomplete = True
+                    previous, history = previous_results(pr, args.history)
+                except (RuntimeError, ValueError, KeyError, TypeError) as exc:
+                    previous = {}
+                    history = dict(status='incomplete', limit=args.history, searched=None, available=None, truncated=None)
+                    errors.append(dict(stage='history', message=str(exc)))
+                stage = 'head_check'
                 if read_pr(target)['headRefOid'] != pr['headRefOid']:
                     raise RuntimeError('PR head changed during fetch; retry for a consistent snapshot.')
-                if args.watch and sys.stdout.isatty():
+                if args.watch and color_enabled() and not args.json:
                     print('\033[2J\033[H', end='')
-                render(pr, current, expected, previous, note)
-                code = 2 if incomplete else 0
+                data = snapshot(pr, current, expected, previous, history, errors)
+                if args.json:
+                    print(json.dumps(data, indent=None if args.watch else 2))
+                else:
+                    render(data)
+                code = 2 if errors else 0
             except (RuntimeError, OSError, ValueError, KeyError, TypeError) as exc:
-                print('cubrid-pr-status: INCOMPLETE: ' + clean(exc), file=sys.stderr, flush=True)
-                code = 2
+                code = report_error(stage, exc, args.json, args.watch)
             sys.stdout.flush()
             if not args.watch:
                 return code

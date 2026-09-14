@@ -19,3 +19,7 @@ Vocabulary for viewing CUBRID pull-request CI from a terminal.
 **Not observed**: No result was found for a check on the queried commit. It does not imply queued, running, skipped, or passed.
 
 **Workflow revision**: The source revision running CI orchestration. An Actions issue-comment workflow may use develop while reporting test results for a separate PR head.
+
+**Snapshot**: One observation of a PR and its CI results, together with fetch time, history coverage, and any collection errors. Human and JSON output describe the same snapshot.
+
+**Incomplete snapshot**: An observation for which some requested data could not be collected or the PR head changed during collection. It is different from a successfully observed CI failure.

@@ -1,0 +1,200 @@
+#!/usr/bin/env python3
+"""Read-only CUBRID PR and CI summary. Requires Python 3.9+ and authenticated gh."""
+import argparse
+from concurrent.futures import ThreadPoolExecutor
+from datetime import datetime, timezone
+import json
+import math
+from pathlib import Path
+import re
+import subprocess
+import sys
+import time
+
+REPO = 'CUBRID/cubrid'
+PREFIX = 'repos/' + REPO
+FIELDS = 'number,title,url,headRefOid,state,isDraft,reviewDecision,mergeable'
+
+
+def gh(*args):
+    try:
+        result = subprocess.run(['gh', *args], capture_output=True, text=True, timeout=45)
+    except FileNotFoundError as exc:
+        raise RuntimeError('gh is missing; install GitHub CLI and run gh auth login.') from exc
+    except subprocess.TimeoutExpired as exc:
+        raise RuntimeError('GitHub request timed out after 45 seconds.') from exc
+    if result.returncode:
+        raise RuntimeError(result.stderr.strip() or 'GitHub request failed.')
+    try:
+        return json.loads(result.stdout)
+    except json.JSONDecodeError as exc:
+        raise RuntimeError('gh returned invalid JSON.') from exc
+
+
+def api(path):
+    return gh('api', PREFIX + '/' + path, '--paginate', '--slurp')
+
+
+def read_pr(target):
+    args = [target] if target else []
+    pr = gh('pr', 'view', *args, '--json', FIELDS)
+    if not re.fullmatch(r'https://github\.com/CUBRID/cubrid/pull/[0-9]+', pr['url'], re.I):
+        raise RuntimeError('This command supports CUBRID/cubrid PRs only.')
+    return pr
+
+
+def check_results(sha):
+    with ThreadPoolExecutor(max_workers=2) as pool:
+        statuses = pool.submit(api, f'commits/{sha}/statuses?per_page=100')
+        checks = pool.submit(api, f'commits/{sha}/check-runs?per_page=100')
+        entries = []
+        for page in statuses.result():
+            for item in page:
+                entries.append(dict(name=item['context'], state=item['state'].upper(),
+                                    url=item.get('target_url') or '', time=item.get('updated_at') or '',
+                                    id=item.get('id', 0), sha=sha))
+        for page in checks.result():
+            for item in page['check_runs']:
+                app = (item.get('app') or {}).get('slug', 'check')
+                entries.append(dict(name=f"{app}: {item['name']}",
+                                    state=(item.get('conclusion') or item['status']).upper(),
+                                    url=item.get('details_url') or '',
+                                    time=item.get('completed_at') or item.get('started_at') or '',
+                                    id=item.get('id', 0), sha=sha))
+    latest = {}
+    for item in sorted(entries, key=lambda x: x['id']):
+        latest[item['name']] = item
+    return latest
+
+
+def clean(value):
+    return ''.join(c if c.isprintable() else ' ' for c in str(value))
+
+
+def age(timestamp):
+    if not timestamp:
+        return 'time unknown'
+    try:
+        seconds = max(0, int((datetime.now(timezone.utc) - datetime.fromisoformat(
+            timestamp.replace('Z', '+00:00'))).total_seconds()))
+    except (ValueError, TypeError):
+        return 'time unknown'
+    return f'{seconds // 86400}d ago' if seconds >= 86400 else f'{seconds // 3600}h {(seconds % 3600) // 60}m ago'
+
+
+def provider(name):
+    if name.startswith('ci/circleci:'):
+        return 'CircleCI'
+    if name.startswith(('gha-ci:', 'github-actions:')):
+        return 'GitHub Actions'
+    return 'Other checks'
+
+
+def priority(state):
+    if state in ('FAILURE', 'ERROR', 'TIMED_OUT', 'CANCELLED', 'ACTION_REQUIRED', 'STARTUP_FAILURE'):
+        return 0
+    if state in ('SUCCESS', 'NEUTRAL', 'SKIPPED'):
+        return 2
+    return 1
+
+
+def previous_results(pr, limit):
+    if limit == 0:
+        return {}, 'History: disabled (--history 0).'
+    commits = [item['sha'] for page in api(f"pulls/{pr['number']}/commits?per_page=100") for item in page]
+    if pr['headRefOid'] not in commits:
+        raise RuntimeError('PR head absent from history (head changed or GitHub history limit reached); retry.')
+    commits = commits[:commits.index(pr['headRefOid'])]
+    selected = list(reversed(commits))[:limit]
+    previous: dict[str, dict] = {}
+    with ThreadPoolExecutor(max_workers=4) as pool:
+        for results in pool.map(check_results, selected):
+            for name, item in results.items():
+                previous.setdefault(name, item)
+    return previous, f'History: searched {len(selected)} of {len(commits)} previous PR commits; limit {limit}. Force-pushed-away commits are unavailable.'
+
+
+def render(pr, current, expected, previous, history_note):
+    print(f"PR #{pr['number']} {clean(pr['title'])}")
+    print(f"{pr['state']} | {'draft' if pr['isDraft'] else 'ready'} | review: {pr['reviewDecision'] or 'none'} | mergeability: {pr['mergeable']}")
+    print(pr['url'])
+    print(f"PR head: {pr['headRefOid']} | fetched {datetime.now(timezone.utc).isoformat(timespec='seconds')}")
+    print('Freshness means reported for this PR commit, not the CI workflow revision.')
+    for group in ('GitHub Actions', 'CircleCI', 'Other checks'):
+        names = [name for name in set(current) | set(expected) | set(previous) if provider(name) == group]
+        if not names:
+            continue
+        print('\n' + group)
+        for name in sorted(names, key=lambda n: (priority(current.get(n, {}).get('state', 'NOT OBSERVED')), n)):
+            item = current.get(name)
+            print(f"  {item['state'] if item else 'NOT OBSERVED':<14} {clean(name)} | current {pr['headRefOid'][:12]}")
+            if item:
+                print(f"    reported: {clean(item['time']) or 'unknown'} ({age(item['time'])})")
+                print('    ' + (clean(item['url']) or 'detail URL unavailable'))
+            elif name in previous:
+                old = previous[name]
+                print(f"    STALE previous: {old['state']} | {old['sha'][:12]} | {clean(old['time'])} ({age(old['time'])})")
+                print('    ' + (clean(old['url']) or 'detail URL unavailable'))
+            else:
+                print('    Previous result unavailable.' if history_note.startswith('INCOMPLETE')
+                      else '    No previous result in searched history.')
+    print('\n' + history_note)
+    print('\nNOT OBSERVED does not mean queued or passed. Timestamps are report times, not durations.')
+
+
+def main():
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument('pr', nargs='?', help='CUBRID PR URL; otherwise detect from current directory')
+    parser.add_argument('--history', type=int, default=5, help='previous PR commits to search (default: 5)')
+    parser.add_argument('--config', type=Path, default=Path(__file__).resolve().with_name('cubrid-pr-status.json'))
+    parser.add_argument('--watch', action='store_true', help='refresh until Ctrl-C')
+    parser.add_argument('--interval', type=float, default=30, help='seconds between watch refreshes (default: 30)')
+    args = parser.parse_args()
+    if args.history < 0 or args.history > 250:
+        parser.error('--history must be between 0 and 250')
+    if not math.isfinite(args.interval) or args.interval <= 0:
+        parser.error('--interval must be a positive finite number')
+    if args.pr and not re.fullmatch(r'https://github\.com/CUBRID/cubrid/pull/[0-9]+/?', args.pr, re.I):
+        parser.error('expected a https://github.com/CUBRID/cubrid/pull/NUMBER URL')
+    try:
+        config = json.loads(args.config.read_text())
+        if not isinstance(config, dict) or 'expected_checks' not in config:
+            raise ValueError('configuration must be a JSON object containing expected_checks.')
+        expected = config['expected_checks']
+        if not isinstance(expected, list) or any(not isinstance(name, str) or not name.strip() for name in expected):
+            raise ValueError('expected_checks must be a JSON array of nonempty check names.')
+    except (RuntimeError, OSError, ValueError, KeyError) as exc:
+        print('cubrid-pr-status: ' + clean(exc), file=sys.stderr)
+        return 2
+    target = args.pr
+    try:
+        while True:
+            try:
+                pr = read_pr(target)
+                target = pr['url']
+                current = check_results(pr['headRefOid'])
+                incomplete = False
+                try:
+                    previous, note = previous_results(pr, args.history)
+                except RuntimeError as exc:
+                    previous, note = {}, 'INCOMPLETE history: ' + clean(exc)
+                    incomplete = True
+                if read_pr(target)['headRefOid'] != pr['headRefOid']:
+                    raise RuntimeError('PR head changed during fetch; retry for a consistent snapshot.')
+                if args.watch and sys.stdout.isatty():
+                    print('\033[2J\033[H', end='')
+                render(pr, current, expected, previous, note)
+                code = 2 if incomplete else 0
+            except (RuntimeError, OSError, ValueError, KeyError, TypeError) as exc:
+                print('cubrid-pr-status: INCOMPLETE: ' + clean(exc), file=sys.stderr, flush=True)
+                code = 2
+            sys.stdout.flush()
+            if not args.watch:
+                return code
+            time.sleep(args.interval)
+    except KeyboardInterrupt:
+        return 0
+
+
+if __name__ == '__main__':
+    sys.exit(main())

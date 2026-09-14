@@ -1,0 +1,10 @@
+{
+  "expected_checks": [
+    "github-actions: license", "github-actions: pr-style", "github-actions: code-style",
+    "github-actions: cppcheck", "github-actions: memory-monitor-check", "github-actions: Check TC PRs",
+    "gha-ci: build (debug)", "gha-ci: build (release)",
+    "gha-ci: test_sql", "gha-ci: test_medium", "gha-ci: test_shell",
+    "ci/circleci: build", "ci/circleci: build_debug", "ci/circleci: download-build",
+    "ci/circleci: test_sql", "ci/circleci: test_medium", "ci/circleci: test_shell"
+  ]
+}

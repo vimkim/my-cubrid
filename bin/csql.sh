@@ -60,6 +60,62 @@ done
 CSQL_BIN=$(command -v csql)
 CUBRID_BIN=$(command -v cubrid)
 
+verify_server_build()
+{
+  local actual_server server_pid source_root client_source server_source
+  if ! command -v cubrid-binary-source-dir >/dev/null 2>&1; then
+    printf 'Refusing connection: cubrid-binary-source-dir is required to verify the server.\n' >&2
+    return 1
+  fi
+  if ! client_source=$(cubrid-binary-source-dir "$CSQL_BIN"); then
+    printf 'Refusing connection: cannot determine the client source tree.\n' >&2
+    return 1
+  fi
+  source_root=$(git rev-parse --show-toplevel 2>/dev/null) || source_root=""
+  # Outside a CUBRID checkout, use the selected client's recorded source tree.
+  if [[ -z $source_root || ! -f $source_root/src/storage/page_buffer.c ]]; then
+    source_root=$client_source
+  fi
+  source_root=$(realpath -e -- "$source_root") || return 1
+  if [[ $client_source != "$source_root" ]]; then
+    printf 'Refusing connection: csql belongs to another source tree.\n' >&2
+    printf '  Current tree: %s\n  Client tree:  %s\n' "$source_root" "$client_source" >&2
+    return 1
+  fi
+
+  # The master identifies the target PID; unrelated servers may use the same DB name.
+  server_pid=$(printf '%s\n' "$SERVER_STATUS" | awk -v db="$DB" '
+    ($1 == "Server" || $1 == "HA-Server") && $2 == db {
+      for (i = 3; i < NF; i++) if ($i == "pid") {
+        pid = $(i + 1); sub(/\)$/, "", pid); print pid
+      }
+    }')
+  if [[ ! $server_pid =~ ^[0-9]+$ ]]; then
+    printf 'Refusing connection: cannot determine the server PID for %s.\n' "$DB" >&2
+    return 1
+  fi
+  actual_server=$(readlink -- "/proc/$server_pid/exe") || actual_server=""
+  if [[ ${actual_server##*/} != cub_server ]]; then
+    printf 'Refusing connection: cannot inspect the running cub_server for %s (PID %s).\n' "$DB" "$server_pid" >&2
+    return 1
+  fi
+  if ! server_source=$(cubrid-binary-source-dir "/proc/$server_pid/exe"); then
+    printf 'Refusing connection: cannot determine the running server source tree.\n' >&2
+    return 1
+  fi
+  if [[ $server_source != "$source_root" ]]; then
+    printf 'Refusing connection: running server belongs to another source tree.\n' >&2
+    printf '  Database: %s\n  Server PID: %s\n  Current tree: %s\n  Server tree:  %s\n  Running: %s\n' \
+      "$DB" "$server_pid" "$source_root" "$server_source" "$actual_server" >&2
+    printf "Switch to the server's environment, or start the matching server on a separate port.\n" >&2
+    return 1
+  fi
+}
+
+if "$SERVER_RUNNING"; then
+  verify_server_build || exit 1
+fi
+
 Y="\033[33m" # yellow
 G="\033[32m" # green
 N="\033[0m"
@@ -85,10 +141,10 @@ if "$SERVER_RUNNING"; then
   printf "  ${G}Mode${N}           : ${CYAN}CS MODE\n${N}"
 printf "${Y}=============================${N}\n"
   printf "Running: csql -u dba %s ${MAGENTA}%s${N}\n\n" "$DB" "$*"
-  exec csql --no-pager -u dba "$DB" "$@"
+  exec "$CSQL_BIN" --no-pager -u dba "$DB" "$@"
 else
   printf "  ${G}Mode${N}           : ${CYAN}SA MODE\n${N}"
 printf "${Y}=============================${N}\n"
   printf "Running: csql -u dba %s -S ${MAGENTA}%s${N}\n\n" "$DB" "$*"
-  exec csql --no-pager -u dba "$DB" -S "$@"
+  exec "$CSQL_BIN" --no-pager -u dba "$DB" -S "$@"
 fi

@@ -6,7 +6,7 @@ readonly repos=(
   "$HOME/gh/my-cubrid-jira"
   "$HOME/gh/my-cubrid-skills"
   "$HOME/gh/cubrid-oos-context"
-  "$HOME/gh/cb"
+  "$HOME/gh/cb/develop"
 )
 
 if [[ "${1:-}" == "--list" ]]; then

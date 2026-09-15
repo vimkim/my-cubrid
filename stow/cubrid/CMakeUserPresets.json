@@ -319,9 +319,40 @@
         "CMAKE_C_FLAGS_RELWITHDEBINFO": "-O2 -ggdb3 -DNDEBUG -fno-inline -fno-inline-functions -Wno-error -Wno-pessimizing-move",
         "CMAKE_CXX_FLAGS_RELWITHDEBINFO": "-O2 -ggdb3 -DNDEBUG -fno-inline -fno-inline-functions -Wno-error -Wno-pessimizing-move"
       }
+    },
+
+    {
+      "name": "release_gcc_nounit",
+      "description": "CBRD-26659 campaign re-pin (ticket 41): release_gcc with every UNIT_TEST_* option OFF so CUBRID_UNIT_TEST_ENABLED is not compiled in. Inherits release_gcc so nothing but the four options differs.",
+      "inherits": "release_gcc",
+      "cacheVariables": {
+        "UNIT_TESTS": "OFF",
+        "UNIT_TEST_OOS": "OFF",
+        "UNIT_TEST_SPAGE": "OFF",
+        "UNIT_TEST_PAGE_BUFFER": "OFF"
+      }
+    },
+    {
+      "name": "debug_gcc_nounit",
+      "description": "CBRD-26659 campaign re-pin (ticket 41): debug_gcc with every UNIT_TEST_* option OFF so CUBRID_UNIT_TEST_ENABLED is not compiled in. Inherits debug_gcc so nothing but the four options differs.",
+      "inherits": "debug_gcc",
+      "cacheVariables": {
+        "UNIT_TESTS": "OFF",
+        "UNIT_TEST_OOS": "OFF",
+        "UNIT_TEST_SPAGE": "OFF",
+        "UNIT_TEST_PAGE_BUFFER": "OFF"
+      }
     }
   ],
   "buildPresets": [
+    {
+      "name": "release_gcc_nounit",
+      "configurePreset": "release_gcc_nounit"
+    },
+    {
+      "name": "debug_gcc_nounit",
+      "configurePreset": "debug_gcc_nounit"
+    },
     {
       "name": "release_gcc_Ofast",
       "configurePreset": "release_gcc_Ofast"

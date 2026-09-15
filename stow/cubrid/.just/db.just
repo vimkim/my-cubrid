@@ -140,6 +140,30 @@ disable-string-compression: get-string-compression
 paramdump-string-compression:
     cub-auto paramdump testdb | rg enable_string_compression
 
+# Show enable_pgbuf_inspector from the installed config (default: no).
+[working-directory(justfile_directory())]
+get-pgbuf-inspector:
+    crudini --get "$CUBRID/conf/cubrid.conf" common enable_pgbuf_inspector
+
+# Enable the page-buffer inspector at the next database server startup.
+[working-directory(justfile_directory())]
+enable-pgbuf-inspector:
+    crudini --set "$CUBRID/conf/cubrid.conf" common enable_pgbuf_inspector yes
+    just db get-pgbuf-inspector
+    printf '%s\n' "Restart the database server to apply enable_pgbuf_inspector."
+
+# Disable the page-buffer inspector at the next database server startup.
+[working-directory(justfile_directory())]
+disable-pgbuf-inspector:
+    crudini --set "$CUBRID/conf/cubrid.conf" common enable_pgbuf_inspector no
+    just db get-pgbuf-inspector
+    printf '%s\n' "Restart the database server to apply enable_pgbuf_inspector."
+
+# Show the effective hidden inspector parameter for a running database.
+[working-directory(justfile_directory())]
+paramdump-pgbuf-inspector database='testdb':
+    cubrid paramdump -C --dump-flag=0x8 "{{database}}" | rg enable_pgbuf_inspector
+
 # Show use_system_malloc.
 [working-directory(justfile_directory())]
 get-use-system-malloc:

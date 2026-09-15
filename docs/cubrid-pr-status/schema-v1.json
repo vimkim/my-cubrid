@@ -1,0 +1,438 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "cubrid-pr-status snapshot, version 1",
+  "description": "One --json snapshot or one line of --json --watch output. Additional fields are allowed for additive evolution.",
+  "type": "object",
+  "required": [
+    "schema_version",
+    "repository",
+    "fetched_at",
+    "complete",
+    "pr",
+    "checks",
+    "history",
+    "errors"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": 1
+    },
+    "repository": {
+      "const": "CUBRID/cubrid"
+    },
+    "fetched_at": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "complete": {
+      "type": "boolean"
+    },
+    "pr": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/pr"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "checks": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/check"
+      }
+    },
+    "history": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/history"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "errors": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/error"
+      }
+    }
+  },
+  "$defs": {
+    "sha": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{40}$"
+    },
+    "pr": {
+      "type": "object",
+      "required": [
+        "number",
+        "title",
+        "url",
+        "head_sha",
+        "state",
+        "draft",
+        "review_decision",
+        "mergeability"
+      ],
+      "properties": {
+        "number": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "title": {
+          "type": "string"
+        },
+        "url": {
+          "type": "string",
+          "format": "uri"
+        },
+        "head_sha": {
+          "$ref": "#/$defs/sha"
+        },
+        "state": {
+          "type": "string"
+        },
+        "draft": {
+          "type": "boolean"
+        },
+        "review_decision": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "mergeability": {
+          "type": "string"
+        }
+      }
+    },
+    "result": {
+      "type": "object",
+      "required": [
+        "state",
+        "reported_for_sha",
+        "detail_url",
+        "reported_at"
+      ],
+      "properties": {
+        "state": {
+          "type": "string",
+          "description": "Provider state uppercased; open string so new provider states remain representable."
+        },
+        "reported_for_sha": {
+          "$ref": "#/$defs/sha"
+        },
+        "detail_url": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "reported_at": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      }
+    },
+    "check": {
+      "type": "object",
+      "required": [
+        "name",
+        "provider",
+        "expected",
+        "freshness",
+        "current",
+        "previous"
+      ],
+      "properties": {
+        "name": {
+          "type": "string"
+        },
+        "provider": {
+          "enum": [
+            "GitHub Actions",
+            "CircleCI",
+            "Other checks"
+          ]
+        },
+        "expected": {
+          "type": "boolean"
+        },
+        "freshness": {
+          "enum": [
+            "current",
+            "not_observed"
+          ]
+        },
+        "current": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/result"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "previous": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/result"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "freshness": {
+                "const": "current"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "current": {
+                "$ref": "#/$defs/result"
+              },
+              "previous": {
+                "type": "null"
+              }
+            }
+          },
+          "else": {
+            "properties": {
+              "current": {
+                "type": "null"
+              }
+            }
+          }
+        }
+      ]
+    },
+    "history": {
+      "type": "object",
+      "required": [
+        "status",
+        "limit",
+        "searched",
+        "available",
+        "truncated"
+      ],
+      "properties": {
+        "status": {
+          "enum": [
+            "disabled",
+            "complete",
+            "incomplete"
+          ]
+        },
+        "limit": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 250
+        },
+        "searched": {
+          "anyOf": [
+            {
+              "type": "integer",
+              "minimum": 0
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "available": {
+          "anyOf": [
+            {
+              "type": "integer",
+              "minimum": 0
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "truncated": {
+          "type": [
+            "boolean",
+            "null"
+          ]
+        }
+      },
+      "oneOf": [
+        {
+          "properties": {
+            "status": {
+              "const": "disabled"
+            },
+            "limit": {
+              "const": 0
+            },
+            "searched": {
+              "const": 0
+            },
+            "available": {
+              "type": "null"
+            },
+            "truncated": {
+              "type": "null"
+            }
+          }
+        },
+        {
+          "properties": {
+            "status": {
+              "const": "complete"
+            },
+            "searched": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "available": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "truncated": {
+              "type": "boolean"
+            }
+          }
+        },
+        {
+          "properties": {
+            "status": {
+              "const": "incomplete"
+            },
+            "searched": {
+              "type": "null"
+            },
+            "available": {
+              "type": "null"
+            },
+            "truncated": {
+              "type": "null"
+            }
+          }
+        }
+      ]
+    },
+    "error": {
+      "type": "object",
+      "required": [
+        "stage",
+        "message"
+      ],
+      "properties": {
+        "stage": {
+          "enum": [
+            "arguments",
+            "configuration",
+            "pr",
+            "current_checks",
+            "history",
+            "head_check"
+          ]
+        },
+        "message": {
+          "type": "string"
+        }
+      }
+    }
+  },
+  "allOf": [
+    {
+      "if": {
+        "properties": {
+          "complete": {
+            "const": true
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "errors": {
+            "maxItems": 0
+          },
+          "pr": {
+            "$ref": "#/$defs/pr"
+          },
+          "history": {
+            "allOf": [
+              {
+                "$ref": "#/$defs/history"
+              },
+              {
+                "properties": {
+                  "status": {
+                    "enum": [
+                      "disabled",
+                      "complete"
+                    ]
+                  }
+                }
+              }
+            ]
+          }
+        }
+      },
+      "else": {
+        "properties": {
+          "errors": {
+            "minItems": 1
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "pr": {
+            "type": "null"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "complete": {
+            "const": false
+          },
+          "checks": {
+            "maxItems": 0
+          },
+          "history": {
+            "type": "null"
+          }
+        }
+      },
+      "else": {
+        "properties": {
+          "history": {
+            "$ref": "#/$defs/history"
+          }
+        }
+      }
+    }
+  ]
+}

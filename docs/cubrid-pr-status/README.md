@@ -52,6 +52,62 @@ head change during fetching rejects that snapshot; retry, or let watch refresh.
 Watch pins the initially resolved PR URL and rereads its head each cycle. `--interval`
 sets the wait between fetches; very short intervals consume more API requests.
 
+## AI agent workflow
+
+Use this tool for a CUBRID PR status summary with GitHub Actions and CircleCI
+results and links. Always select `--json` for programmatic consumption; redirected
+output otherwise remains human-readable.
+
+1. **Select the PR and fetch once.** Run
+   `cubrid-pr-status --json https://github.com/CUBRID/cubrid/pull/7939`, replacing
+   the example URL with the requested PR. Omit the URL only inside the checkout
+   for the intended PR. Use `~/my-cubrid/bin/cubrid-pr-status` if it is not on PATH.
+2. **Validate the snapshot.** Capture stdout and the exit code, then parse stdout
+   even on exit 2: it contains structured errors. Require `schema_version == 1`
+   before relying on this schema. Inspect `complete` and `errors`; exit 0 and
+   `complete: true` describe successful collection, not passing or finished CI.
+   For incomplete data, report the error stage and message. A history-only error
+   preserves valid current results; fatal errors have `pr: null` and no check rows.
+   Retry a `head_check` error to fetch a consistent snapshot.
+3. **Interpret checks for the published head.** Use `pr.head_sha`, which can
+   differ from local HEAD. Read each check's `provider`, `name`, and `current`.
+   After successful current-check collection, `current: null` means not observed.
+   Treat `previous` as stale evidence for its own `reported_for_sha`, including
+   when it says `PENDING` or `SUCCESS`. An expected check is a configured display
+   entry; it does not establish a CI trigger or branch-protection requirement.
+4. **Report evidence and links.** Include `pr.url`, the head SHA, `fetched_at`, PR
+   state, draft/review/mergeability fields, and current CI states by provider and
+   check name. Link to each available `current.detail_url`. Clearly label stale
+   results with their commit and link, and disclose incomplete data or limited
+   history when relevant. Preserve state distinctions: `SUCCESS` is passing;
+   `NEUTRAL` and `SKIPPED` are separate outcomes. Failure states include `FAILURE`,
+   `ERROR`, `TIMED_OUT`, `CANCELLED`, `ACTION_REQUIRED`, and `STARTUP_FAILURE`.
+   Report other states as returned; an unfamiliar state does not establish success.
+   Follow detail links when testcase failures or root causes are requested; this
+   tool reports status metadata and does not independently audit artifacts.
+
+For current-only questions, use `--history 0` to avoid history requests. If prior
+CI results matter, inspect `history` and increase `--history` when the searched
+window is too short (default 5, maximum 250). An absent previous result means none
+was found within coverage; force-pushed-away commits remain unavailable.
+
+For ongoing monitoring, use `--json --watch --interval 30` and parse each line as
+an independent snapshot, checking its schema, completeness, errors, and head SHA.
+Stop the process when the requested monitoring condition is met. For a single
+status request, finish after reporting one snapshot. Fetching status is read-only;
+triggering CI, posting comments, and changing the PR require separate tools.
+
+For example, preserve error snapshots and extract PR/check links in Bash:
+
+```sh
+status_code=0
+cubrid-pr-status --json https://github.com/CUBRID/cubrid/pull/7939 > /tmp/cubrid-pr-snapshot.json || status_code=$?
+printf 'Fetch exit status: %s\n' "$status_code"
+jq '{schema_version, complete, errors, pr, history,
+     checks: [.checks[] | {provider, name, freshness, current, previous}]}' \
+  /tmp/cubrid-pr-snapshot.json
+```
+
 ## Output formats
 
 `--human` is the default even when redirected. It uses an aligned ASCII layout,
@@ -66,7 +122,21 @@ human prose on stdout. One-time output is an indented object; watch is NDJSON,
 with one flushed, compact object per line, including error snapshots. JSON errors
 are on stdout and retain exit2. Help (`--help`) remains ordinary help text.
 
-Schema version1:
+### JSON Schema (version 1)
+
+The machine-readable [schema-v1.json](schema-v1.json) describes every field,
+required key, nullable value, and the current/previous and history variants.
+It uses JSON Schema draft 2020-12 and accepts additional fields. Provider states
+remain open strings so consumers can display unfamiliar states without treating
+them as success. `reported_at` and `detail_url` are nullable strings passed through
+from provider metadata; `fetched_at` is a generated UTC timestamp.
+
+The schema validates structure; consumers must also compare a current result's
+`reported_for_sha` with `pr.head_sha` when enforcing commit identity. Schema
+validation alone establishes neither CI success nor artifact correctness.
+
+See [jq recipes](jq-recipes.md) for snapshot guards, summaries, failure links,
+missing/stale checks, expected-check success, and watch processing.
 
 | Field | Meaning |
 | --- | --- |
@@ -94,12 +164,6 @@ Fatal collection/argument/config errors return `complete: false`, no check rows,
 and a structured error, so unavailable data cannot masquerade as missing checks.
 Stages are `arguments`, `configuration`, `pr`, `current_checks`, `history`, and
 `head_check`. An invalid combination containing `--json` reports its error as JSON.
-
-For example, find current failed checks:
-
-```sh
-cubrid-pr-status --json | jq '.checks[] | select(.current.state == "FAILURE")'
-```
 
 Exit status is 0 when the view was fetched (even if CI failed), 2 for invalid input
 or incomplete data, and 0 on Ctrl-C. The command does not trigger CI or write to

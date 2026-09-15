@@ -234,14 +234,72 @@ def main():
     options = tokens[:tokens.index('--')] if '--' in tokens else tokens
     json_mode = '--json' in options
     watch = '--watch' in options
-    parser = Arguments(description=__doc__, allow_abbrev=False)
+    parser = Arguments(description=__doc__, allow_abbrev=False,
+                       formatter_class=argparse.RawDescriptionHelpFormatter,
+                       epilog='''AI agents:
+  Fetch once: cubrid-pr-status --json [CUBRID_PR_URL]
+  Omit the URL only when the current checkout selects the intended PR.
+  Parse stdout as JSON, including on exit 2. Check schema_version == 1,
+  complete, and errors before interpreting checks. Exit 0 means fetched,
+  not CI passed; complete means collection succeeded, not CI finished.
+  Use pr.head_sha for freshness and pr.url for the PR link. Report each
+  check's provider, name, current.state, and current.detail_url when present.
+  current == null means not observed after successful collection; previous
+  is stale and cannot establish current CI status. Consult history coverage.
+  Use --history 0 for current-only queries; increase it for older CI results.
+  Use --json --watch only for ongoing monitoring; parse one object per line
+  and check complete/errors on every snapshot. Stop when monitoring is done.
+  This tool is read-only. Failure details require following detail_url.
+
+Exit status: 0 = fetched or Ctrl-C; 2 = invalid input or incomplete data.
+
+JSON v1 field layout (all keys present; ? means value may be null):
+  schema_version: 1, repository: string, fetched_at: UTC timestamp,
+  complete: boolean, errors: [{stage: string, message: string}],
+  pr: {number: integer, title: string, url: string, head_sha: full SHA,
+       state: string, draft: boolean, review_decision: string?,
+       mergeability: string}?,
+  checks: [{name: string, provider: string, expected: boolean,
+            freshness: "current" | "not_observed",
+            current: result?, previous: result?}],
+  history: {status: "disabled" | "complete" | "incomplete", limit: integer,
+            searched: integer?, available: integer?, truncated: boolean?}?
+  result = {state: string, reported_for_sha: full SHA,
+            detail_url: string?, reported_at: string?}
+  Fatal errors: complete=false, pr=null, history=null, checks=[].
+  Provider states are open strings; unfamiliar states do not imply success.
+
+jq examples (save one snapshot, including structured errors on exit 2):
+  cubrid-pr-status --json > snapshot.json
+  # Check collection before extracting; exit 0 from jq -e means true:
+  jq -e '.schema_version == 1 and .complete == true and .errors == []
+         and .pr != null' snapshot.json
+  # PR identity, status, and errors:
+  jq '{pr, fetched_at, complete, errors}' snapshot.json
+  # Current failure states and links:
+  jq '[.checks[] | select(.current != null)
+       | select(.current.state as $s | ["FAILURE", "ERROR", "TIMED_OUT",
+           "CANCELLED", "ACTION_REQUIRED", "STARTUP_FAILURE"] | index($s) != null)
+       | {provider, name, current}]' snapshot.json
+  # Expected checks missing on the published head:
+  jq '[.checks[] | select(.expected and .current == null)
+       | {provider, name}]' snapshot.json
+  # Stale results with coverage and their own commit/URL:
+  jq '{history, stale: [.checks[]
+       | select(.current == null and .previous != null)
+       | {provider, name, previous}]}' snapshot.json
+
+Agent workflow and schema: ~/my-cubrid/docs/cubrid-pr-status/README.md
+JSON Schema: ~/my-cubrid/docs/cubrid-pr-status/schema-v1.json
+jq recipes: ~/my-cubrid/docs/cubrid-pr-status/jq-recipes.md
+''')
     parser.add_argument('pr', nargs='?', help='CUBRID PR URL; otherwise detect from current directory')
     parser.add_argument('--history', type=int, default=5, help='previous PR commits to search (default: 5)')
     parser.add_argument('--config', type=Path, default=Path(__file__).resolve().with_name('cubrid-pr-status.json'))
     parser.add_argument('--watch', action='store_true', help='refresh until Ctrl-C')
     parser.add_argument('--interval', type=float, default=30, help='seconds between watch refreshes (default: 30)')
     modes = parser.add_mutually_exclusive_group()
-    modes.add_argument('--json', action='store_true', help='versioned JSON; one object per line in watch mode')
+    modes.add_argument('--json', action='store_true', help='AI agents: versioned JSON; one object per line in watch mode')
     modes.add_argument('--human', action='store_true', help='human-readable terminal output (default)')
     try:
         args = parser.parse_args()

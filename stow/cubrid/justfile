@@ -95,3 +95,6 @@ dwb-off:
 
 dwb-get:
     ini.sh -s common "$CUBRID/conf/cubrid.conf" double_write_buffer_size
+
+cubrid-pr-status:
+    cubrid-pr-status

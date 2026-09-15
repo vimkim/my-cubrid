@@ -160,7 +160,9 @@ acquire_runtime_lock()
 
   exec {RUNTIME_LOCK_FD}>"$RUNTIME_LOCK"
   if ! flock -w "$timeout" "$RUNTIME_LOCK_FD"; then
-    report_runtime_busy ""
+    printf 'Runtime command could not acquire the lock within %s seconds.\n' "$timeout" >&2
+    printf 'Environment: %s\nLock: %s\n' "$CUBRID" "$RUNTIME_LOCK" >&2
+    printf 'Another runtime command or a daemon holding an inherited lock may own it.\n' >&2
     exit "$EX_TEMPFAIL"
   fi
 }
@@ -275,7 +277,11 @@ case "$action" in
     fi
     acquire_runtime_lock "$runtime_timeout"
     export CUBRID_RUNTIME_LOCK_HELD=1
-    exec "$@"
+    # Keep the lock in this supervisor, not in the command or its daemon children.
+    (
+      exec {RUNTIME_LOCK_FD}>&-
+      exec "$@"
+    )
     ;;
   stop-and-build)
     [[ $# -eq 0 ]] || die_usage "stop-and-build takes no arguments"

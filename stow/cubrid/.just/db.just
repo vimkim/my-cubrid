@@ -22,7 +22,7 @@ start-interactive:
       [[ $status == 1 || $status == 130 ]] && exit 0
       exit "$status"
     fi
-    ~/my-cubrid/bin/cubrid-build-coordinator.sh runtime 300 -- cubrid server start "$database"
+    ~/my-cubrid/bin/cubrid-build-coordinator.sh runtime 0 -- cubrid server start "$database"
 
 # Select a running database server with fzf and stop it.
 stop-interactive:
@@ -41,7 +41,7 @@ stop-interactive:
       [[ $status == 1 || $status == 130 ]] && exit 0
       exit "$status"
     fi
-    ~/my-cubrid/bin/cubrid-build-coordinator.sh runtime 300 -- cubrid server stop "$database"
+    ~/my-cubrid/bin/cubrid-build-coordinator.sh runtime 0 -- cubrid server stop "$database"
 
 # Create an empty database named from the invocation directory or branch.
 pwddb-create:

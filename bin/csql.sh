@@ -7,14 +7,6 @@ if [[ $# -gt 0 && $1 != -* ]]; then
   shift
 fi
 
-if ! SERVER_STATUS=$(cubrid server status); then
-  printf 'Unable to determine running CUBRID servers.\n' >&2
-  exit 1
-fi
-mapfile -t RUNNING_DATABASES < <(
-  printf '%s\n' "$SERVER_STATUS" | awk '$1 == "Server" || $1 == "HA-Server" { if (!seen[$2]++) print $2 }'
-)
-
 select_database()
 {
   local prompt=$1
@@ -32,22 +24,24 @@ select_database()
 }
 
 if [[ -z $DB ]]; then
-  case ${#RUNNING_DATABASES[@]} in
-    0)
-      REGISTRY="${CUBRID_DATABASES:-.}/databases.txt"
-      if [[ ! -r $REGISTRY ]]; then
-        printf 'Cannot read database registry: %s\n' "$REGISTRY" >&2
-        exit 1
-      fi
-      mapfile -t REGISTERED_DATABASES < <(
-        awk 'NF && $1 !~ /^#/ { if (!seen[$1]++) print $1 }' "$REGISTRY"
-      )
-      select_database 'Registered database (standalone)> ' "${REGISTERED_DATABASES[@]}"
-      ;;
-    1) DB=${RUNNING_DATABASES[0]} ;;
-    *) select_database 'Running database> ' "${RUNNING_DATABASES[@]}" ;;
-  esac
+  REGISTRY="${CUBRID_DATABASES:-.}/databases.txt"
+  if [[ ! -r $REGISTRY ]]; then
+    printf 'Cannot read database registry: %s\n' "$REGISTRY" >&2
+    exit 1
+  fi
+  mapfile -t REGISTERED_DATABASES < <(
+    awk 'NF && $1 !~ /^#/ { if (!seen[$1]++) print $1 }' "$REGISTRY"
+  )
+  select_database 'Registered database> ' "${REGISTERED_DATABASES[@]}"
 fi
+
+if ! SERVER_STATUS=$(cubrid server status); then
+  printf 'Unable to determine running CUBRID servers.\n' >&2
+  exit 1
+fi
+mapfile -t RUNNING_DATABASES < <(
+  printf '%s\n' "$SERVER_STATUS" | awk '$1 == "Server" || $1 == "HA-Server" { if (!seen[$2]++) print $2 }'
+)
 
 SERVER_RUNNING=false
 for RUNNING_DB in "${RUNNING_DATABASES[@]}"; do

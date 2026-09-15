@@ -1,0 +1,81 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+usage()
+{
+  echo 'Usage: my-cubrid-pwddb create|recreate|delete [--append-name SUFFIX] [--load demodb]'
+  echo 'Uses CUBRID_DATABASES and the active cubrid executable; --load requires CUBRID.'
+  echo 'Creation leaves the database stopped. Recreation/deletion stops only the target.'
+}
+die() { printf 'Error: %s\n' "$*" >&2; exit 1; }
+action=${1:-}
+case $action in
+  -h|--help|help) usage; exit 0 ;;
+  create|recreate|delete) shift ;;
+  *) usage >&2; exit 2 ;;
+esac
+name_args=()
+template=''
+while [[ $# -gt 0 ]]; do
+  case $1 in
+    --append-name)
+      [[ $# -ge 2 ]] || die '--append-name requires a suffix'
+      name_args+=(--append-name "$2"); shift 2 ;;
+    --load)
+      [[ $# -ge 2 && $2 == demodb ]] || die '--load supports only demodb'
+      template=$2; shift 2 ;;
+    -h|--help) usage; exit 0 ;;
+    *) die "Unknown argument: $1" ;;
+  esac
+done
+[[ $action != delete || -z $template ]] || die '--load is only valid for create/recreate'
+script_dir=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd -P)
+name=$("$script_dir/my-cubrid-pwddb-getname" "${name_args[@]}")
+[[ -n ${CUBRID_DATABASES:-} ]] || die 'CUBRID_DATABASES must be set'
+command -v cubrid >/dev/null || die 'cubrid is not on PATH'
+command -v flock >/dev/null || die 'flock is not on PATH'
+if [[ -n $template ]]; then
+  [[ -n ${CUBRID:-} ]] || die 'CUBRID must be set for --load demodb'
+  schema=$CUBRID/demo/demodb_schema
+  objects=$CUBRID/demo/demodb_objects
+  [[ -r $schema && -r $objects ]] || die 'Cannot read demodb schema/objects under CUBRID/demo'
+  schema=$(realpath -e -- "$schema")
+  objects=$(realpath -e -- "$objects")
+fi
+mkdir -p -- "$CUBRID_DATABASES"
+CUBRID_DATABASES=$(cd -- "$CUBRID_DATABASES" && pwd -P)
+export CUBRID_DATABASES
+# Serialize pwddb lifecycle operations sharing a registry.
+exec 9>"$CUBRID_DATABASES/.pwddb.lock"
+flock -x 9
+registry=$CUBRID_DATABASES/databases.txt
+exists=false
+if [[ -e $registry ]]; then
+  [[ -f $registry && -r $registry ]] || die "Cannot read registry: $registry"
+  if PWDB_NAME="$name" awk '$1 == ENVIRON["PWDB_NAME"] { found=1 } END { exit !found }' "$registry"; then exists=true; fi
+fi
+if [[ $action == create && $exists == true ]]; then
+  die "Database already exists: $name"
+fi
+if [[ $action != create && $exists == true ]]; then
+  server_status=$(cubrid server status) || die 'Cannot determine running servers'
+  if PWDB_NAME="$name" awk '($1 == "Server" || $1 == "HA-Server") && $2 == ENVIRON["PWDB_NAME"] { found=1 } END { exit !found }' <<<"$server_status"; then
+    cubrid server stop "$name" || die "Failed to stop database: $name"
+  fi
+  cubrid deletedb "$name" || die "Failed to delete database: $name"
+fi
+if [[ $action == delete ]]; then
+  printf 'Database absent: %s\n' "$name"
+  exit 0
+fi
+db_dir=$CUBRID_DATABASES/$name
+mkdir -p -- "$db_dir"
+create_args=(--db-volume-size=20M --log-volume-size=20M)
+[[ -z $template ]] || create_args+=(--db-page-size=16K)
+# Keep utility output files in the database's directory.
+cd -- "$db_dir"
+cubrid createdb "${create_args[@]}" "$name" en_US.utf8 -F "$db_dir" || die "Failed to create database: $name"
+if [[ -n $template ]]; then
+  cubrid loaddb -u dba -s "$schema" -d "$objects" "$name" || die "demodb load failed; database retained for inspection: $name"
+fi
+printf 'Created database: %s\n' "$name"

@@ -1,0 +1,35 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+if [[ $# != 0 ]]; then
+  case $1 in
+    -h|--help|help)
+      echo 'Usage: my-cubrid-ticket-get'
+      echo 'Find a CBRD ticket in the directory basename, then the Git branch.'
+      echo 'Exit: 0 found, 1 absent, 2 ambiguous or invalid arguments.'
+      exit 0 ;;
+    *) echo 'Usage: my-cubrid-ticket-get' >&2; exit 2 ;;
+  esac
+fi
+
+extract()
+{
+  local rest=$1 match
+  local -A tickets=()
+  shopt -s nocasematch
+  while [[ $rest =~ CBRD-[0-9]+ ]]; do
+    match=${BASH_REMATCH[0]}
+    tickets[${match^^}]=1
+    rest=${rest#*"$match"}
+  done
+  case ${#tickets[@]} in
+    0) return 1 ;;
+    1) printf '%s\n' "${!tickets[@]}" ;;
+    *) echo 'Multiple distinct CBRD tickets found; cannot choose a database name.' >&2; return 2 ;;
+  esac
+}
+
+if extract "${PWD##*/}"; then exit 0; else status=$?; fi
+[[ $status == 1 ]] || exit "$status"
+branch=$(git symbolic-ref --quiet --short HEAD 2>/dev/null) || branch=''
+extract "$branch"

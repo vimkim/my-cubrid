@@ -2,6 +2,71 @@ set minimum-version := "1.55.0"
 set no-cd
 set shell := ["sh", "-cu"]
 
+# List all registered database names, including stopped databases.
+list-all:
+    @awk 'NF && $1 !~ /^#/ {print $1}' "${CUBRID_DATABASES:-.}/databases.txt"
+
+# Select a registered database with fzf and start its server.
+start-interactive:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    databases=$(awk 'NF && $1 !~ /^#/ && !seen[$1]++ {print $1}' "${CUBRID_DATABASES:-.}/databases.txt")
+    if [[ -z $databases ]]; then
+      echo 'No registered databases.'
+      exit 0
+    fi
+    if database=$(printf '%s\n' "$databases" | fzf --height=40% --layout=reverse --border --no-multi --prompt='Start database> '); then
+      [[ -n $database ]] || exit 0
+    else
+      status=$?
+      [[ $status == 1 || $status == 130 ]] && exit 0
+      exit "$status"
+    fi
+    ~/my-cubrid/bin/cubrid-build-coordinator.sh runtime 300 -- cubrid server start "$database"
+
+# Select a running database server with fzf and stop it.
+stop-interactive:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    server_status=$(cubrid server status)
+    databases=$(awk '($1 == "Server" || $1 == "HA-Server") && !seen[$2]++ {print $2}' <<<"$server_status")
+    if [[ -z $databases ]]; then
+      echo 'No running database servers.'
+      exit 0
+    fi
+    if database=$(printf '%s\n' "$databases" | fzf --height=40% --layout=reverse --border --no-multi --prompt='Stop database> '); then
+      [[ -n $database ]] || exit 0
+    else
+      status=$?
+      [[ $status == 1 || $status == 130 ]] && exit 0
+      exit "$status"
+    fi
+    ~/my-cubrid/bin/cubrid-build-coordinator.sh runtime 300 -- cubrid server stop "$database"
+
+# Create an empty database named from the invocation directory or branch.
+pwddb-create:
+    ~/my-cubrid/bin/my-cubrid-pwddb create
+
+# Replace only the resolved database with an empty database.
+pwddb-recreate:
+    ~/my-cubrid/bin/my-cubrid-pwddb recreate
+
+# Delete only the resolved database.
+pwddb-delete:
+    ~/my-cubrid/bin/my-cubrid-pwddb delete
+
+# Create the resolved database with the demodb suffix and sample data.
+pwddb-create-demodb:
+    ~/my-cubrid/bin/my-cubrid-pwddb create --append-name demodb --load demodb
+
+# Replace the resolved demodb variant and load its sample data.
+pwddb-recreate-demodb:
+    ~/my-cubrid/bin/my-cubrid-pwddb recreate --append-name demodb --load demodb
+
+# Delete only the resolved demodb variant.
+pwddb-delete-demodb:
+    ~/my-cubrid/bin/my-cubrid-pwddb delete --append-name demodb
+
 # Start testdb while holding the runtime lock.
 [working-directory(justfile_directory())]
 start-testdb:

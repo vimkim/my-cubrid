@@ -1,0 +1,35 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+suffix=''
+while [[ $# -gt 0 ]]; do
+  case $1 in
+    --append-name)
+      [[ $# -ge 2 && -n $2 && $2 != -* ]] || { echo '--append-name requires a nonempty suffix.' >&2; exit 2; }
+      suffix=$2; shift 2 ;;
+    -h|--help|help)
+      echo 'Usage: my-cubrid-pwddb-getname [--append-name SUFFIX]'
+      echo 'Print the directory/branch ticket, otherwise the first 10 directory characters.'
+      exit 0 ;;
+    *) printf 'Unknown argument: %s\n' "$1" >&2; exit 2 ;;
+  esac
+done
+script_dir=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd -P)
+if name=$("$script_dir/my-cubrid-ticket-get"); then
+  :
+else
+  status=$?
+  [[ $status == 1 ]] || exit "$status"
+  name=${PWD##*/}
+  name=${name:0:10}
+fi
+[[ -z $suffix ]] || name+="-$suffix"
+# Match the utility's forbidden characters, plus reject option/path aliases.
+# The documented database name limit is 17 English characters.
+export LC_ALL=C
+if [[ -z $name || ${#name} -gt 17 || $name == [-#]* || $name == . || $name == .. ||
+      $name == *[![:print:]]* || $name == *[[:space:]/\\@]* ]]; then
+  printf 'Invalid database name: %s (use 1–17 printable ASCII characters without whitespace, /, \\, or @; no leading - or #).\n' "$name" >&2
+  exit 2
+fi
+printf '%s\n' "$name"

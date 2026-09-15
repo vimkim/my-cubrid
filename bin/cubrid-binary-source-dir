@@ -1,0 +1,69 @@
+#!/usr/bin/env python3
+"""Print the existing local Git source root recorded in an ELF binary."""
+
+import argparse
+import os
+from pathlib import Path
+import shutil
+import subprocess
+import sys
+
+
+def fail(message):
+    print(f"cubrid-binary-source-dir: {message}", file=sys.stderr)
+    return 1
+
+
+def main():
+    parser = argparse.ArgumentParser(
+        description="Print the local Git source directory recorded in binary debug information.",
+        epilog="Requires eu-srcfiles (elfutils). Reports a location, not a verified source revision.",
+    )
+    parser.add_argument("binary", help="command name on PATH or path to an ELF binary")
+    args = parser.parse_args()
+
+    target = args.binary if "/" in args.binary else shutil.which(args.binary)
+    if not target or not Path(target).is_file():
+        return fail(f"binary not found: {args.binary}")
+    extractor = shutil.which("eu-srcfiles")
+    if not extractor:
+        return fail("eu-srcfiles is required; install elfutils")
+
+    # Inspect the file without running it or downloading debug information.
+    env = dict(os.environ, DEBUGINFOD_URLS="")
+    result = subprocess.run(
+        [extractor, "-0", "-c", "-e", str(Path(target).resolve())],
+        stdout=subprocess.PIPE, stderr=subprocess.PIPE, env=env,
+    )
+    if result.returncode:
+        detail = os.fsdecode(result.stderr).strip()
+        return fail(f"cannot read source information: {detail or args.binary}")
+
+    roots = set()
+    for raw in result.stdout.split(b"\0"):
+        if not raw:
+            continue
+        source = Path(os.fsdecode(raw))
+        # Relative debug paths must not be interpreted against our working directory.
+        if not source.is_absolute() or not source.is_file():
+            continue
+        for parent in source.parents:
+            if (parent / ".git").exists():
+                roots.add(parent.resolve())
+                break
+
+    # A nested submodule belongs to its enclosing source checkout.
+    roots = {root for root in roots if not any(parent in roots for parent in root.parents)}
+    if not roots:
+        return fail("no existing local Git source directory found in debug information")
+    if len(roots) > 1:
+        return fail("multiple source directories found:\n" + "\n".join(sorted(map(str, roots))))
+    print(roots.pop())
+    return 0
+
+
+if __name__ == "__main__":
+    try:
+        sys.exit(main())
+    except OSError as error:
+        sys.exit(fail(str(error)))

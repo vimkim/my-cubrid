@@ -3,7 +3,8 @@ set -euo pipefail
 
 usage()
 {
-  echo 'Usage: my-cubrid-pwddb create|recreate|delete [--append-name SUFFIX] [--load demodb]'
+  echo 'Usage: my-cubrid-pwddb ensure|create|recreate|delete [--append-name SUFFIX] [--load demodb]'
+  echo 'Ensure creates only if absent; existing databases are left untouched.'
   echo 'Uses CUBRID_DATABASES and the active cubrid executable; --load requires CUBRID.'
   echo 'Creation leaves the database stopped. Recreation/deletion stops only the target.'
 }
@@ -11,7 +12,7 @@ die() { printf 'Error: %s\n' "$*" >&2; exit 1; }
 action=${1:-}
 case $action in
   -h|--help|help) usage; exit 0 ;;
-  create|recreate|delete) shift ;;
+  ensure|create|recreate|delete) shift ;;
   *) usage >&2; exit 2 ;;
 esac
 name_args=()
@@ -28,7 +29,7 @@ while [[ $# -gt 0 ]]; do
     *) die "Unknown argument: $1" ;;
   esac
 done
-[[ $action != delete || -z $template ]] || die '--load is only valid for create/recreate'
+[[ $action != delete || -z $template ]] || die '--load is only valid for ensure/create/recreate'
 script_dir=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd -P)
 name=$("$script_dir/my-cubrid-pwddb-getname" "${name_args[@]}")
 [[ -n ${CUBRID_DATABASES:-} ]] || die 'CUBRID_DATABASES must be set'
@@ -54,10 +55,14 @@ if [[ -e $registry ]]; then
   [[ -f $registry && -r $registry ]] || die "Cannot read registry: $registry"
   if PWDB_NAME="$name" awk '$1 == ENVIRON["PWDB_NAME"] { found=1 } END { exit !found }' "$registry"; then exists=true; fi
 fi
+if [[ $action == ensure && $exists == true ]]; then
+  printf 'Database already exists: %s\n' "$name"
+  exit 0
+fi
 if [[ $action == create && $exists == true ]]; then
   die "Database already exists: $name"
 fi
-if [[ $action != create && $exists == true ]]; then
+if [[ ( $action == recreate || $action == delete ) && $exists == true ]]; then
   server_status=$(cubrid server status) || die 'Cannot determine running servers'
   if PWDB_NAME="$name" awk '($1 == "Server" || $1 == "HA-Server") && $2 == ENVIRON["PWDB_NAME"] { found=1 } END { exit !found }' <<<"$server_status"; then
     cubrid server stop "$name" || die "Failed to stop database: $name"

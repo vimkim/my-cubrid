@@ -133,6 +133,32 @@ class PwddbTests(unittest.TestCase):
         self.run_cli('my-cubrid-pwddb', 'create', '--append-name', 'demodb', ok=False)
         self.assertEqual(len(self.calls()), 1)
 
+    def test_ensure_creates_once_and_preserves_existing_database(self):
+        self.register('unrelated')
+        self.run_cli('my-cubrid-pwddb', 'ensure')
+        registry = (self.dbroot / 'databases.txt').read_text()
+        self.env['RUNNING'] = 'oos-storag'
+        result = self.run_cli('my-cubrid-pwddb', 'ensure')
+        self.assertIn('already exists', result.stdout)
+        self.assertEqual([call[0] for call in self.calls()], ['createdb'])
+        self.assertEqual((self.dbroot / 'databases.txt').read_text(), registry)
+        self.assertIn('unrelated', registry)
+
+    def test_ensure_creation_failure_is_reported(self):
+        self.env['FAIL'] = 'createdb'
+        self.run_cli('my-cubrid-pwddb', 'ensure', ok=False)
+        self.assertFalse((self.dbroot / 'databases.txt').exists())
+
+    def test_concurrent_ensure_creates_once(self):
+        processes = [subprocess.Popen([str(BIN / 'my-cubrid-pwddb'), 'ensure'],
+                                     cwd=self.cwd, env=dict(self.env, PWD=str(self.cwd)),
+                                     text=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+                     for _ in range(4)]
+        for process in processes:
+            stdout, stderr = process.communicate(timeout=10)
+            self.assertEqual(process.returncode, 0, stdout + stderr)
+        self.assertEqual([call[0] for call in self.calls()], ['createdb'])
+
     def test_template_load_and_failure_retention(self):
         self.env['FAIL'] = 'loaddb'
         result = self.run_cli('my-cubrid-pwddb', 'create', '--append-name', 'demodb', '--load', 'demodb', ok=False)

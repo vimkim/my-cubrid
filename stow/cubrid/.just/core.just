@@ -146,7 +146,7 @@ install:
 build-without-log: ensure-build-jdk
     ~/my-cubrid/bin/cubrid-build-coordinator.sh build 0
 
-# Compile, install, and capture the complete build log.
+# Compile, install, ensure the worktree database exists, and capture the complete log.
 [working-directory(justfile_directory())]
 build: ensure-build-jdk
     #!/usr/bin/env bash
@@ -155,7 +155,10 @@ build: ensure-build-jdk
     mkdir -p "$build_dir"
     log_file="$build_dir/build.log"
     echo "Logging build output to: $log_file"
-    direnv exec . "$HOME/my-cubrid/bin/cubrid-build-coordinator.sh" build 0 2>&1 | tee "$log_file"
+    {
+      direnv exec . "$HOME/my-cubrid/bin/cubrid-build-coordinator.sh" build 0
+      direnv exec . "$HOME/my-cubrid/bin/cubrid-build-coordinator.sh" runtime 300 -- "$HOME/my-cubrid/bin/my-cubrid-pwddb" ensure
+    } 2>&1 | tee "$log_file"
 
 # Wait up to `timeout` seconds for an idle runtime, then build.
 [working-directory(justfile_directory())]

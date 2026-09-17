@@ -103,17 +103,46 @@ class RuntimeGuardCliTest(unittest.TestCase):
         return sorted(snapshot)
 
     def run_runtime(self, command, *arguments):
+        return self.run_runtime_for(
+            self.worktree, self.environment, command, *arguments
+        )
+
+    def run_runtime_for(self, worktree, environment, command, *arguments):
         return subprocess.run(
             [str(CLI), command, *arguments],
-            cwd=self.worktree,
-            env=self.environment,
+            cwd=worktree,
+            env=environment,
             text=True,
             capture_output=True,
             timeout=10,
         )
 
+    def create_additional_runtime(self, name):
+        worktree = self.root / f"source-{name}"
+        worktree.mkdir()
+        subprocess.run(["git", "init", "-q", str(worktree)], check=True)
+        for filename in ("CMakeLists.txt", "VERSION"):
+            (worktree / filename).touch()
+        for directory in ("src", "broker", "pl_engine"):
+            (worktree / directory).mkdir()
+        installation = self.root / f"install-{name}"
+        shutil.copytree(self.installation, installation)
+        environment = {
+            **self.environment,
+            "CUBRID": str(installation),
+            "CUBRID_BUILD_DIR": str(worktree / "build_preset_debug"),
+        }
+        return worktree, installation, environment
+
     def run_cli(self, *arguments):
         return self.run_runtime("validate", *arguments)
+
+    def manifest_for(self, result):
+        report = json.loads(result.stdout)
+        return self.read_manifest(Path(report["manifest_path"]))
+
+    def read_manifest(self, path):
+        return json.loads(path.read_text())
 
     def use_fake_state(self, runtime_id, manifest, observations=None):
         environment_path = self.worktree / ".env"
@@ -160,7 +189,7 @@ class RuntimeGuardCliTest(unittest.TestCase):
             self.state_home / "cubrid-worktree-guard" / "worktrees"
             / runtime_id / "manifest.json"
         )
-        manifest = json.loads(manifest_path.read_text())
+        manifest = self.read_manifest(manifest_path)
         bundle = manifest["resource_bundle"]
         self.assertEqual(manifest["state"], "ready")
         self.assertEqual(manifest["active_preset"], "debug")
@@ -312,7 +341,7 @@ class RuntimeGuardCliTest(unittest.TestCase):
         result = self.run_runtime("init", "--preset", "debug", "--json")
 
         self.assertEqual(result.returncode, 0, result.stderr + result.stdout)
-        manifest = json.loads(Path(json.loads(result.stdout)["manifest_path"]).read_text())
+        manifest = self.manifest_for(result)
         bundle = manifest["resource_bundle"]
         self.assertEqual(bundle["master_port"], 15123)
         self.assertEqual(bundle["brokers"][0]["port"], 23123)
@@ -322,6 +351,487 @@ class RuntimeGuardCliTest(unittest.TestCase):
             manifest["normalized_claims"]["system_v_keys"],
             [0x60000100, 0x60000101, 0x51000101],
         )
+        self.assertFalse(self.calls.exists())
+
+    def test_init_allocates_every_enabled_broker_as_one_disjoint_bundle(self):
+        broker_path = self.installation / "conf" / "cubrid_broker.conf"
+        broker_path.write_text(
+            broker_path.read_text()
+            + "\n[%analytics]\n"
+            + "SERVICE=ON\n"
+            + "BROKER_PORT=33000\n"
+            + "MAX_NUM_APPL_SERVER=3\n"
+            + "APPL_SERVER_SHM_ID=0x33000\n"
+            + "ANALYTICS_SETTING=preserved\n"
+        )
+
+        result = self.run_runtime("init", "--preset", "debug", "--json")
+
+        self.assertEqual(result.returncode, 0, result.stderr + result.stdout)
+        manifest = self.manifest_for(result)
+        bundle = manifest["resource_bundle"]
+        self.assertEqual(
+            [broker["name"] for broker in bundle["brokers"]],
+            ["query_editor", "analytics"],
+        )
+        self.assertEqual(
+            [broker["port"] for broker in bundle["brokers"]], [20000, 20001]
+        )
+        self.assertEqual(
+            [broker["appl_server_shm_key"] for broker in bundle["brokers"]],
+            [0x60000001, 0x60000002],
+        )
+        self.assertEqual(
+            manifest["normalized_claims"]["system_v_keys"],
+            [
+                0x60000000,
+                0x60000001,
+                0x60000002,
+                0x51000001,
+                0x51000002,
+            ],
+        )
+        patched = broker_path.read_text()
+        self.assertIn("ANALYTICS_SETTING=preserved", patched)
+        self.assertIn("[%analytics]\nSERVICE=ON\nBROKER_PORT=20001", patched)
+        self.assertIn("APPL_SERVER_SHM_ID=0x60000002", patched)
+        self.assertFalse(self.calls.exists())
+
+    def test_fake_occupied_values_are_excluded_by_key_not_kernel_shmid(self):
+        self.fixture.write_text(json.dumps({
+            "filesystem": {},
+            "observations": {
+                "complete": True,
+                "processes": [],
+                "sockets": [],
+                "listeners": [{"port": 15000}, {"port": 20000}],
+                "system_v_ipc": [
+                    {"key": 0x60000000, "shmid": 41},
+                    {"key": 0x51000002, "shmid": 0x60000001},
+                ],
+            },
+        }))
+
+        result = self.run_runtime("init", "--preset", "debug", "--json")
+
+        self.assertEqual(result.returncode, 0, result.stderr + result.stdout)
+        manifest = self.manifest_for(result)
+        bundle = manifest["resource_bundle"]
+        self.assertEqual(bundle["master_port"], 15001)
+        self.assertEqual(bundle["brokers"][0]["port"], 20001)
+        self.assertEqual(bundle["master_shm_key"], 0x60000001)
+        self.assertEqual(bundle["brokers"][0]["appl_server_shm_key"], 0x60000003)
+        self.assertEqual(
+            bundle["brokers"][0]["query_replacement_shm_key"], 0x51000003
+        )
+        self.assertIn("MASTER_SHM_ID=0x60000001", (
+            self.installation / "conf" / "cubrid_broker.conf"
+        ).read_text())
+        self.assertFalse(self.calls.exists())
+
+    def test_broker_shared_memory_configuration_uses_hexadecimal_key_grammar(self):
+        broker_path = self.installation / "conf" / "cubrid_broker.conf"
+        broker_path.write_text(
+            broker_path.read_text().replace(
+                "MASTER_SHM_ID=30001", "MASTER_SHM_ID=not-a-system-v-key"
+            )
+        )
+        before = self.snapshot()
+
+        result = self.run_runtime("init", "--preset", "debug", "--json")
+
+        self.assertEqual(result.returncode, 4, result.stderr + result.stdout)
+        report = json.loads(result.stdout)
+        self.assertEqual(report["diagnostic"]["code"], "broker_configuration_invalid")
+        self.assertEqual(report["diagnostic"]["affected_object"]["kind"], "broker shared-memory key")
+        self.assertEqual(self.snapshot(), before)
+        self.assertFalse(self.calls.exists())
+
+    def test_claims_are_collected_from_every_manifest_not_only_the_registry(self):
+        second_worktree, _, second_environment = self.create_additional_runtime("two")
+        first = self.run_runtime("init", "--preset", "debug", "--json")
+        self.assertEqual(first.returncode, 0, first.stderr + first.stdout)
+        first_report = json.loads(first.stdout)
+        first_manifest = self.manifest_for(first)
+        registry_path = self.state_home / "cubrid-worktree-guard" / "allocations.json"
+        registry = json.loads(registry_path.read_text())
+        del registry["allocations"][first_report["worktree_id"]]
+        registry_path.write_text(json.dumps(registry))
+
+        second = self.run_runtime_for(
+            second_worktree,
+            second_environment,
+            "init",
+            "--preset",
+            "debug",
+            "--json",
+        )
+
+        self.assertEqual(second.returncode, 0, second.stderr + second.stdout)
+        second_manifest = self.manifest_for(second)
+        first_claims = first_manifest["normalized_claims"]
+        second_claims = second_manifest["normalized_claims"]
+        for claim_kind in ("tcp_ports", "system_v_keys", "paths"):
+            self.assertTrue(
+                set(first_claims[claim_kind]).isdisjoint(second_claims[claim_kind]),
+                claim_kind,
+            )
+        self.assertEqual(second_manifest["resource_bundle"]["master_port"], 15001)
+        self.assertEqual(second_manifest["resource_bundle"]["brokers"][0]["port"], 20001)
+        self.assertEqual(second_manifest["resource_bundle"]["master_shm_key"], 0x60000002)
+        self.assertFalse(self.calls.exists())
+
+    def test_incomplete_manifest_claims_fail_closed_instead_of_being_reused(self):
+        second_worktree, _, second_environment = self.create_additional_runtime("two")
+        first = self.run_runtime("init", "--preset", "debug", "--json")
+        self.assertEqual(first.returncode, 0, first.stderr + first.stdout)
+        first_report = json.loads(first.stdout)
+        manifest_path = Path(first_report["manifest_path"])
+        manifest = self.read_manifest(manifest_path)
+        manifest["normalized_claims"] = {
+            "tcp_ports": [],
+            "system_v_keys": [],
+            "paths": [],
+        }
+        manifest_path.write_text(json.dumps(manifest))
+        registry_path = self.state_home / "cubrid-worktree-guard" / "allocations.json"
+        registry = json.loads(registry_path.read_text())
+        del registry["allocations"][first_report["worktree_id"]]
+        registry_path.write_text(json.dumps(registry))
+
+        second = self.run_runtime_for(
+            second_worktree,
+            second_environment,
+            "init",
+            "--preset",
+            "debug",
+            "--json",
+        )
+
+        self.assertEqual(second.returncode, 4, second.stderr + second.stdout)
+        report = json.loads(second.stdout)
+        self.assertEqual(report["diagnostic"]["code"], "managed_claims_invalid")
+        self.assertFalse((second_worktree / ".env").exists())
+        self.assertFalse(self.calls.exists())
+
+    def test_semantically_incomplete_manifest_bundle_fails_closed(self):
+        second_worktree, _, second_environment = self.create_additional_runtime("two")
+        first = self.run_runtime("init", "--preset", "debug", "--json")
+        self.assertEqual(first.returncode, 0, first.stderr + first.stdout)
+        first_report = json.loads(first.stdout)
+        manifest_path = Path(first_report["manifest_path"])
+        manifest = self.read_manifest(manifest_path)
+        manifest["resource_bundle"]["brokers"] = []
+        manifest["normalized_claims"]["tcp_ports"] = [
+            manifest["resource_bundle"]["master_port"]
+        ]
+        manifest["normalized_claims"]["system_v_keys"] = [
+            manifest["resource_bundle"]["master_shm_key"]
+        ]
+        manifest_path.write_text(json.dumps(manifest))
+        registry_path = self.state_home / "cubrid-worktree-guard" / "allocations.json"
+        registry = json.loads(registry_path.read_text())
+        del registry["allocations"][first_report["worktree_id"]]
+        registry_path.write_text(json.dumps(registry))
+
+        second = self.run_runtime_for(
+            second_worktree,
+            second_environment,
+            "init",
+            "--preset",
+            "debug",
+            "--json",
+        )
+
+        self.assertEqual(second.returncode, 4, second.stderr + second.stdout)
+        report = json.loads(second.stdout)
+        self.assertEqual(report["diagnostic"]["code"], "managed_claims_invalid")
+        self.assertFalse((second_worktree / ".env").exists())
+        self.assertFalse(self.calls.exists())
+
+    def test_repeated_init_rejects_a_new_managed_collision_with_its_retained_bundle(self):
+        second_worktree, _, second_environment = self.create_additional_runtime("two")
+        first = self.run_runtime("init", "--preset", "debug", "--json")
+        second = self.run_runtime_for(
+            second_worktree,
+            second_environment,
+            "init",
+            "--preset",
+            "debug",
+            "--json",
+        )
+        self.assertEqual(first.returncode, 0, first.stderr + first.stdout)
+        self.assertEqual(second.returncode, 0, second.stderr + second.stdout)
+        first_manifest = self.manifest_for(first)
+        second_manifest_path = Path(json.loads(second.stdout)["manifest_path"])
+        second_manifest = self.read_manifest(second_manifest_path)
+        old_master_socket = second_manifest["resource_bundle"]["socket_paths"][0]
+        new_master_port = first_manifest["resource_bundle"]["master_port"]
+        new_master_socket = str(
+            Path(second_manifest["resource_bundle"]["cubrid_tmp"])
+            / f"CUBRID{new_master_port}"
+        )
+        second_manifest["resource_bundle"]["master_port"] = (
+            new_master_port
+        )
+        second_manifest["resource_bundle"]["socket_paths"][0] = new_master_socket
+        second_manifest["normalized_claims"]["tcp_ports"][0] = (
+            new_master_port
+        )
+        second_manifest["normalized_claims"]["paths"] = [
+            new_master_socket if path == old_master_socket else path
+            for path in second_manifest["normalized_claims"]["paths"]
+        ]
+        second_manifest_path.write_text(json.dumps(second_manifest))
+        registry_path = self.state_home / "cubrid-worktree-guard" / "allocations.json"
+        registry = json.loads(registry_path.read_text())
+        registry["allocations"][second_manifest["worktree_id"]]["claims"] = (
+            second_manifest["normalized_claims"]
+        )
+        registry_path.write_text(json.dumps(registry))
+        before = self.snapshot()
+
+        repeated = self.run_runtime("init", "--preset", "debug", "--json")
+
+        self.assertEqual(repeated.returncode, 4, repeated.stderr + repeated.stdout)
+        report = json.loads(repeated.stdout)
+        self.assertEqual(report["diagnostic"]["code"], "managed_claim_collision")
+        self.assertEqual(report["diagnostic"]["affected_object"]["kind"], "TCP port")
+        self.assertEqual(self.snapshot(), before)
+        self.assertFalse(self.calls.exists())
+
+    def test_ready_reports_no_kernel_reservation_and_possible_startup_race(self):
+        structured = self.run_runtime("init", "--preset", "debug", "--json")
+
+        self.assertEqual(structured.returncode, 0, structured.stderr + structured.stdout)
+        report = json.loads(structured.stdout)
+        self.assertFalse(report["kernel_resources_reserved"])
+        self.assertTrue(report["kernel_acquisition_can_race"])
+
+        human = self.run_runtime("validate", "--preset", "debug")
+        self.assertEqual(human.returncode, 0, human.stderr + human.stdout)
+        self.assertIn("Kernel reservation: none", human.stdout)
+        self.assertIn("later kernel acquisition can still race", human.stdout)
+        self.assertFalse(self.calls.exists())
+
+    def test_init_makes_no_kernel_listener_or_system_v_reservation(self):
+        strace = shutil.which("strace")
+        self.assertIsNotNone(strace, "strace is required for kernel-reservation evidence")
+        trace_path = self.root / "allocation-syscalls.trace"
+
+        result = subprocess.run(
+            [
+                strace,
+                "-f",
+                "-qq",
+                "-e",
+                "trace=bind,listen,shmget",
+                "-o",
+                str(trace_path),
+                str(CLI),
+                "init",
+                "--preset",
+                "debug",
+                "--json",
+            ],
+            cwd=self.worktree,
+            env=self.environment,
+            text=True,
+            capture_output=True,
+            timeout=10,
+        )
+
+        self.assertEqual(result.returncode, 0, result.stderr + result.stdout)
+        trace = trace_path.read_text()
+        for reserving_call in ("bind(", "listen(", "shmget("):
+            self.assertNotIn(reserving_call, trace)
+        self.assertFalse(self.calls.exists())
+
+    def test_two_worktrees_keep_stable_disjoint_complete_bundles(self):
+        second_worktree, _, second_environment = self.create_additional_runtime("two")
+
+        first = self.run_runtime("init", "--preset", "debug", "--json")
+        repeated = self.run_runtime("init", "--preset", "debug", "--json")
+        second = self.run_runtime_for(
+            second_worktree,
+            second_environment,
+            "init",
+            "--preset",
+            "debug",
+            "--json",
+        )
+
+        for result in (first, repeated, second):
+            self.assertEqual(result.returncode, 0, result.stderr + result.stdout)
+        first_manifest = self.manifest_for(first)
+        repeated_manifest = self.manifest_for(repeated)
+        second_manifest = self.manifest_for(second)
+        self.assertEqual(
+            first_manifest["resource_bundle"], repeated_manifest["resource_bundle"]
+        )
+        self.assertEqual(second_manifest["resource_bundle"]["master_port"], 15001)
+        self.assertEqual(second_manifest["resource_bundle"]["brokers"][0]["port"], 20001)
+        self.assertEqual(second_manifest["resource_bundle"]["master_shm_key"], 0x60000002)
+        for claim_kind in ("tcp_ports", "system_v_keys", "paths"):
+            self.assertTrue(set(first_manifest["normalized_claims"][claim_kind]).isdisjoint(
+                second_manifest["normalized_claims"][claim_kind]
+            ))
+        self.assertFalse(self.calls.exists())
+
+    def test_two_worktrees_cannot_reuse_one_stable_runtime_identity(self):
+        second_worktree, _, second_environment = self.create_additional_runtime("two")
+        first = self.run_runtime("init", "--preset", "debug", "--json")
+        self.assertEqual(first.returncode, 0, first.stderr + first.stdout)
+        runtime_id = json.loads(first.stdout)["worktree_id"]
+        (second_worktree / ".env").write_text(f"CUBRID_WORKTREE_ID={runtime_id}\n")
+        before_manifest = Path(json.loads(first.stdout)["manifest_path"]).read_text()
+
+        second = self.run_runtime_for(
+            second_worktree,
+            second_environment,
+            "init",
+            "--preset",
+            "debug",
+            "--json",
+        )
+
+        self.assertEqual(second.returncode, 4, second.stderr + second.stdout)
+        report = json.loads(second.stdout)
+        self.assertEqual(report["diagnostic"]["code"], "worktree_identity_collision")
+        self.assertEqual(
+            Path(json.loads(first.stdout)["manifest_path"]).read_text(), before_manifest
+        )
+        self.assertFalse(self.calls.exists())
+
+    def test_overlapping_port_ranges_still_exclude_cross_role_collisions(self):
+        broker_path = self.installation / "conf" / "cubrid_broker.conf"
+        broker_path.write_text(
+            broker_path.read_text()
+            + "\n[%analytics]\nSERVICE=ON\nMAX_NUM_APPL_SERVER=1\n"
+        )
+        self.environment.update({
+            "MY_CUBRID_RUNTIME_MASTER_PORT_RANGE": "25000-25002",
+            "MY_CUBRID_RUNTIME_BROKER_PORT_RANGE": "25000-25002",
+        })
+
+        result = self.run_runtime("init", "--preset", "debug", "--json")
+
+        self.assertEqual(result.returncode, 0, result.stderr + result.stdout)
+        manifest = self.manifest_for(result)
+        bundle = manifest["resource_bundle"]
+        self.assertEqual(bundle["master_port"], 25000)
+        self.assertEqual(
+            [broker["port"] for broker in bundle["brokers"]], [25001, 25002]
+        )
+        self.assertEqual(len(set(manifest["normalized_claims"]["tcp_ports"])), 3)
+        self.assertFalse(self.calls.exists())
+
+    def test_two_worktrees_cannot_claim_the_same_mutable_installation_paths(self):
+        second_worktree, _, second_environment = self.create_additional_runtime("two")
+        second_environment["CUBRID"] = str(self.installation)
+        first = self.run_runtime("init", "--preset", "debug", "--json")
+        self.assertEqual(first.returncode, 0, first.stderr + first.stdout)
+
+        second = self.run_runtime_for(
+            second_worktree,
+            second_environment,
+            "init",
+            "--preset",
+            "debug",
+            "--json",
+        )
+
+        self.assertEqual(second.returncode, 4, second.stderr + second.stdout)
+        report = json.loads(second.stdout)
+        self.assertEqual(report["diagnostic"]["code"], "managed_path_collision")
+        self.assertIn(
+            report["diagnostic"]["affected_object"]["value"],
+            {str(self.installation / "tmp"), str(self.installation / "log")},
+        )
+        self.assertFalse((second_worktree / ".env").exists())
+        self.assertFalse(self.calls.exists())
+
+    def test_range_exhaustion_fails_without_duplicate_or_partial_claims(self):
+        second_worktree, _, second_environment = self.create_additional_runtime("two")
+        for environment in (self.environment, second_environment):
+            environment.update({
+                "MY_CUBRID_RUNTIME_MASTER_PORT_RANGE": "15000-15000",
+                "MY_CUBRID_RUNTIME_BROKER_PORT_RANGE": "20000-20000",
+                "MY_CUBRID_RUNTIME_SHM_KEY_RANGE": "0x60000000-0x60000001",
+            })
+        first = self.run_runtime("init", "--preset", "debug", "--json")
+        self.assertEqual(first.returncode, 0, first.stderr + first.stdout)
+
+        second = self.run_runtime_for(
+            second_worktree,
+            second_environment,
+            "init",
+            "--preset",
+            "debug",
+            "--json",
+        )
+
+        self.assertEqual(second.returncode, 4, second.stderr + second.stdout)
+        self.assertEqual(json.loads(second.stdout)["diagnostic"]["code"], "allocation_exhausted")
+        registry = json.loads((
+            self.state_home / "cubrid-worktree-guard" / "allocations.json"
+        ).read_text())
+        self.assertEqual(len(registry["allocations"]), 1)
+        manifests = list((
+            self.state_home / "cubrid-worktree-guard" / "worktrees"
+        ).glob("*/manifest.json"))
+        self.assertEqual(len(manifests), 1)
+        self.assertEqual(len(list(manifests[0].parent.parent.iterdir())), 1)
+        self.assertEqual(self.read_manifest(manifests[0])["state"], "ready")
+        self.assertFalse((second_worktree / ".env").exists())
+        self.assertFalse(self.calls.exists())
+
+    def test_concurrent_initializations_publish_only_disjoint_ready_bundles(self):
+        second_worktree, _, second_environment = self.create_additional_runtime("two")
+        first_process = subprocess.Popen(
+            [str(CLI), "init", "--preset", "debug", "--json"],
+            cwd=self.worktree,
+            env=self.environment,
+            text=True,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+        )
+        second_process = subprocess.Popen(
+            [str(CLI), "init", "--preset", "debug", "--json"],
+            cwd=second_worktree,
+            env=second_environment,
+            text=True,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+        )
+
+        first_stdout, first_stderr = first_process.communicate(timeout=10)
+        second_stdout, second_stderr = second_process.communicate(timeout=10)
+
+        self.assertEqual(first_process.returncode, 0, first_stderr + first_stdout)
+        self.assertEqual(second_process.returncode, 0, second_stderr + second_stdout)
+        reports = [json.loads(first_stdout), json.loads(second_stdout)]
+        manifests = [
+            self.read_manifest(Path(report["manifest_path"])) for report in reports
+        ]
+        self.assertTrue(set(manifests[0]["normalized_claims"]["tcp_ports"]).isdisjoint(
+            manifests[1]["normalized_claims"]["tcp_ports"]
+        ))
+        self.assertTrue(set(manifests[0]["normalized_claims"]["system_v_keys"]).isdisjoint(
+            manifests[1]["normalized_claims"]["system_v_keys"]
+        ))
+        self.assertTrue(set(manifests[0]["normalized_claims"]["paths"]).isdisjoint(
+            manifests[1]["normalized_claims"]["paths"]
+        ))
+        self.assertEqual([manifest["state"] for manifest in manifests], ["ready", "ready"])
+        registry = json.loads((
+            self.state_home / "cubrid-worktree-guard" / "allocations.json"
+        ).read_text())
+        self.assertEqual(len(registry["allocations"]), 2)
+        self.assertTrue(all(
+            allocation["state"] == "ready"
+            for allocation in registry["allocations"].values()
+        ))
         self.assertFalse(self.calls.exists())
 
     def home_for_pl_socket_length(self, target_bytes, database_name):
@@ -349,7 +859,7 @@ class RuntimeGuardCliTest(unittest.TestCase):
         )
 
         self.assertEqual(result.returncode, 0, result.stderr + result.stdout)
-        manifest = json.loads(Path(json.loads(result.stdout)["manifest_path"]).read_text())
+        manifest = self.manifest_for(result)
         pl_socket = manifest["resource_bundle"]["pl_socket_path"]
         self.assertEqual(len(os.fsencode(pl_socket)), 107)
         self.assertFalse(self.calls.exists())
@@ -670,7 +1180,7 @@ class RuntimeGuardCliTest(unittest.TestCase):
     def test_validate_rejects_a_managed_path_with_a_symlinked_ancestor(self):
         initialized = self.run_runtime("init", "--preset", "debug", "--json")
         self.assertEqual(initialized.returncode, 0, initialized.stderr + initialized.stdout)
-        manifest = json.loads(Path(json.loads(initialized.stdout)["manifest_path"]).read_text())
+        manifest = self.manifest_for(initialized)
         runtime_parent = Path(manifest["resource_bundle"]["cubrid_tmp"]).parent
         moved_parent = runtime_parent.with_name(runtime_parent.name + "-moved")
         runtime_parent.rename(moved_parent)

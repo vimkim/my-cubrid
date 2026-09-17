@@ -78,6 +78,13 @@ class RuntimeSelection:
     preset: str
 
 
+@dataclass(frozen=True)
+class AllocationRanges:
+    master_ports: tuple[int, int]
+    broker_ports: tuple[int, int]
+    system_v_keys: tuple[int, int]
+
+
 def require_string(document: dict[str, object], field: str) -> str:
     value = document.get(field)
     if not isinstance(value, str):
@@ -90,6 +97,13 @@ def require_integer(document: dict[str, object], field: str) -> int:
     if type(value) is not int:
         raise ValueError(f"{field} must be an integer")
     return value
+
+
+@dataclass(frozen=True)
+class BrokerSpec:
+    section: str
+    name: str
+    max_appl_servers: int
 
 
 @dataclass(frozen=True)
@@ -334,6 +348,9 @@ class ValidationResult:
             result["manifest_path"] = self.manifest_path
         if self.environment_path is not None:
             result["environment_path"] = self.environment_path
+        if self.outcome == "ready":
+            result["kernel_resources_reserved"] = False
+            result["kernel_acquisition_can_race"] = True
         if self.diagnostic is not None:
             result["diagnostic"] = self.diagnostic.to_dict()
         return result
@@ -394,9 +411,15 @@ class FakeObservationAdapter:
 
     def __init__(self, fixture_path: Path):
         self.files = LinuxObservationAdapter()
+        self.fixture_path = fixture_path
         fixture = json.loads(fixture_path.read_text())
         self.filesystem = fixture["filesystem"]
-        observations = fixture["observations"]
+        self._validate_observations(fixture["observations"])
+
+    @staticmethod
+    def _validate_observations(observations: object) -> dict[str, object]:
+        if not isinstance(observations, dict):
+            raise ValueError("fake runtime observations must be an object")
         if type(observations["complete"]) is not bool:
             raise ValueError("fake observation completeness must be Boolean")
         observation_lists = (
@@ -407,7 +430,12 @@ class FakeObservationAdapter:
         )
         if any(not isinstance(items, list) for items in observation_lists):
             raise ValueError("fake runtime observations must be lists")
-        self.runtime_snapshot = RuntimeObservationSnapshot(
+        return observations
+
+    def inspect_runtime(self) -> RuntimeObservationSnapshot:
+        fixture = json.loads(self.fixture_path.read_text())
+        observations = self._validate_observations(fixture["observations"])
+        return RuntimeObservationSnapshot(
             complete=observations["complete"],
             processes=tuple(observations["processes"]),
             sockets=tuple(observations["sockets"]),
@@ -430,10 +458,6 @@ class FakeObservationAdapter:
             content=record.get("content"),
             canonical=record.get("canonical", True),
         )
-
-    def inspect_runtime(self) -> RuntimeObservationSnapshot:
-        return self.runtime_snapshot
-
 
 def observation_adapter() -> ObservationAdapter:
     fixture = os.environ.get("MY_CUBRID_RUNTIME_TEST_OBSERVATIONS")
@@ -707,6 +731,17 @@ def is_canonical_existing_path(path: Path) -> bool:
         return False
 
 
+def is_owner_only_canonical_regular_file(
+    path: Path, metadata: os.stat_result
+) -> bool:
+    return (
+        stat.S_ISREG(metadata.st_mode)
+        and metadata.st_uid == os.geteuid()
+        and stat.S_IMODE(metadata.st_mode) == 0o600
+        and is_canonical_existing_path(path)
+    )
+
+
 def make_private_directory(path: Path) -> None:
     missing: list[Path] = []
     cursor = path
@@ -903,6 +938,26 @@ def parse_range(environment_name: str, default: tuple[int, int], maximum: int) -
     return start, end
 
 
+def allocation_ranges() -> AllocationRanges:
+    return AllocationRanges(
+        master_ports=parse_range(
+            "MY_CUBRID_RUNTIME_MASTER_PORT_RANGE",
+            DEFAULT_MASTER_PORT_RANGE,
+            65535,
+        ),
+        broker_ports=parse_range(
+            "MY_CUBRID_RUNTIME_BROKER_PORT_RANGE",
+            DEFAULT_BROKER_PORT_RANGE,
+            65535,
+        ),
+        system_v_keys=parse_range(
+            "MY_CUBRID_RUNTIME_SHM_KEY_RANGE",
+            DEFAULT_SHM_KEY_RANGE,
+            0x7FFFFFFF,
+        ),
+    )
+
+
 def parse_ini(content: str) -> dict[str, dict[str, str]]:
     sections: dict[str, dict[str, str]] = {}
     current = ""
@@ -1003,6 +1058,29 @@ def validate_socket_path(path: Path, source: str) -> None:
 
 def hexadecimal_key(value: int) -> str:
     return f"0x{value:08x}"
+
+
+def parse_broker_shm_key(value: str, field: str, section: str) -> int:
+    if not re.fullmatch(r"(?:0[xX])?[0-9a-fA-F]+", value):
+        raise OperationError(
+            "broker_configuration_invalid",
+            "broker shared-memory key",
+            value,
+            f"cubrid_broker.conf [{section}] {field}",
+            f"{field} must be a System V key in CUBRID's hexadecimal grammar, not a kernel-assigned shmid.",
+            "Correct the configured shared-memory key before retrying initialization.",
+        )
+    key = int(value, 16)
+    if not 1 <= key <= 0x7FFFFFFF:
+        raise OperationError(
+            "broker_configuration_invalid",
+            "broker shared-memory key",
+            hexadecimal_key(key),
+            f"cubrid_broker.conf [{section}] {field}",
+            f"{field} is outside the supported positive System V key range.",
+            "Correct the configured shared-memory key before retrying initialization.",
+        )
+    return key
 
 
 def environment_assignment(name: str, value: str) -> str:
@@ -1124,9 +1202,14 @@ def runtime_library_paths(library_path: Path) -> list[Path]:
     return sorted(path for path in library_path.iterdir() if path.is_file())
 
 
-def broker_inventory(content: str) -> list[dict[str, object]]:
+def broker_inventory(content: str) -> list[BrokerSpec]:
     sections = parse_ini(content)
-    enabled: list[dict[str, object]] = []
+    broker_values = sections.get("broker", {})
+    if "master_shm_id" in broker_values:
+        parse_broker_shm_key(
+            broker_values["master_shm_id"], "MASTER_SHM_ID", "broker"
+        )
+    enabled: list[BrokerSpec] = []
     for section, values in sections.items():
         if not section.startswith("%") or values.get("service", "OFF").upper() not in ("ON", "YES"):
             continue
@@ -1151,12 +1234,16 @@ def broker_inventory(content: str) -> list[dict[str, object]]:
                 "MAX_NUM_APPL_SERVER must be positive.",
                 "Correct the broker configuration before retrying initialization.",
             )
-        enabled.append({"section": section, "name": name, "max_appl_servers": maximum})
-    if len(enabled) != 1:
+        if "appl_server_shm_id" in values:
+            parse_broker_shm_key(
+                values["appl_server_shm_id"], "APPL_SERVER_SHM_ID", section
+            )
+        enabled.append(BrokerSpec(section, name, maximum))
+    if not enabled:
         raise OperationError(
             "broker_scope_unsupported", "enabled brokers", str(len(enabled)), "cubrid_broker.conf",
-            "This initialization slice requires exactly one enabled broker.",
-            "Enable exactly one supported broker before retrying initialization.",
+            "At least one supported broker must be enabled.",
+            "Enable a supported broker before retrying initialization.",
         )
     return enabled
 
@@ -1271,74 +1358,284 @@ def next_free(allocation_range: tuple[int, int], used: set[int], kind: str) -> i
     )
 
 
-def all_claimed_values(registry: dict[str, object], selected_id: str) -> tuple[set[int], set[int]]:
+def next_free_application_shm_key(
+    allocation_range: tuple[int, int], used: set[int]
+) -> tuple[int, int]:
+    for candidate in range(allocation_range[0], allocation_range[1] + 1):
+        derived = (candidate & 0x00FFFFFF) | 0x51000000
+        if candidate in used or derived in used or candidate == derived:
+            continue
+        used.update((candidate, derived))
+        return candidate, derived
+    raise OperationError(
+        "allocation_exhausted",
+        "broker application shared-memory key",
+        f"{allocation_range[0]}-{allocation_range[1]}",
+        "configured allocation range",
+        "No explicit key with a collision-free derived query-replacement key remains in the configured range.",
+        "Expand the configured range or explicitly deinitialize an unused managed runtime.",
+    )
+
+
+def add_normalized_claims(
+    claims: object,
+    ports: set[int],
+    keys: set[int],
+    paths: set[Path],
+    source: str,
+) -> None:
+    if not isinstance(claims, dict):
+        raise OperationError(
+            "managed_claims_invalid",
+            "managed allocation",
+            source,
+            source,
+            "A retained managed allocation has no normalized claims.",
+            "Restore the complete retained allocation before initializing another runtime.",
+        )
+    tcp_ports = claims.get("tcp_ports")
+    system_v_keys = claims.get("system_v_keys")
+    claimed_paths = claims.get("paths")
+    if (
+        not isinstance(tcp_ports, list)
+        or any(type(value) is not int for value in tcp_ports)
+        or not isinstance(system_v_keys, list)
+        or any(type(value) is not int for value in system_v_keys)
+        or not isinstance(claimed_paths, list)
+        or any(not isinstance(value, str) for value in claimed_paths)
+    ):
+        raise OperationError(
+            "managed_claims_invalid",
+            "managed allocation",
+            source,
+            source,
+            "A retained managed allocation contains malformed numeric claims.",
+            "Restore the complete retained allocation before initializing another runtime.",
+        )
+    ports.update(tcp_ports)
+    keys.update(system_v_keys)
+    paths.update(Path(value) for value in claimed_paths)
+
+
+def all_claimed_values(
+    registry: dict[str, object], selected_id: str, guard_root: Path
+) -> tuple[set[int], set[int], set[Path]]:
     ports: set[int] = set()
     keys: set[int] = set()
+    paths: set[Path] = set()
     allocations = registry["allocations"]
     assert isinstance(allocations, dict)
     for runtime_identifier, allocation in allocations.items():
-        if runtime_identifier == selected_id or not isinstance(allocation, dict):
+        if runtime_identifier == selected_id:
             continue
-        claims = allocation.get("claims", {})
-        if not isinstance(claims, dict):
-            continue
-        ports.update(value for value in claims.get("tcp_ports", []) if type(value) is int)
-        keys.update(value for value in claims.get("system_v_keys", []) if type(value) is int)
-    return ports, keys
+        add_normalized_claims(
+            allocation.get("claims") if isinstance(allocation, dict) else None,
+            ports,
+            keys,
+            paths,
+            f"allocation registry entry {runtime_identifier}",
+        )
+    worktrees_root = guard_root / "worktrees"
+    if worktrees_root.exists():
+        for runtime_directory in worktrees_root.iterdir():
+            if runtime_directory.name == selected_id:
+                continue
+            manifest_path = runtime_directory / "manifest.json"
+            if not manifest_path.exists():
+                continue
+            metadata = manifest_path.lstat()
+            if not is_owner_only_canonical_regular_file(manifest_path, metadata):
+                raise OperationError(
+                    "managed_claims_invalid",
+                    "worktree manifest",
+                    manifest_path,
+                    "guard state",
+                    "A retained worktree manifest is not a canonical owner-only regular file.",
+                    "Restore the retained manifest before initializing another runtime.",
+                )
+            manifest = read_json_file(manifest_path, "worktree_manifest")
+            try:
+                retained_bundle = ResourceBundle.from_dict(
+                    manifest.get("resource_bundle")
+                )
+            except ValueError as error:
+                raise OperationError(
+                    "managed_claims_invalid",
+                    "worktree manifest",
+                    manifest_path,
+                    "guard state",
+                    f"A retained worktree manifest has an invalid resource bundle: {error}.",
+                    "Restore the complete retained manifest before initializing another runtime.",
+                ) from error
+            retained_runtime_id = manifest.get("worktree_id")
+            if (
+                not isinstance(retained_runtime_id, str)
+                or retained_runtime_id != runtime_directory.name
+            ):
+                raise OperationError(
+                    "managed_claims_invalid",
+                    "worktree manifest",
+                    manifest_path,
+                    "guard state",
+                    "A retained worktree manifest has an inconsistent runtime identity.",
+                    "Restore the complete retained manifest before initializing another runtime.",
+                )
+            try:
+                validate_resource_bundle(
+                    retained_bundle,
+                    retained_runtime_id,
+                    Path.home(),
+                    os.fspath(manifest_path),
+                    defer_managed_path_checks=True,
+                )
+            except OperationError as error:
+                raise OperationError(
+                    "managed_claims_invalid",
+                    "worktree manifest",
+                    manifest_path,
+                    "guard state",
+                    f"A retained worktree manifest has an unsafe or incomplete resource bundle: {error.diagnostic.message}",
+                    "Restore the complete retained manifest before initializing another runtime.",
+                ) from error
+            retained_claims = retained_bundle.claims().to_dict()
+            if manifest.get("normalized_claims") != retained_claims:
+                raise OperationError(
+                    "managed_claims_invalid",
+                    "worktree manifest",
+                    manifest_path,
+                    "guard state",
+                    "A retained worktree manifest's normalized claims do not match its complete resource bundle.",
+                    "Restore matching retained bundle and claim data before initializing another runtime.",
+                )
+            add_normalized_claims(
+                retained_claims,
+                ports,
+                keys,
+                paths,
+                os.fspath(manifest_path),
+            )
+    return ports, keys, paths
+
+
+def reject_managed_claim_collisions(
+    bundle: ResourceBundle,
+    registry: dict[str, object],
+    runtime_identifier: str,
+    guard_root: Path,
+) -> None:
+    used_ports, used_keys, used_paths = all_claimed_values(
+        registry, runtime_identifier, guard_root
+    )
+    claims = bundle.claims()
+    conflicting_port = next(
+        (port for port in claims.tcp_ports if port in used_ports), None
+    )
+    if conflicting_port is not None:
+        raise OperationError(
+            "managed_claim_collision",
+            "TCP port",
+            str(conflicting_port),
+            "retained managed claims",
+            "The complete resource bundle would reuse a TCP port claimed by another worktree runtime.",
+            "Restore disjoint managed claims before retrying initialization.",
+        )
+    conflicting_key = next(
+        (key for key in claims.system_v_keys if key in used_keys), None
+    )
+    if conflicting_key is not None:
+        raise OperationError(
+            "managed_claim_collision",
+            "System V key",
+            hexadecimal_key(conflicting_key),
+            "retained managed claims",
+            "The complete resource bundle would reuse a System V key claimed by another worktree runtime.",
+            "Restore disjoint managed claims before retrying initialization.",
+        )
+    conflicting_path = next(
+        (path for path in claims.paths if path in used_paths), None
+    )
+    if conflicting_path is not None:
+        raise OperationError(
+            "managed_path_collision",
+            "managed path",
+            conflicting_path,
+            "retained managed claims",
+            "The complete resource bundle would reuse a path claimed by another worktree runtime.",
+            "Select a distinct private installation and runtime identity before retrying initialization.",
+        )
+
+
+def private_resource_roots(runtime_identifier: str) -> tuple[Path, Path, Path]:
+    home = ensure_safe_root(Path.home(), "HOME")
+    short_id = runtime_identifier[:8]
+    cubrid_tmp = ensure_safe_root(
+        home / ".cub" / "runtime" / short_id / "tmp", "HOME runtime root"
+    )
+    database_registry = ensure_safe_root(
+        home / ".cub" / "db" / short_id / "commondb", "HOME database root"
+    )
+    return home, cubrid_tmp, database_registry
+
+
+def generated_socket_paths(
+    cubrid_tmp: Path,
+    database_name: str,
+    master_port: int,
+    brokers: list[BrokerSpec],
+) -> tuple[tuple[Path, ...], dict[str, tuple[Path, ...]], Path]:
+    all_paths: list[Path] = [cubrid_tmp / f"CUBRID{master_port}"]
+    paths_by_section: dict[str, tuple[Path, ...]] = {}
+    for broker in brokers:
+        broker_paths = [cubrid_tmp / f"{broker.name}.B"]
+        broker_paths.extend(
+            cubrid_tmp / f"{broker.name}.{number}"
+            for number in range(1, broker.max_appl_servers + 1)
+        )
+        paths_by_section[broker.section] = tuple(broker_paths)
+        all_paths.extend(broker_paths)
+    pl_socket = cubrid_tmp / f"sp_{database_name}.sock"
+    all_paths.append(pl_socket)
+    return tuple(all_paths), paths_by_section, pl_socket
 
 
 def create_resource_bundle(
     runtime_identifier: str,
     database_name: str,
     installation: Path,
-    brokers: list[dict[str, object]],
+    brokers: list[BrokerSpec],
     registry: dict[str, object],
     observations: RuntimeObservationSnapshot,
+    guard_root: Path,
 ) -> ResourceBundle:
-    used_ports, used_keys = all_claimed_values(registry, runtime_identifier)
+    used_ports, used_keys, _used_paths = all_claimed_values(
+        registry, runtime_identifier, guard_root
+    )
     used_ports.update(item["port"] for item in observations.listeners if type(item.get("port")) is int)
     used_keys.update(item["key"] for item in observations.system_v_ipc if type(item.get("key")) is int)
-    master_range = parse_range("MY_CUBRID_RUNTIME_MASTER_PORT_RANGE", DEFAULT_MASTER_PORT_RANGE, 65535)
-    broker_range = parse_range("MY_CUBRID_RUNTIME_BROKER_PORT_RANGE", DEFAULT_BROKER_PORT_RANGE, 65535)
-    shm_range = parse_range("MY_CUBRID_RUNTIME_SHM_KEY_RANGE", DEFAULT_SHM_KEY_RANGE, 0x7FFFFFFF)
-    master_port = next_free(master_range, used_ports, "master TCP port")
-    master_shm_key = next_free(shm_range, used_keys, "broker shared-memory key")
-    short_id = runtime_identifier[:8]
-    home = ensure_safe_root(Path.home(), "HOME")
-    cubrid_tmp = ensure_safe_root(home / ".cub" / "runtime" / short_id / "tmp", "HOME runtime root")
-    database_registry = ensure_safe_root(home / ".cub" / "db" / short_id / "commondb", "HOME database root")
+    ranges = allocation_ranges()
+    master_port = next_free(ranges.master_ports, used_ports, "master TCP port")
+    master_shm_key = next_free(
+        ranges.system_v_keys, used_keys, "broker shared-memory key"
+    )
+    _, cubrid_tmp, database_registry = private_resource_roots(runtime_identifier)
+    socket_paths, broker_socket_paths, pl_socket = generated_socket_paths(
+        cubrid_tmp, database_name, master_port, brokers
+    )
     configured_brokers: list[BrokerAllocation] = []
-    socket_paths: list[Path] = [cubrid_tmp / f"CUBRID{master_port}"]
     for broker in brokers:
-        port = next_free(broker_range, used_ports, "broker TCP port")
-        appl_key = next_free(shm_range, used_keys, "broker shared-memory key")
-        derived = (appl_key & 0x00FFFFFF) | 0x51000000
-        if derived in used_keys or derived in (master_shm_key, appl_key):
-            raise OperationError(
-                "derived_shm_key_conflict", "query-replacement shared-memory key", hexadecimal_key(derived),
-                "APPL_SERVER_SHM_ID derivation",
-                "The derived query-replacement key overlaps another explicit or derived claim.",
-                "Choose a different shared-memory allocation range.",
-            )
-        used_keys.add(derived)
-        name = str(broker["name"])
-        broker_sockets = [cubrid_tmp / f"{name}.B"]
-        broker_sockets.extend(
-            cubrid_tmp / f"{name}.{number}"
-            for number in range(1, int(broker["max_appl_servers"]) + 1)
+        port = next_free(ranges.broker_ports, used_ports, "broker TCP port")
+        appl_key, derived = next_free_application_shm_key(
+            ranges.system_v_keys, used_keys
         )
-        socket_paths.extend(broker_sockets)
         configured_brokers.append(BrokerAllocation(
-            section=str(broker["section"]),
-            name=name,
-            max_appl_servers=int(broker["max_appl_servers"]),
+            section=broker.section,
+            name=broker.name,
+            max_appl_servers=broker.max_appl_servers,
             port=port,
             appl_server_shm_key=appl_key,
             query_replacement_shm_key=derived,
-            socket_paths=tuple(broker_sockets),
+            socket_paths=broker_socket_paths[broker.section],
         ))
-    pl_socket = cubrid_tmp / f"sp_{database_name}.sock"
-    socket_paths.append(pl_socket)
     for socket_path in socket_paths:
         validate_socket_path(socket_path, "generated resource bundle")
     database_base = database_registry
@@ -1352,7 +1649,7 @@ def create_resource_bundle(
         master_port=master_port,
         master_shm_key=master_shm_key,
         brokers=tuple(configured_brokers),
-        socket_paths=tuple(socket_paths),
+        socket_paths=socket_paths,
         pl_socket_path=pl_socket,
         pl_mutable_paths=(
             ("info", installation / "var" / "pl" / f"pl_{database_name}.info"),
@@ -1365,6 +1662,27 @@ def create_resource_bundle(
         engine_configuration=installation / "conf" / "cubrid.conf",
         broker_configuration=installation / "conf" / "cubrid_broker.conf",
     )
+
+
+def preflight_resource_paths(
+    runtime_identifier: str,
+    database_name: str,
+    brokers: list[BrokerSpec],
+) -> None:
+    ranges = allocation_ranges()
+    home, cubrid_tmp, database_registry = private_resource_roots(runtime_identifier)
+    require_private_directory_chain(home, cubrid_tmp, "HOME runtime root")
+    require_private_directory_chain(
+        home, database_registry, "HOME database root"
+    )
+    first_fit_paths, _, _ = generated_socket_paths(
+        cubrid_tmp, database_name, ranges.master_ports[0], brokers
+    )
+    last_fit_paths, _, _ = generated_socket_paths(
+        cubrid_tmp, database_name, ranges.master_ports[1], brokers
+    )
+    for socket_path in (*first_fit_paths, *last_fit_paths):
+        validate_socket_path(socket_path, "generated resource bundle")
 
 
 def validate_resource_bundle(
@@ -1405,8 +1723,8 @@ def validate_resource_bundle(
                 )
         if not 1 <= bundle.master_port <= 65535 or not 1 <= bundle.master_shm_key <= 0x7FFFFFFF:
             raise ValueError("master port or shared-memory key is outside its legal range")
-        if len(bundle.brokers) != 1:
-            raise ValueError("exactly one enabled broker must be represented")
+        if not bundle.brokers:
+            raise ValueError("at least one enabled broker must be represented")
 
         expected_sockets: list[Path] = [
             bundle.cubrid_tmp / f"CUBRID{bundle.master_port}"
@@ -1520,18 +1838,15 @@ def validate_resource_bundle(
 
 
 def existing_bundle(
-    manifest_path: Path, runtime_identifier: str
+    manifest_path: Path,
+    runtime_identifier: str,
+    selection: RuntimeSelection,
 ) -> tuple[ResourceBundle, str] | None:
     try:
         metadata = manifest_path.lstat()
     except FileNotFoundError:
         return None
-    if (
-        not stat.S_ISREG(metadata.st_mode)
-        or metadata.st_uid != os.geteuid()
-        or stat.S_IMODE(metadata.st_mode) != 0o600
-        or not is_canonical_existing_path(manifest_path)
-    ):
+    if not is_owner_only_canonical_regular_file(manifest_path, metadata):
         raise OperationError(
             "path_unsafe", "worktree manifest", manifest_path, "guard state",
             "The retained worktree manifest must be a canonical owner-only regular file.",
@@ -1543,6 +1858,20 @@ def existing_bundle(
             "manifest_inconsistent", "worktree manifest", manifest_path, "guard state",
             "The existing worktree manifest has an unsupported schema or a different identity.",
             "Restore the manifest associated with this worktree before retrying.",
+        )
+    if (
+        manifest.get("worktree_path") != os.fspath(selection.worktree)
+        or manifest.get("git_common_dir") != os.fspath(selection.git_common_dir)
+    ):
+        raise OperationError(
+            "worktree_identity_collision",
+            "worktree identity",
+            runtime_identifier,
+            "retained worktree manifest",
+            "The selected stable runtime identity is already associated with another Git worktree.",
+            "Remove the copied CUBRID_WORKTREE_ID and initialize this worktree with a new identity.",
+            expected_value=os.fspath(selection.worktree),
+            observed_value=str(manifest.get("worktree_path")),
         )
     database_name = manifest.get("database_name")
     try:
@@ -1618,23 +1947,6 @@ def initialize(
     if database_override is not None:
         validate_database_name(database_override)
     refuse_effective_configuration_overrides()
-    observations = adapter.inspect_runtime()
-    if not observations.complete:
-        raise OperationError(
-            "observation_incomplete", "runtime observation snapshot", selection.worktree,
-            observations.source,
-            "Initialization cannot prove that the selected runtime is idle.",
-            "Retry when process, socket, listener, and System V IPC observations are complete.",
-            "unknown",
-        )
-    if any((observations.processes, observations.sockets, observations.listeners, observations.system_v_ipc)):
-        raise OperationError(
-            "runtime_not_idle", "runtime observation snapshot", selection.worktree,
-            observations.source,
-            "Initialization found a live or potentially owned runtime resource.",
-            "Stop the runtime through normal CUBRID lifecycle commands and retry.",
-            "unknown",
-        )
     try:
         selected_id = runtime_id(adapter, selection.worktree)
     except WorktreeIdentityError as error:
@@ -1673,34 +1985,49 @@ def initialize(
     manifest_path = runtime_directory / "manifest.json"
     environment_path = runtime_directory / "env.sh"
     ensure_safe_root(Path.home(), "HOME")
-    if not manifest_path.exists():
-        preview_database_name = database_override or default_database_name(
-            selection.worktree, runtime_identifier
-        )
-        validate_database_name(preview_database_name)
-        create_resource_bundle(
-            runtime_identifier,
-            preview_database_name,
-            installation,
-            brokers,
-            {"schema_version": STATE_SCHEMA_VERSION, "generation": 0, "allocations": {}},
-            observations,
-        )
+    preview_database_name = database_override or default_database_name(
+        selection.worktree, runtime_identifier
+    )
+    validate_database_name(preview_database_name)
+    preflight_resource_paths(runtime_identifier, preview_database_name, brokers)
     make_private_directory(guard_root)
-    load_registry(registry_path)
-    existing_bundle(manifest_path, runtime_identifier)
     lock_descriptor = open_private_lock(lock_path)
     try:
         fcntl.flock(lock_descriptor, fcntl.LOCK_EX)
         make_private_directory(guard_root / "worktrees")
-        make_private_directory(runtime_directory)
         registry = load_registry(registry_path)
-        retained = existing_bundle(manifest_path, runtime_identifier)
+        retained = existing_bundle(manifest_path, runtime_identifier, selection)
+        observations = adapter.inspect_runtime()
+        if not observations.complete:
+            raise OperationError(
+                "observation_incomplete", "runtime observation snapshot", selection.worktree,
+                observations.source,
+                "Initialization cannot prove that the selected runtime is idle.",
+                "Retry when process, socket, listener, and System V IPC observations are complete.",
+                "unknown",
+            )
+        occupied_retained_resource = retained is not None and any(
+            (observations.listeners, observations.system_v_ipc)
+        )
+        if any((observations.processes, observations.sockets)) or occupied_retained_resource:
+            raise OperationError(
+                "runtime_not_idle", "runtime observation snapshot", selection.worktree,
+                observations.source,
+                "Initialization found a live or potentially owned runtime resource.",
+                "Stop the runtime through normal CUBRID lifecycle commands and retry.",
+                "unknown",
+            )
         if retained is None:
             database_name = database_override or default_database_name(selection.worktree, runtime_identifier)
             validate_database_name(database_name)
             bundle = create_resource_bundle(
-                runtime_identifier, database_name, installation, brokers, registry, observations
+                runtime_identifier,
+                database_name,
+                installation,
+                brokers,
+                registry,
+                observations,
+                guard_root,
             )
         else:
             bundle, database_name = retained
@@ -1711,6 +2038,9 @@ def initialize(
                     "Omit --db-name or use the manifest's existing database name.",
                 )
             bundle = bundle.for_installation(installation)
+        reject_managed_claim_collisions(
+            bundle, registry, runtime_identifier, guard_root
+        )
         claims = bundle.claims().to_dict()
         generation = int(registry["generation"]) + 1
         initializing_manifest: dict[str, object] = {
@@ -1733,6 +2063,7 @@ def initialize(
         }
         allocations = registry["allocations"]
         assert isinstance(allocations, dict)
+        make_private_directory(runtime_directory)
         allocations[runtime_identifier] = {
             "generation": generation,
             "state": "initializing",
@@ -2370,6 +2701,7 @@ def render_human(result: ValidationResult) -> str:
             f"Active preset: {result.selection.preset}\n"
             f"Manifest: {result.manifest_path}\n"
             f"Environment: {result.environment_path}\n"
+            "Kernel reservation: none; later kernel acquisition can still race.\n"
         )
     affected = diagnostic.affected_object
     lines = [

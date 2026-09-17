@@ -4,6 +4,10 @@
 dir-list:
     my-cubrid-dir list
 
+# Summary of Git Statuses for the repositories
+dir-status:
+    my-cubrid-dir status
+
 # Fast-forward every CUBRID work repository to its configured upstream.
 dir-pull:
     my-cubrid-dir pull

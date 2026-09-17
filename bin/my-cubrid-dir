@@ -15,8 +15,12 @@ Keep the repositories configured in cubrid-dir-picker.sh synchronized.
 
 Commands:
   list    List configured directories
+  status  Check cleanliness and sync with each branch's upstream (fetches)
   pull    Run git pull --ff-only in every configured repository
   help    Show this help
+
+Status uses ANSI colors in terminals; set NO_COLOR to disable them.
+Status exits 1 if any repository needs attention or cannot be checked.
 EOF
 }
 
@@ -44,6 +48,93 @@ load_repos()
 list_repos()
 {
   printf '%s\n' "${repos[@]}"
+}
+
+status_repos()
+{
+  local repo branch changes remote merge_ref counts ahead behind
+  local work_label sync_label work_color sync_color
+  local green='' yellow='' red='' reset=''
+  local attention=0
+
+  if [[ -t 1 && "${TERM:-}" != dumb && -z "${NO_COLOR:-}" ]]; then
+    green=$'\033[32m'
+    yellow=$'\033[33m'
+    red=$'\033[31m'
+    reset=$'\033[0m'
+  fi
+
+  printf 'Checking working trees and fetching upstream branches...\n'
+  for repo in "${repos[@]}"; do
+    if [[ ! -d "$repo" ]]; then
+      printf '%s | %smissing directory%s\n' "$repo" "$red" "$reset"
+      attention=$((attention + 1))
+      continue
+    fi
+    if [[ "$(git -C "$repo" rev-parse --is-inside-work-tree 2>/dev/null)" != true ]]; then
+      printf '%s | %snot a working-tree repository%s\n' "$repo" "$red" "$reset"
+      attention=$((attention + 1))
+      continue
+    fi
+
+    work_color=$green
+    work_label=clean
+    if ! changes=$(git -C "$repo" status --porcelain --untracked-files=normal --ignore-submodules=none 2>/dev/null); then
+      work_color=$red
+      work_label='working tree unknown (status failed)'
+    elif [[ -n "$changes" ]]; then
+      work_color=$yellow
+      work_label='dirty (uncommitted changes)'
+    fi
+
+    sync_color=$yellow
+    if ! branch=$(git -C "$repo" symbolic-ref --quiet --short HEAD); then
+      branch='detached HEAD'
+      sync_label='sync unknown (detached HEAD)'
+    elif ! git -C "$repo" rev-parse --verify HEAD >/dev/null 2>&1; then
+      sync_label='sync unknown (no commits yet)'
+    else
+      remote=$(git -C "$repo" config --get "branch.$branch.remote")
+      merge_ref=$(git -C "$repo" config --get "branch.$branch.merge")
+      if [[ -z "$remote" || -z "$merge_ref" ]]; then
+        sync_label='sync unknown (no upstream configured)'
+      elif ! GIT_TERMINAL_PROMPT=0 git -C "$repo" fetch --quiet --no-tags -- "$remote" "$merge_ref" 2>/dev/null; then
+        sync_color=$red
+        sync_label="sync unknown (fetch failed: $remote/${merge_ref#refs/heads/})"
+      elif ! counts=$(git -C "$repo" rev-list --left-right --count HEAD...FETCH_HEAD 2>/dev/null); then
+        sync_color=$red
+        sync_label='sync unknown (comparison failed)'
+      else
+        read -r ahead behind <<<"$counts"
+        if ((ahead == 0 && behind == 0)); then
+          sync_color=$green
+          sync_label='synced'
+        elif ((ahead > 0 && behind > 0)); then
+          sync_color=$red
+          sync_label="diverged (ahead $ahead, behind $behind)"
+        elif ((ahead > 0)); then
+          sync_label="ahead $ahead (push needed)"
+        else
+          sync_label="behind $behind (pull needed)"
+        fi
+        sync_label+=" [$remote/${merge_ref#refs/heads/}]"
+      fi
+    fi
+
+    printf '%s (%s) | %s%s%s | %s%s%s\n' \
+      "$repo" "$branch" "$work_color" "$work_label" "$reset" \
+      "$sync_color" "$sync_label" "$reset"
+    if [[ "$work_label" != clean || "$sync_label" != synced\ * ]]; then
+      attention=$((attention + 1))
+    fi
+  done
+
+  if ((attention == 0)); then
+    printf '\n%sAll %d repositories are clean and synced.%s\n' "$green" "${#repos[@]}" "$reset"
+    return 0
+  fi
+  printf '\n%s%d of %d repositories need attention.%s\n' "$yellow" "$attention" "${#repos[@]}" "$reset"
+  return 1
 }
 
 pull_repos()
@@ -94,13 +185,13 @@ main()
       load_repos || return
       list_repos
       ;;
-    pull)
+    status|pull)
       [[ $# -eq 1 ]] || {
         usage >&2
         return 2
       }
       load_repos || return
-      pull_repos
+      "${1}_repos"
       ;;
     help|-h|--help)
       [[ $# -eq 1 ]] || {

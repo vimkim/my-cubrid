@@ -31,7 +31,7 @@ test_list()
     "$test_root/home/gh/my-cubrid-jira" \
     "$test_root/home/gh/my-cubrid-skills" \
     "$test_root/home/gh/cubrid-oos-context" \
-    "$test_root/home/gh/cb")
+    "$test_root/home/gh/cb/develop")
   actual=$(HOME="$test_root/home" "$cli" list)
 
   assert_equal "$expected" "$actual"
@@ -48,7 +48,7 @@ test_pull_all()
     "$test_root/home/gh/my-cubrid-jira"
     "$test_root/home/gh/my-cubrid-skills"
     "$test_root/home/gh/cubrid-oos-context"
-    "$test_root/home/gh/cb"
+    "$test_root/home/gh/cb/develop"
   )
 
   mkdir -p "$test_root/bin"

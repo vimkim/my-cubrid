@@ -1,5 +1,10 @@
 # pwddb design interview
 
+The 2026-09-15 interview below records the original naming design. The accepted
+2026-09-17 runtime-guard specification supersedes directory/branch naming,
+suffixes, and environment-selected storage with ready-manifest authority; see
+[runtime guard database integration](runtime-guard-transactions.md#database-adoption-and-helpers).
+
 ## Agreed requirements
 
 - Commands live in `/home/vimkim/my-cubrid/bin`.
@@ -35,22 +40,29 @@ The user accepted all six recommendations on 2026-09-15:
 
 ```bash
 my-cubrid-pwddb-getname
-my-cubrid-pwddb-getname --append-name demodb
+my-cubrid-pwddb ensure
 my-cubrid-pwddb create
-my-cubrid-pwddb create --append-name demodb --load demodb
-my-cubrid-pwddb recreate --append-name demodb --load demodb
-my-cubrid-pwddb delete --append-name demodb
+my-cubrid-pwddb create --load demodb
+my-cubrid-pwddb recreate --load demodb
+my-cubrid-pwddb delete
 just db pwddb-create
 just db pwddb-create-demodb
 ```
 
-The commands use the active `cubrid` executable and `CUBRID_DATABASES`; loading additionally requires `CUBRID/demo`. The helper does not need a running CUBRID installation. Ticket extraction exits 1 for absence and 2 for ambiguity; name resolution only falls back on absence.
+The commands require a ready worktree manifest and `PRESET_MODE`. They use the
+manifest-selected executable, registry, data, log, and LOB roots; template loading
+uses the selected installation's `demo` directory. `my-cubrid-ticket-get` remains
+an independent ticket extractor; it no longer determines the database name.
 
-Final names must fit the documented 17-character ASCII database-name limit. Invalid names are rejected without rewriting. For example, `oos-storag-demodb` fits; an overly long ticket plus suffix may not.
+Names must fit the 17-character ASCII database-name limit and are selected by
+explicit runtime initialization or adoption. Helpers never add suffixes.
 
-Lifecycle calls from this CLI sharing a registry are serialized with `.pwddb.lock`. Other utilities do not participate in that lock. No recipes invoke the existing broad `delete-all` operation.
+Lifecycle calls sharing a registry are serialized with `.pwddb.lock`, including
+registry reads during concurrent `ensure`. The allocation lock also holds the
+runtime generation stable through lifecycle. Other utilities do not participate
+in these cooperative locks. No recipes invoke the broad `delete-all` operation.
 
-## Verification
+## Historical verification (before the runtime guard)
 
 - `python3 tests/pwddb-test.py`: real Git naming scenarios and stateful fake utility tests for lifecycle ordering, failure handling, and all six just recipes from a child directory.
 - ShellCheck passes for all three executables.

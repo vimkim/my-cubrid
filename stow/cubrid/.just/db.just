@@ -43,7 +43,7 @@ stop-interactive:
     fi
     ~/my-cubrid/bin/cubrid-build-coordinator.sh runtime 0 -- cubrid server stop "$database"
 
-# Create an empty database named from the invocation directory or branch.
+# Create the ready manifest's database, initially empty.
 pwddb-create:
     ~/my-cubrid/bin/my-cubrid-pwddb create
 
@@ -55,17 +55,17 @@ pwddb-recreate:
 pwddb-delete:
     ~/my-cubrid/bin/my-cubrid-pwddb delete
 
-# Create the resolved database with the demodb suffix and sample data.
+# Populate the ready manifest's database with demodb sample data.
 pwddb-create-demodb:
-    ~/my-cubrid/bin/my-cubrid-pwddb create --append-name demodb --load demodb
+    ~/my-cubrid/bin/my-cubrid-pwddb create --load demodb
 
-# Replace the resolved demodb variant and load its sample data.
+# Replace the manifest's database and load demodb sample data.
 pwddb-recreate-demodb:
-    ~/my-cubrid/bin/my-cubrid-pwddb recreate --append-name demodb --load demodb
+    ~/my-cubrid/bin/my-cubrid-pwddb recreate --load demodb
 
-# Delete only the resolved demodb variant.
+# Delete the manifest's database; template selection never changes its name.
 pwddb-delete-demodb:
-    ~/my-cubrid/bin/my-cubrid-pwddb delete --append-name demodb
+    ~/my-cubrid/bin/my-cubrid-pwddb delete
 
 # Start testdb while holding the runtime lock.
 [working-directory(justfile_directory())]

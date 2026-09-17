@@ -28,7 +28,6 @@ EXIT_UNINITIALIZED = 3
 EXIT_INVALID = 4
 RUNTIME_ID_PATTERN = re.compile(r"[A-Za-z0-9][A-Za-z0-9_-]{0,63}\Z")
 PRESET_PATTERN = re.compile(r"[A-Za-z0-9][A-Za-z0-9_.-]{0,127}\Z")
-DATABASE_NAME_PATTERN = re.compile(r"[A-Za-z][A-Za-z0-9_]{0,16}\Z")
 STATE_SCHEMA_VERSION = 1
 UNIX_SOCKET_PATH_BYTES = 107
 DEFAULT_MASTER_PORT_RANGE = (15000, 15999)
@@ -207,11 +206,14 @@ class ResourceBundle:
     library_directory: Path
     engine_configuration: Path
     broker_configuration: Path
+    database_adopted: bool = False
 
     @classmethod
     def from_dict(cls, document: object) -> "ResourceBundle":
         if not isinstance(document, dict):
             raise ValueError("resource bundle must be an object")
+        if type(document.get("database_adopted", False)) is not bool:
+            raise ValueError("database_adopted must be Boolean")
         brokers = document.get("brokers")
         sockets = document.get("socket_paths")
         mutable = document.get("pl_mutable_paths")
@@ -226,6 +228,7 @@ class ResourceBundle:
             raise ValueError("pl_mutable_paths must map strings to strings")
         return cls(
             database_name=require_string(document, "database_name"),
+            database_adopted=document.get("database_adopted", False),
             cubrid_tmp=Path(require_string(document, "cubrid_tmp")),
             database_registry=Path(require_string(document, "database_registry")),
             data_root=Path(require_string(document, "data_root")),
@@ -301,6 +304,7 @@ class ResourceBundle:
     def to_dict(self) -> dict[str, object]:
         return {
             "database_name": self.database_name,
+            "database_adopted": self.database_adopted,
             "cubrid_tmp": os.fspath(self.cubrid_tmp),
             "database_registry": os.fspath(self.database_registry),
             "data_root": os.fspath(self.data_root),
@@ -676,6 +680,8 @@ class LinuxObservationAdapter:
                             "fd": int(descriptor.name),
                             "socket_inode": int(match.group(1)),
                         })
+                    elif target.startswith("/"):
+                        descriptors.append({"fd": int(descriptor.name), "path": target})
                 record["fds"] = descriptors
             except (OSError, UnicodeError, ValueError):
                 record["accessible"] = False
@@ -1576,6 +1582,7 @@ def retained_transactions(guard_root: Path) -> dict[str, GuardTransaction]:
 def require_transaction_operation(
     transaction: GuardTransaction, command: str, selection: RuntimeSelection,
     database_override: str | None = None, layout: InstallationLayout | None = None,
+    adoption_registry: Path | None = None,
 ) -> None:
     manifest = transaction["manifest"]
     if (
@@ -1584,6 +1591,8 @@ def require_transaction_operation(
         or manifest["worktree_path"] != os.fspath(selection.worktree)
         or manifest["git_common_dir"] != os.fspath(selection.git_common_dir)
         or database_override not in (None, manifest["database_name"])
+        or (adoption_registry is not None
+            and manifest["resource_bundle"]["database_registry"] != os.fspath(adoption_registry))
         or (layout is not None and (
             manifest["resource_bundle"]["installation_root"] != os.fspath(layout.root)
             or manifest["resource_bundle"]["engine_configuration"] != os.fspath(layout.engine_configuration)
@@ -1996,10 +2005,11 @@ def patch_ini(content: str, managed: dict[str, dict[str, str]]) -> str:
 
 
 def validate_database_name(name: str) -> None:
-    if not DATABASE_NAME_PATTERN.fullmatch(name) or len(name.encode("ascii", "ignore")) != len(name):
+    if (not 1 <= len(name) <= 17 or name.startswith(("-", "#")) or name in (".", "..")
+        or any(not "!" <= character <= "~" or character in "/\\@" for character in name)):
         raise OperationError(
             "database_name_invalid", "database name", name, "init --db-name",
-            "A database name must be 1-17 ASCII characters, start with a letter, and contain only letters, digits, or underscore.",
+            "A database name must be 1-17 printable ASCII characters without whitespace, /, \\, or @; no leading - or # or path aliases.",
             "Choose a legal CUBRID database name before retrying initialization.",
         )
 
@@ -2061,6 +2071,18 @@ def environment_assignment(name: str, value: str) -> str:
     return f"export {name}={shlex.quote(value)}\n"
 
 
+def runtime_environment_values(bundle: ResourceBundle) -> dict[str, str]:
+    return {
+        "CUBRID": os.fspath(bundle.installation_root),
+        "CUBRID_CONF_FILE": os.fspath(bundle.engine_configuration),
+        "CUBRID_BROKER_CONF_FILE": os.fspath(bundle.broker_configuration),
+        "CUBRID_DATABASES": os.fspath(bundle.database_registry),
+        "CUBRID_TMP": os.fspath(bundle.cubrid_tmp),
+        "PATH": os.fspath(bundle.executable_directory),
+        "LD_LIBRARY_PATH": os.fspath(bundle.library_directory),
+    }
+
+
 def generated_environment_content(
     selection: RuntimeSelection,
     runtime_identifier: str,
@@ -2068,38 +2090,39 @@ def generated_environment_content(
     bundle: ResourceBundle,
 ) -> str:
     installation = bundle.installation_root
+    values = runtime_environment_values(bundle)
     content = "# Generated by my-cubrid-runtime; source this file, do not eval command output.\n"
     content += "unset " + " ".join(
         (*HA_OVERRIDE_NAMES, *MANAGED_PARAMETER_OVERRIDE_NAMES)
     ) + "\n"
     content += environment_assignment("PRESET_MODE", selection.preset)
     content += environment_assignment("CUBRID_WORKTREE_ID", runtime_identifier)
-    content += environment_assignment("CUBRID", os.fspath(installation))
+    content += environment_assignment("CUBRID", values["CUBRID"])
     if bundle.engine_configuration != installation / "conf" / "cubrid.conf":
         content += environment_assignment(
-            "CUBRID_CONF_FILE", os.fspath(bundle.engine_configuration)
+            "CUBRID_CONF_FILE", values["CUBRID_CONF_FILE"]
         )
     else:
         content += "unset CUBRID_CONF_FILE\n"
     if bundle.broker_configuration != installation / "conf" / "cubrid_broker.conf":
         content += environment_assignment(
-            "CUBRID_BROKER_CONF_FILE", os.fspath(bundle.broker_configuration)
+            "CUBRID_BROKER_CONF_FILE", values["CUBRID_BROKER_CONF_FILE"]
         )
     else:
         content += "unset CUBRID_BROKER_CONF_FILE\n"
     content += environment_assignment("CUBRID_BUILD_DIR", build_directory)
     content += environment_assignment(
-        "CUBRID_DATABASES", os.fspath(bundle.database_registry)
+        "CUBRID_DATABASES", values["CUBRID_DATABASES"]
     )
-    content += environment_assignment("CUBRID_TMP", os.fspath(bundle.cubrid_tmp))
+    content += environment_assignment("CUBRID_TMP", values["CUBRID_TMP"])
     content += environment_assignment("CUBRID_RUNTIME_READY", "1")
     content += (
-        f"export PATH={shlex.quote(os.fspath(bundle.executable_directory))}"
+        f"export PATH={shlex.quote(values['PATH'])}"
         "${PATH:+:$PATH}\n"
     )
     content += (
         "export LD_LIBRARY_PATH="
-        f"{shlex.quote(os.fspath(bundle.library_directory))}"
+        f"{shlex.quote(values['LD_LIBRARY_PATH'])}"
         "${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}\n"
     )
     return content
@@ -2385,9 +2408,8 @@ def validate_broker_spawn_environment_values(
     }
     unsupported_or_deferred = set(HA_OVERRIDE_NAMES)
     if bundle is not None:
+        expected_identity.update(runtime_environment_values(bundle))
         expected_identity.update({
-            "CUBRID_TMP": os.fspath(bundle.cubrid_tmp),
-            "CUBRID_DATABASES": os.fspath(bundle.database_registry),
             "CUBRID_CUBRID_PORT_ID": str(bundle.master_port),
             "CUBRID_STORED_PROCEDURE_UDS": "yes",
             "CUBRID_JAVA_STORED_PROCEDURE_UDS": "yes",
@@ -3066,6 +3088,7 @@ def reject_managed_claim_collisions(
     registry: dict[str, object],
     runtime_identifier: str,
     guard_root: Path,
+    adapter: ObservationAdapter,
 ) -> None:
     used_ports, used_keys, used_paths = all_claimed_values(
         registry, runtime_identifier, guard_root
@@ -3096,7 +3119,7 @@ def reject_managed_claim_collisions(
             "Restore disjoint managed claims before retrying initialization.",
         )
     conflicting_path = next(
-        (path for path in claims.paths if path in used_paths), None
+        (path for path in claims.paths if any(paths_overlap(path, used, adapter) for used in used_paths)), None
     )
     if conflicting_path is not None:
         raise OperationError(
@@ -3107,6 +3130,15 @@ def reject_managed_claim_collisions(
             "The complete resource bundle would reuse a path claimed by another worktree runtime.",
             "Select a distinct private installation and runtime identity before retrying initialization.",
         )
+
+
+def paths_overlap(path: Path, other: Path, adapter: ObservationAdapter) -> bool:
+    if path == other or path in other.parents or other in path.parents:
+        return True
+    left = adapter.inspect_file(path)
+    right = adapter.inspect_file(other)
+    return (left.exists and right.exists and left.device is not None and left.inode is not None
+            and (left.device, left.inode) == (right.device, right.inode))
 
 
 def private_resource_roots(runtime_identifier: str) -> tuple[Path, Path, Path]:
@@ -3229,6 +3261,123 @@ def preflight_resource_paths(
         validate_socket_path(socket_path, "generated resource bundle")
 
 
+@dataclass(frozen=True)
+class DatabaseStorage:
+    name: str
+    registry: Path
+    data: Path
+    log: Path
+    lob: Path
+
+    def apply(self, bundle: ResourceBundle) -> ResourceBundle:
+        return replace(bundle, database_registry=self.registry, data_root=self.data,
+                       log_root=self.log, lob_root=self.lob, database_adopted=True)
+
+
+def database_evidence_error(path: Path, message: str) -> OperationError:
+    return OperationError(
+        "database_ownership_unproven", "database storage", path, "databases.txt and canonical storage",
+        message, "Select one exclusively owned local database with complete canonical registry, data, log, and file: LOB paths.",
+        "unknown", expected_owner=os.geteuid(),
+    )
+
+
+def require_database_path(adapter: ObservationAdapter, path: Path, kind: str) -> FileObservation:
+    observed = adapter.inspect_file(path)
+    if (not path.is_absolute() or ".." in path.parts or path.resolve() != path
+        or not observed.exists or not observed.accessible or observed.canonical is not True
+        or observed.kind != kind or observed.owner != os.geteuid()
+        or observed.mode is None or observed.mode & 0o077):
+        raise database_evidence_error(path, "Database evidence must be canonical, present, readable, and owner-only; aliases and path escapes are unsafe.")
+    if kind == "file" and path.stat().st_nlink != 1:
+        raise database_evidence_error(path, "A hard-linked database registry has ambiguous ownership.")
+    return observed
+
+
+def inspect_database_storage(
+    adapter: ObservationAdapter, name: str, registry: Path, *, required: bool,
+) -> DatabaseStorage | None:
+    validate_database_name(name)
+    require_database_path(adapter, registry, "directory")
+    entry_path = registry / "databases.txt"
+    observed = adapter.inspect_file(entry_path)
+    if not observed.exists and not required:
+        return None
+    observed = require_database_path(adapter, entry_path, "file")
+    if observed.content is None:
+        raise database_evidence_error(entry_path, "The database registry is unreadable.")
+    rows = [line.split() for line in observed.content.splitlines()
+            if line.strip() and not line.lstrip().startswith("#")]
+    if not rows and not required:
+        return None
+    if (len(rows) != 1 or len(rows[0]) != 5 or rows[0][0] != name
+        or rows[0][2] != "localhost" or not rows[0][4].startswith("file:")):
+        raise database_evidence_error(entry_path, "The private registry must contain exactly one matching local entry with explicit data, log, and file: LOB paths.")
+    row = rows[0]
+    storage = DatabaseStorage(name, registry, Path(row[1]), Path(row[3]), Path(row[4][5:]))
+    for root in (storage.data, storage.log, storage.lob):
+        require_database_path(adapter, root, "directory")
+        if root == Path.home() or root == Path("/"):
+            raise database_evidence_error(root, "A broad home or filesystem root is not private database storage.")
+    inventory = storage.data / f"{name}_vinf"
+    selected_volumes = require_database_volumes(adapter, storage) if required or inventory.exists() else set()
+    for root in (storage.data, storage.log, storage.lob):
+        def failed_walk(error: OSError) -> None:
+            raise database_evidence_error(root, f"Storage contents cannot be inspected: {error}.")
+
+        for directory, children, files in os.walk(root, onerror=failed_walk, followlinks=False):
+            for child in (*children, *files):
+                path = Path(directory) / child
+                metadata = path.lstat()
+                if child.endswith("_vinf") and path != inventory and path not in selected_volumes:
+                    raise database_evidence_error(path, "Another database volume inventory shares the selected storage roots.")
+                if (metadata.st_uid != os.geteuid() or metadata.st_mode & 0o022
+                    or not (stat.S_ISDIR(metadata.st_mode) or stat.S_ISREG(metadata.st_mode))
+                    or (stat.S_ISREG(metadata.st_mode) and metadata.st_nlink != 1)):
+                    raise database_evidence_error(path, "Storage contains foreign, shared, writable, or aliased files; exclusive ownership is unproven.")
+    return storage
+
+
+def require_database_volumes(adapter: ObservationAdapter, storage: DatabaseStorage) -> set[Path]:
+    inventory = storage.data / f"{storage.name}_vinf"
+    observed = adapter.inspect_file(inventory)
+    if (observed.kind != "file" or not observed.accessible or observed.content is None
+        or observed.owner != os.geteuid() or observed.canonical is not True):
+        raise database_evidence_error(inventory, "The existing database volume inventory is missing or unreadable.")
+    rows = [line.split() for line in observed.content.splitlines() if line.strip()]
+    volume_paths: list[Path] = []
+    volume_ids: set[int] = set()
+    for row in rows:
+        if len(row) != 2 or not re.fullmatch(r"-?[0-9]+", row[0]):
+            raise database_evidence_error(inventory, "The database volume inventory is incomplete or inconsistent.")
+        path = Path(row[1])
+        volume_id = int(row[0])
+        if volume_id in volume_ids or path in volume_paths:
+            raise database_evidence_error(inventory, "The volume inventory contains duplicate identities or paths.")
+        volume_ids.add(volume_id)
+        # LOG_DBLOG_BKUPINFO_VOLID is registered by createdb before the first backup exists.
+        optional_backup_inventory = volume_id == -3 and path == storage.log / f"{storage.name}_bkvinf"
+        if (not path.is_absolute() or ".." in path.parts or path.resolve() != path
+            or not any(root in path.parents for root in (storage.data, storage.log))
+            or (not path.is_file() and not (optional_backup_inventory and not path.exists()))):
+            raise database_evidence_error(path, "A registered volume is missing, aliased, or escapes its private data/log roots.")
+        volume_paths.append(path)
+    if not any(row == ["0", os.fspath(storage.data / storage.name)] for row in rows):
+        raise database_evidence_error(inventory, "The volume inventory does not prove the selected primary database volume.")
+    return set(volume_paths)
+
+
+def require_bundle_database(adapter: ObservationAdapter, bundle: ResourceBundle) -> None:
+    storage = inspect_database_storage(adapter, bundle.database_name, bundle.database_registry,
+                                       required=False)
+    if storage is not None and (storage.data, storage.log, storage.lob) != (
+        bundle.data_root, bundle.log_root, bundle.lob_root,
+    ):
+        raise database_evidence_error(bundle.database_registry, "Registry storage locations disagree with the manifest.")
+    if storage is not None and bundle.database_adopted:
+        require_database_volumes(adapter, storage)
+
+
 def validate_resource_bundle(
     bundle: ResourceBundle,
     runtime_identifier: str,
@@ -3250,8 +3399,10 @@ def validate_resource_bundle(
         )
         if (
             bundle.cubrid_tmp != expected_tmp
-            or bundle.database_registry != expected_registry
-            or (bundle.data_root, bundle.log_root, bundle.lob_root) != expected_storage
+            or (not bundle.database_adopted and (
+                bundle.database_registry != expected_registry
+                or (bundle.data_root, bundle.log_root, bundle.lob_root) != expected_storage
+            ))
         ):
             raise ValueError("private runtime and database roots are inconsistent")
         if not defer_managed_path_checks:
@@ -3263,7 +3414,8 @@ def validate_resource_bundle(
                 bundle.lob_root,
             ):
                 require_private_directory_chain(
-                    safe_home, private_directory, source
+                    private_directory if bundle.database_adopted and private_directory != bundle.cubrid_tmp else safe_home,
+                    private_directory, source
                 )
         if not 1 <= bundle.master_port <= 65535 or not 1 <= bundle.master_shm_key <= 0x7FFFFFFF:
             raise ValueError("master port or shared-memory key is outside its legal range")
@@ -3496,7 +3648,9 @@ def initialize(
     adapter: ObservationAdapter,
     selection: RuntimeSelection,
     database_override: str | None,
+    adoption_registry: Path | None = None,
 ) -> tuple[ValidationResult, int]:
+    command = "adopt" if adoption_registry is not None else "init"
     if database_override is not None:
         validate_database_name(database_override)
     refuse_effective_configuration_overrides()
@@ -3513,6 +3667,8 @@ def initialize(
         selection.worktree, runtime_identifier
     )
     validate_database_name(preview_database_name)
+    adoption = (inspect_database_storage(adapter, preview_database_name, adoption_registry, required=True)
+                if adoption_registry is not None else None)
     layout = installation_paths()
     installation = layout.root
     engine_path = layout.engine_configuration
@@ -3590,6 +3746,8 @@ def initialize(
             observations,
             guard_root,
         ).for_installation(layout)
+        if adoption is not None:
+            preview_bundle = adoption.apply(preview_bundle)
         require_mutation_safe_ownership(
             adapter,
             observations,
@@ -3635,12 +3793,14 @@ def initialize(
         recovering = transaction is not None and transaction["state"] != "ready"
         if recovering:
             assert transaction is not None
-            require_transaction_operation(transaction, "init", selection, database_override, layout)
+            require_transaction_operation(transaction, command, selection, database_override, layout, adoption_registry)
         retained = existing_bundle(
             manifest_path, runtime_identifier, selection,
             transaction["manifest"] if recovering and transaction is not None else None,
         )
         published = require_transaction_generation(transaction, manifest_path, registry, runtime_identifier)
+        if adoption_registry is not None:
+            adoption = inspect_database_storage(adapter, preview_database_name, adoption_registry, required=True)
         # Configuration and binary observations are refreshed after taking the lock.
         engine_content = engine_path.read_text()
         broker_content = broker_path.read_text()
@@ -3653,13 +3813,13 @@ def initialize(
                         "transaction_input_changed", f"{kind} configuration",
                         engine_path if kind == "engine" else broker_path, "retained transaction",
                         "The configuration is neither the original nor the transaction's intended publication.",
-                        "Restore the original or intended configuration, then retry init; claims remain retained.",
+                    f"Restore the original or intended configuration, then retry {command}; claims remain retained.",
                     )
             if installation_document != transaction["manifest"]["installation"]:
                 raise OperationError(
                     "transaction_input_changed", "installation", installation, "retained transaction",
                     "The installation changed during an unfinished generation.",
-                    "Restore the transaction's installation identity before retrying init.",
+                    f"Restore the transaction's installation identity before retrying {command}.",
                 )
         observations = adapter.inspect_runtime()
         if retained is None:
@@ -3684,8 +3844,15 @@ def initialize(
                     "Omit --db-name or use the manifest's existing database name.",
                 )
             bundle = bundle.for_installation(layout)
+        if adoption is not None:
+            adopted_bundle = adoption.apply(bundle)
+            if retained is not None and adopted_bundle != bundle:
+                raise database_evidence_error(adoption.registry, "The selected database differs from the runtime's retained database; claims cannot be replaced by adoption.")
+            bundle = adopted_bundle
+        if bundle.database_adopted:
+            require_bundle_database(adapter, bundle)
         reject_managed_claim_collisions(
-            bundle, registry, runtime_identifier, guard_root
+            bundle, registry, runtime_identifier, guard_root, adapter
         )
         spawn_environments = require_mutation_safe_ownership(
             adapter,
@@ -3700,7 +3867,7 @@ def initialize(
         )
         if transaction is not None and transaction["state"] == "ready" and transaction != requested_transaction:
             result, status = validate(adapter, selection)
-            return replace(result, command="init"), status
+            return replace(result, command=command), status
         claims = bundle.claims().to_dict()
         generation = (
             transaction["generation"] if recovering and transaction is not None else
@@ -3740,7 +3907,7 @@ def initialize(
             transaction = {
                 "schema_version": STATE_SCHEMA_VERSION,
                 "generation": generation,
-                "operation": "init",
+                "operation": command,
                 "state": "initializing",
                 "manifest": initializing_manifest,
                 "predecessor": {"manifest": published, "allocation": allocations.get(runtime_identifier)},
@@ -3810,12 +3977,12 @@ def initialize(
             atomic_json(registry_path, registry)
             error.diagnostic = replace(
                 error.diagnostic,
-                next_action=error.diagnostic.next_action + " Then retry init with the original selection; claims remain retained.",
+                next_action=error.diagnostic.next_action + f" Then retry {command} with the original selection; claims remain retained.",
             )
         raise
     finally:
         os.close(lock_descriptor)
-    return ready_result("init", selection, runtime_identifier, manifest_path, environment_path), 0
+    return ready_result(command, selection, runtime_identifier, manifest_path, environment_path), 0
 
 
 def process_owns_socket_inode(process: dict[str, object], inode: int) -> bool:
@@ -4252,6 +4419,7 @@ def classify_live_ownership(
         os.fspath(bundle.installation_root),
         os.fspath(bundle.cubrid_tmp),
         os.fspath(bundle.database_registry),
+        os.fspath(bundle.data_root), os.fspath(bundle.log_root), os.fspath(bundle.lob_root),
     }
     for process in snapshot.processes:
         pid = process.get("pid")
@@ -4261,6 +4429,14 @@ def classify_live_ownership(
             isinstance(configuration, dict)
             and any(value in expected_configuration_values for value in configuration.values())
         )
+        descriptors = process.get("fds")
+        if isinstance(descriptors, list):
+            relevant = relevant or any(
+                isinstance(descriptor, dict) and isinstance(descriptor.get("path"), str)
+                and any(root in Path(descriptor["path"]).parents or root == Path(descriptor["path"])
+                        for root in (bundle.data_root, bundle.log_root, bundle.lob_root))
+                for descriptor in descriptors
+            )
         if relevant and pid not in linked_pids:
             return ownership_assessment(
                 "unknown", "CUBRID process", f"pid={pid}",
@@ -4786,7 +4962,8 @@ def validate(
     for field, path in managed_paths.items():
         observation = adapter.inspect_file(path)
         try:
-            require_private_directory_chain(Path.home(), path, f"resource_bundle.{field}")
+            require_private_directory_chain(path if bundle.database_adopted and field != "cubrid_tmp" else Path.home(),
+                                            path, f"resource_bundle.{field}")
         except OperationError:
             observation = replace(observation, canonical=False)
         if (
@@ -4804,6 +4981,10 @@ def validate(
                 next_action="Rerun initialization while the selected runtime is idle.",
                 expected_owner=os.geteuid(),
             ), EXIT_INVALID
+    try:
+        require_bundle_database(adapter, bundle)
+    except OperationError as error:
+        return ValidationResult(outcome="invalid", selection=selection, diagnostic=error.diagnostic), EXIT_INVALID
     registry_path = state_home / "cubrid-worktree-guard" / "allocations.json"
     registry_observation = adapter.inspect_file(registry_path)
     if (
@@ -4846,6 +5027,10 @@ def validate(
             affected_kind="allocation registry", source="guard state",
             next_action="Restore matching registry and manifest state before using this runtime.",
         ), EXIT_INVALID
+    try:
+        reject_managed_claim_collisions(bundle, registry_document, selected_runtime_id, guard_root, adapter)
+    except OperationError as error:
+        return ValidationResult(outcome="invalid", selection=selection, diagnostic=error.diagnostic), EXIT_INVALID
     configuration_contents: dict[str, str] = {}
     configuration_hashes: dict[str, tuple[Path, str, str]] = {}
     for kind in ("engine", "broker"):
@@ -5339,13 +5524,15 @@ def parse_arguments() -> argparse.Namespace:
     subparsers = parser.add_subparsers(dest="command", required=True)
     initialize_parser = subparsers.add_parser("init", help="initialize a worktree runtime")
     validate_parser = subparsers.add_parser("validate", help="validate runtime guard state")
-    adopt_parser = subparsers.add_parser("adopt", help="reserved; refuses unfinished operations")
+    adopt_parser = subparsers.add_parser("adopt", help="adopt one existing private database")
     deinit_parser = subparsers.add_parser("deinit", help="reserved; refuses unfinished operations")
     for command_parser in (initialize_parser, validate_parser, adopt_parser, deinit_parser):
         command_parser.add_argument("--worktree", help="CUBRID Git worktree (default: current worktree)")
         command_parser.add_argument("--preset", help="active build preset (default: PRESET_MODE)")
         command_parser.add_argument("--json", action="store_true", help="emit structured diagnostics")
     initialize_parser.add_argument("--db-name", help="database identity for a new runtime")
+    adopt_parser.add_argument("--db-name", help="existing database name to preserve")
+    adopt_parser.add_argument("--registry", help="existing private CUBRID_DATABASES directory")
     return parser.parse_args()
 
 
@@ -5372,6 +5559,16 @@ def main() -> int:
             result, exit_status = initialize(adapter, selection, arguments.db_name)
         elif arguments.command == "validate":
             result, exit_status = validate(adapter, selection)
+        elif arguments.command == "adopt":
+            for transaction in retained_transactions(state_root()).values():
+                if transaction["state"] != "ready" and transaction["manifest"]["worktree_path"] == os.fspath(worktree):
+                    require_transaction_operation(transaction, "adopt", selection, arguments.db_name,
+                                                  adoption_registry=Path(arguments.registry) if arguments.registry else None)
+            if not arguments.db_name or not arguments.registry:
+                raise OperationError("adoption_selection_required", "database adoption", worktree, "adopt arguments",
+                                     "Explicit --db-name and --registry are required.",
+                                     "Select the existing private database; discovery never adopts it.")
+            result, exit_status = initialize(adapter, selection, arguments.db_name, Path(arguments.registry))
         else:
             refuse_unimplemented_mutation(arguments.command, selection)
     except OperationError as error:

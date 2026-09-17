@@ -3,10 +3,10 @@
 ## Language
 
 **pwddb**:
-The database alias derived from the current directory's ticket, otherwise the current branch's ticket, otherwise the first ten characters of the current directory name. Hyphens are preserved in the directory fallback.
+The database selected by the current worktree runtime's ready manifest. Its name and private storage remain independent of the invocation directory and branch.
 
-**Database name suffix**:
-An optional label appended to the resolved base name with a hyphen. A suffix identifies a database variant without determining its contents.
+**Database adoption**:
+The explicit association of an existing private database with a worktree runtime after exclusive registry and storage ownership has been proven. Adoption preserves its name and locations.
 
 **demodb template**:
-The sample dataset explicitly selected to populate a database. A database named with the demodb suffix can still be empty unless the template is selected.
+The sample dataset explicitly selected to populate the manifest-selected database. Selecting the template does not change the database name.

@@ -146,6 +146,234 @@ class RuntimeGuardCliTest(unittest.TestCase):
     def run_cli(self, *arguments):
         return self.run_runtime("validate", *arguments)
 
+    def adoption_database(self, name="CBRD-12345"):
+        registry = self.home / "existing-registry"
+        registry.mkdir(mode=0o700)
+        roots = [self.home / f"existing-{role}" for role in ("data", "log", "lob")]
+        for root in roots:
+            root.mkdir(mode=0o700)
+        (roots[0] / name).write_text("existing database volume\n")
+        (roots[0] / f"{name}_vinf").write_text(f"0 {roots[0] / name}\n")
+        entry = registry / "databases.txt"
+        entry.write_text(f"{name} {roots[0]} localhost {roots[1]} file:{roots[2]}\n")
+        entry.chmod(0o600)
+        return registry, roots
+
+    def test_adopt_preserves_name_and_disjoint_storage_without_lifecycle(self):
+        registry, roots = self.adoption_database()
+        (roots[0] / "extension_vinf").write_text("selected extension volume\n")
+        with (roots[0] / "CBRD-12345_vinf").open("a") as inventory:
+            inventory.write(f"-3 {roots[1] / 'CBRD-12345_bkvinf'}\n")
+            inventory.write(f"1 {roots[0] / 'extension_vinf'}\n")
+        original_entry = (registry / "databases.txt").read_bytes()
+        result = self.run_runtime("adopt", "--preset", "debug", "--db-name", "CBRD-12345",
+                                  "--registry", str(registry), "--json")
+        self.assertEqual(result.returncode, 0, result.stderr + result.stdout)
+        manifest = self.manifest_for(result)
+        self.assertEqual(manifest["database_name"], "CBRD-12345")
+        bundle = manifest["resource_bundle"]
+        self.assertEqual(bundle["database_registry"], str(registry))
+        self.assertEqual([bundle[f"{role}_root"] for role in ("data", "log", "lob")],
+                         list(map(str, roots)))
+        self.assertEqual((registry / "databases.txt").read_bytes(), original_entry)
+        self.assertFalse(self.calls.exists())
+        validated = self.run_cli("--preset", "debug", "--json")
+        self.assertEqual(validated.returncode, 0, validated.stderr + validated.stdout)
+
+    def test_helpers_refuse_without_ready_manifest(self):
+        for helper, arguments in (("my-cubrid-pwddb-getname", ()),
+                                  ("my-cubrid-pwddb", ("ensure",))):
+            result = subprocess.run([str(CLI.parent / helper), *arguments], cwd=self.worktree,
+                                    env={**self.environment, "PRESET_MODE": "debug"},
+                                    text=True, capture_output=True)
+            self.assertNotEqual(result.returncode, 0, result.stdout)
+            self.assertIn("ready", result.stderr)
+        self.assertFalse(self.calls.exists())
+
+    def test_adopt_preserves_database_names_ending_in_inventory_suffix(self):
+        registry, _ = self.adoption_database("existing_vinf")
+        result = self.run_runtime("adopt", "--preset", "debug", "--db-name", "existing_vinf",
+                                  "--registry", str(registry), "--json")
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertEqual(self.manifest_for(result)["database_name"], "existing_vinf")
+
+    def test_adopt_rejects_incomplete_aliased_and_foreign_evidence_without_writes(self):
+        for problem in ("duplicate", "other-name", "remote", "missing-lob", "missing-directory",
+                        "registry-alias", "registry-hardlink", "storage-alias", "escape",
+                        "foreign", "inaccessible", "shared-volume", "volume-alias",
+                        "missing-volume", "missing-inventory", "escaped-volume",
+                        "other-database", "duplicate-volume-id"):
+            with self.subTest(problem=problem):
+                self.setUp()
+                registry, roots = self.adoption_database()
+                entry = registry / "databases.txt"
+                original = entry.read_text()
+                if problem == "duplicate":
+                    entry.write_text(original * 2)
+                elif problem == "other-name":
+                    entry.write_text(original.replace("CBRD-12345", "unrelated"))
+                elif problem == "remote":
+                    entry.write_text(original.replace("localhost", "foreign-host"))
+                elif problem == "missing-lob":
+                    entry.write_text(" ".join(original.split()[:4]) + "\n")
+                elif problem == "missing-directory":
+                    roots[2].rmdir()
+                elif problem == "registry-alias":
+                    alias = self.home / "alias"
+                    alias.symlink_to(registry, target_is_directory=True)
+                    registry = alias
+                elif problem == "registry-hardlink":
+                    os.link(entry, self.home / "other-registry")
+                elif problem == "storage-alias":
+                    alias = self.home / "alias"
+                    alias.symlink_to(roots[0], target_is_directory=True)
+                    entry.write_text(original.replace(str(roots[0]), str(alias)))
+                elif problem == "escape":
+                    entry.write_text(original.replace(str(roots[0]), str(registry / ".." / roots[0].name)))
+                elif problem in ("foreign", "inaccessible"):
+                    self.replace_observations({}, {str(roots[0]): {
+                        "type": "directory", "mode": "0700", "owner": os.geteuid() + (problem == "foreign"),
+                        "accessible": problem != "inaccessible", "canonical": True,
+                    }})
+                elif problem == "shared-volume":
+                    os.link(roots[0] / "CBRD-12345", self.home / "shared-volume")
+                elif problem == "volume-alias":
+                    (roots[0] / "outside-volume").symlink_to(self.home / "outside")
+                elif problem == "missing-volume":
+                    (roots[0] / "CBRD-12345").unlink()
+                elif problem == "missing-inventory":
+                    (roots[0] / "CBRD-12345_vinf").unlink()
+                elif problem == "escaped-volume":
+                    with (roots[0] / "CBRD-12345_vinf").open("a") as output:
+                        output.write(f"1 {self.home / 'foreign-volume'}\n")
+                elif problem == "other-database":
+                    (roots[0] / "unrelated_vinf").write_text("another database's volume inventory\n")
+                elif problem == "duplicate-volume-id":
+                    (roots[0] / "CBRD-12345_vinf").write_text(f"0 {roots[0] / 'CBRD-12345'}\n" * 2)
+                before = self.snapshot()
+                result = self.run_runtime("adopt", "--preset", "debug", "--db-name", "CBRD-12345",
+                                          "--registry", str(registry), "--json")
+                self.assertEqual(result.returncode, 4, result.stdout + result.stderr)
+                self.assertEqual(self.snapshot(), before)
+
+    def test_adopt_rejects_shared_and_nested_managed_roots_without_writes(self):
+        initialized = self.run_runtime("init", "--preset", "debug", "--json")
+        shared = Path(self.manifest_for(initialized)["resource_bundle"]["data_root"])
+        other_worktree, _, environment = self.create_additional_runtime("adopt")
+        registry, roots = self.adoption_database()
+        for root in (shared, shared / "nested", roots[0]):
+            root.mkdir(mode=0o700, exist_ok=True)
+            (root / "CBRD-12345").write_text("volume")
+            (root / "CBRD-12345_vinf").write_text(f"0 {root / 'CBRD-12345'}\n")
+            if root == roots[0]:
+                metadata = shared.stat()
+                self.replace_observations({}, {str(root): {
+                    "type": "directory", "owner": os.geteuid(), "mode": "0700",
+                    "canonical": True, "device": metadata.st_dev, "inode": metadata.st_ino,
+                }})
+            entry = registry / "databases.txt"
+            entry.write_text(f"CBRD-12345 {root} localhost {roots[1]} file:{roots[2]}\n")
+            before = self.snapshot()
+            result = self.run_runtime_for(other_worktree, environment, "adopt", "--preset", "debug",
+                                           "--db-name", "CBRD-12345", "--registry", str(registry), "--json")
+            self.assertEqual(result.returncode, 4, result.stdout + result.stderr)
+            self.assertEqual(self.snapshot(), before)
+
+    def test_adopt_refuses_live_and_unknown_observations_without_writes(self):
+        for condition in ("incomplete", "unlinked-process", "storage-fd", "same-runtime"):
+            with self.subTest(condition=condition):
+                self.setUp()
+                registry, roots = self.adoption_database()
+                arguments = ("--preset", "debug", "--db-name", "CBRD-12345", "--registry", str(registry), "--json")
+                if condition == "incomplete":
+                    self.replace_observations({"complete": False})
+                elif condition == "unlinked-process":
+                    self.replace_observations({"processes": [{"pid": 123, "configuration": {
+                        "database_registry": str(registry)}, "executable": "/foreign/cub_server"}]})
+                elif condition == "storage-fd":
+                    self.replace_observations({"processes": [{"pid": 123, "configuration": {},
+                        "executable": "/foreign/cub_server", "fds": [{"path": str(roots[0] / "CBRD-12345")}]}]})
+                else:
+                    adopted = self.run_runtime("adopt", *arguments)
+                    self.assertEqual(adopted.returncode, 0, adopted.stdout + adopted.stderr)
+                    manifest = self.manifest_for(adopted)
+                    process = self.runtime_process(manifest)
+                    self.replace_observations({"processes": [process], "listeners": [{
+                        "protocol": "tcp", "address": "127.0.0.1", "port": manifest["resource_bundle"]["master_port"],
+                        "inode": 7001, "namespace": "net:[200]", "owner_pid": 4242, "owner_start_time": 100,
+                    }]})
+                before = self.snapshot()
+                result = self.run_runtime("adopt", *arguments)
+                self.assertEqual(result.returncode, 4, result.stdout + result.stderr)
+                self.assertEqual(self.snapshot(), before)
+
+    def test_adopt_recovers_every_publication_with_original_generation(self):
+        for boundary in (*PUBLICATION_BOUNDARIES, "before_ready_transaction", "after_ready_transaction"):
+            with self.subTest(boundary=boundary):
+                self.setUp()
+                registry, _ = self.adoption_database()
+                arguments = ("--preset", "debug", "--db-name", "CBRD-12345", "--registry", str(registry), "--json")
+                fixture = json.loads(self.fixture.read_text())
+                fixture["publication_failure"] = boundary
+                self.fixture.write_text(json.dumps(fixture))
+                interrupted = self.run_runtime("adopt", *arguments)
+                self.assertEqual(interrupted.returncode, 86, interrupted.stderr + interrupted.stdout)
+                transaction_path = next(self.state_home.glob("cubrid-worktree-guard/worktrees/*/transaction.json"))
+                transaction = self.read_manifest(transaction_path)
+                fixture.pop("publication_failure")
+                self.fixture.write_text(json.dumps(fixture))
+                before = self.snapshot()
+                if boundary != "after_ready_transaction":
+                    wrong = self.run_runtime("init", "--preset", "debug", "--json")
+                    self.assertEqual(json.loads(wrong.stdout)["diagnostic"]["code"], "transaction_operation_mismatch")
+                    self.assertEqual(self.snapshot(), before)
+                recovered = self.run_runtime("adopt", *arguments)
+                self.assertEqual(recovered.returncode, 0, recovered.stdout + recovered.stderr)
+                manifest = self.manifest_for(recovered)
+                self.assertEqual(manifest["normalized_claims"], transaction["manifest"]["normalized_claims"])
+                if boundary != "after_ready_transaction":
+                    self.assertEqual(manifest["generation"], transaction["generation"])
+                self.assertEqual(self.run_cli("--preset", "debug").returncode, 0)
+                self.assertFalse(self.calls.exists())
+
+    def test_adopt_matching_name_is_not_discovery_and_registry_drift_is_rejected(self):
+        registry, roots = self.adoption_database()
+        absent = self.run_cli("--preset", "debug")
+        self.assertEqual(absent.returncode, 3)
+        self.assertFalse(self.state_home.exists())
+        adopted = self.run_runtime("adopt", "--preset", "debug", "--db-name", "CBRD-12345",
+                                   "--registry", str(registry), "--json")
+        self.assertEqual(adopted.returncode, 0, adopted.stdout + adopted.stderr)
+        helper = subprocess.run([str(CLI.parent / "my-cubrid-pwddb-getname")], cwd=self.worktree,
+                                env={**self.environment, "PRESET_MODE": "debug"}, text=True, capture_output=True)
+        self.assertEqual(helper.stdout, "CBRD-12345\n", helper.stderr)
+        entry = registry / "databases.txt"
+        entry.write_text(entry.read_text().replace(str(roots[0]), str(roots[1])))
+        before = self.snapshot()
+        result = self.run_cli("--preset", "debug", "--json")
+        self.assertEqual(result.returncode, 4)
+        self.assertEqual(self.snapshot(), before)
+
+    def test_adopt_recovery_fences_changed_registry_without_writes(self):
+        registry, _ = self.adoption_database()
+        fixture = json.loads(self.fixture.read_text())
+        fixture["publication_failure"] = "after_manifest"
+        self.fixture.write_text(json.dumps(fixture))
+        result = self.run_runtime("adopt", "--preset", "debug", "--db-name", "CBRD-12345",
+                                  "--registry", str(registry), "--json")
+        self.assertEqual(result.returncode, 86)
+        fixture.pop("publication_failure")
+        self.fixture.write_text(json.dumps(fixture))
+        other = self.home / "other-registry"
+        other.mkdir(mode=0o700)
+        shutil.copy2(registry / "databases.txt", other / "databases.txt")
+        before = self.snapshot()
+        result = self.run_runtime("adopt", "--preset", "debug", "--db-name", "CBRD-12345",
+                                  "--registry", str(other), "--json")
+        self.assertEqual(result.returncode, 4, result.stdout + result.stderr)
+        self.assertEqual(self.snapshot(), before)
+        self.assertEqual(json.loads(result.stdout)["diagnostic"]["code"], "transaction_operation_mismatch")
+
     def manifest_for(self, result):
         report = json.loads(result.stdout)
         return self.read_manifest(Path(report["manifest_path"]))

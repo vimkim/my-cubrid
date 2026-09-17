@@ -144,6 +144,21 @@ class RuntimeGuardCliTest(unittest.TestCase):
     def read_manifest(self, path):
         return json.loads(path.read_text())
 
+    def configure_broker_spawn_environment(self, content):
+        source_environment = self.installation / "conf" / "query-editor.env"
+        if isinstance(content, bytes):
+            source_environment.write_bytes(content)
+        else:
+            source_environment.write_text(content)
+        broker_path = self.installation / "conf" / "cubrid_broker.conf"
+        broker_path.write_text(
+            broker_path.read_text().replace(
+                "CUSTOM_BROKER_SETTING=preserved",
+                "SOURCE_ENV=conf/query-editor.env\nCUSTOM_BROKER_SETTING=preserved",
+            )
+        )
+        return source_environment
+
     def use_fake_state(self, runtime_id, manifest, observations=None):
         environment_path = self.worktree / ".env"
         manifest_path = (
@@ -177,6 +192,10 @@ class RuntimeGuardCliTest(unittest.TestCase):
         (self.worktree / ".env").write_text(
             "# human setting\nPRESET_MODE=debug\n\nOTHER=value\n"
         )
+        self.assertIn(
+            "service=server,broker,manager",
+            (self.installation / "conf" / "cubrid.conf").read_text(),
+        )
 
         initialized = self.run_runtime("init", "--preset", "debug", "--json")
 
@@ -206,6 +225,11 @@ class RuntimeGuardCliTest(unittest.TestCase):
         self.assertEqual(
             bundle["brokers"][0]["query_replacement_shm_key"], 0x51000001
         )
+        effective = manifest["configurations"]["effective"]
+        self.assertEqual(effective["engine"]["service"], "server,broker")
+        self.assertEqual(effective["engine"]["cubrid_port_id"], "15000")
+        self.assertEqual(effective["engine"]["stored_procedure_uds"], "yes")
+        self.assertEqual(effective["broker"]["MASTER_SHM_ID"], "0x60000000")
         self.assertRegex(manifest["database_name"], r"^[A-Za-z][A-Za-z0-9_]{0,16}$")
         self.assertTrue(manifest["database_name"].startswith("source"))
         self.assertIn(str(Path(bundle["cubrid_tmp"]) / "CUBRID15000"), bundle["socket_paths"])
@@ -252,11 +276,13 @@ class RuntimeGuardCliTest(unittest.TestCase):
         ):
             self.assertEqual(path.stat().st_mode & 0o777, 0o600)
 
+        before_validation = self.snapshot()
         validated = self.run_runtime("validate", "--preset", "debug", "--json")
         self.assertEqual(validated.returncode, 0, validated.stderr + validated.stdout)
         validation_report = json.loads(validated.stdout)
         self.assertEqual(validation_report["outcome"], "ready")
         self.assertTrue(validation_report["ready"])
+        self.assertEqual(self.snapshot(), before_validation)
         self.assertFalse(self.calls.exists())
 
     def test_init_is_idempotent_and_database_override_is_stable(self):
@@ -445,6 +471,47 @@ class RuntimeGuardCliTest(unittest.TestCase):
         self.assertEqual(report["diagnostic"]["code"], "broker_configuration_invalid")
         self.assertEqual(report["diagnostic"]["affected_object"]["kind"], "broker shared-memory key")
         self.assertEqual(self.snapshot(), before)
+        self.assertFalse(self.calls.exists())
+
+    def test_broker_defaults_and_section_case_match_cubrid_effective_values(self):
+        broker_path = self.installation / "conf" / "cubrid_broker.conf"
+        broker_path.write_text(
+            "[BROKER]\nMASTER_SHM_ID=30001\n\n"
+            "[%CaseBroker]\nBROKER_PORT=30000\nAPPL_SERVER_SHM_ID=30000\n"
+        )
+
+        initialized = self.run_runtime("init", "--preset", "debug", "--json")
+
+        self.assertEqual(initialized.returncode, 0, initialized.stderr + initialized.stdout)
+        manifest = self.manifest_for(initialized)
+        broker = manifest["resource_bundle"]["brokers"][0]
+        self.assertEqual(broker["section"], "%casebroker")
+        self.assertEqual(broker["name"], "casebroker")
+        self.assertEqual(broker["max_appl_servers"], 40)
+        self.assertEqual(len(broker["socket_paths"]), 41)
+        configured = broker_path.read_text()
+        self.assertIn("[BROKER]\nMASTER_SHM_ID=0x60000000", configured)
+        self.assertNotIn("\n[broker]\n", configured)
+        validated = self.run_runtime("validate", "--preset", "debug", "--json")
+        self.assertEqual(validated.returncode, 0, validated.stderr + validated.stdout)
+
+    def test_ordinary_broker_names_may_contain_gateway_or_shard(self):
+        broker_path = self.installation / "conf" / "cubrid_broker.conf"
+        broker_path.write_text(
+            broker_path.read_text().replace("%query_editor", "%gateway_api")
+            + "\n[%shard_reader]\nSERVICE=ON\nSHARD=OFF\nMAX_NUM_APPL_SERVER=1\n"
+        )
+
+        initialized = self.run_runtime("init", "--preset", "debug", "--json")
+
+        self.assertEqual(initialized.returncode, 0, initialized.stderr + initialized.stdout)
+        manifest = self.manifest_for(initialized)
+        self.assertEqual(
+            [broker["section"] for broker in manifest["resource_bundle"]["brokers"]],
+            ["%gateway_api", "%shard_reader"],
+        )
+        validated = self.run_runtime("validate", "--preset", "debug", "--json")
+        self.assertEqual(validated.returncode, 0, validated.stderr + validated.stdout)
         self.assertFalse(self.calls.exists())
 
     def test_claims_are_collected_from_every_manifest_not_only_the_registry(self):
@@ -1020,7 +1087,7 @@ class RuntimeGuardCliTest(unittest.TestCase):
         self.assertEqual(rejected.returncode, 4, rejected.stderr + rejected.stdout)
         self.assertEqual(
             json.loads(rejected.stdout)["diagnostic"]["code"],
-            "effective_configuration_uncertain",
+            "configuration_selection_drift",
         )
         self.assertFalse(marker.exists())
         self.assertFalse(self.calls.exists())
@@ -1067,10 +1134,8 @@ class RuntimeGuardCliTest(unittest.TestCase):
         )
         self.assertFalse(self.calls.exists())
 
-    def test_effective_configuration_overrides_are_rejected_before_mutation(self):
+    def test_managed_parameter_environment_overrides_are_rejected_before_mutation(self):
         cases = {
-            "CUBRID_CONF_FILE": str(self.root / "alternate.conf"),
-            "CUBRID_BROKER_CONF_FILE": str(self.root / "alternate-broker.conf"),
             "CUBRID_CUBRID_PORT_ID": "15555",
             "CUBRID_STORED_PROCEDURE_UDS": "no",
         }
@@ -1084,9 +1149,344 @@ class RuntimeGuardCliTest(unittest.TestCase):
                 self.assertEqual(
                     report["diagnostic"]["code"], "effective_configuration_uncertain"
                 )
+                self.assertEqual(report["diagnostic"]["expected_value"], "unset")
+                self.assertEqual(report["diagnostic"]["observed_value"], "<redacted>")
                 self.assertEqual(self.snapshot(), before)
                 del self.environment[name]
         self.assertFalse(self.calls.exists())
+
+    def test_alternate_configuration_files_are_selected_and_revalidated(self):
+        default_engine = self.installation / "conf" / "cubrid.conf"
+        default_broker = self.installation / "conf" / "cubrid_broker.conf"
+        alternate_engine = self.installation / "conf" / "runtime.conf"
+        alternate_broker = self.installation / "conf" / "runtime-broker.conf"
+        alternate_engine.write_text(default_engine.read_text())
+        alternate_broker.write_text(default_broker.read_text())
+        self.environment["CUBRID_CONF_FILE"] = str(alternate_engine)
+        self.environment["CUBRID_BROKER_CONF_FILE"] = str(alternate_broker)
+
+        initialized = self.run_runtime("init", "--preset", "debug", "--json")
+
+        self.assertEqual(initialized.returncode, 0, initialized.stderr + initialized.stdout)
+        manifest = self.manifest_for(initialized)
+        self.assertEqual(
+            manifest["configurations"]["engine"]["path"], str(alternate_engine)
+        )
+        self.assertEqual(
+            manifest["configurations"]["broker"]["path"], str(alternate_broker)
+        )
+        self.assertIn("cubrid_port_id=15000", alternate_engine.read_text())
+        self.assertIn("cubrid_port_id=1523", default_engine.read_text())
+        self.assertIn("BROKER_PORT=20000", alternate_broker.read_text())
+        self.assertIn("BROKER_PORT=30000", default_broker.read_text())
+        validated = self.run_runtime("validate", "--preset", "debug", "--json")
+        self.assertEqual(validated.returncode, 0, validated.stderr + validated.stdout)
+
+        self.environment["CUBRID_CONF_FILE"] = str(default_engine)
+        before = self.snapshot()
+        rejected = self.run_runtime("validate", "--preset", "debug", "--json")
+
+        self.assertEqual(rejected.returncode, 4, rejected.stderr + rejected.stdout)
+        diagnostic = json.loads(rejected.stdout)["diagnostic"]
+        self.assertEqual(diagnostic["code"], "configuration_selection_drift")
+        self.assertEqual(diagnostic["source"], "CUBRID_CONF_FILE")
+        self.assertEqual(diagnostic["expected_value"], str(alternate_engine))
+        self.assertEqual(diagnostic["observed_value"], str(default_engine))
+        self.assertEqual(self.snapshot(), before)
+
+    def test_validate_reports_effective_managed_setting_drift_without_repair(self):
+        initialized = self.run_runtime("init", "--preset", "debug", "--json")
+        self.assertEqual(initialized.returncode, 0, initialized.stderr + initialized.stdout)
+        engine_path = self.installation / "conf" / "cubrid.conf"
+        engine_path.write_text(
+            engine_path.read_text().replace("cubrid_port_id=15000", "cubrid_port_id=15555")
+        )
+        before = self.snapshot()
+
+        validated = self.run_runtime("validate", "--preset", "debug", "--json")
+
+        self.assertEqual(validated.returncode, 4, validated.stderr + validated.stdout)
+        diagnostic = json.loads(validated.stdout)["diagnostic"]
+        self.assertEqual(diagnostic["code"], "configuration_drift")
+        self.assertEqual(diagnostic["affected_object"]["value"], "cubrid_port_id")
+        self.assertEqual(diagnostic["normalized_value"], "15555")
+        self.assertEqual(diagnostic["source"], "cubrid.conf [common] cubrid_port_id")
+        self.assertEqual(diagnostic["expected_value"], "15000")
+        self.assertEqual(diagnostic["observed_value"], "15555")
+        self.assertIn("idle", diagnostic["next_action"])
+        self.assertEqual(self.snapshot(), before)
+
+    def test_validate_detects_reinstall_that_restores_stock_configuration(self):
+        initialized = self.run_runtime("init", "--preset", "debug", "--json")
+        self.assertEqual(initialized.returncode, 0, initialized.stderr + initialized.stdout)
+        engine_path = self.installation / "conf" / "cubrid.conf"
+        engine_path.write_text(
+            "[service]\nservice=server,broker,manager\n"
+            "[common]\ncubrid_port_id=1523\nstored_procedure_uds=no\n"
+        )
+        before = self.snapshot()
+
+        validated = self.run_runtime("validate", "--preset", "debug", "--json")
+
+        self.assertEqual(validated.returncode, 4, validated.stderr + validated.stdout)
+        diagnostic = json.loads(validated.stdout)["diagnostic"]
+        self.assertIn(
+            diagnostic["code"], {"component_unsupported", "configuration_drift"}
+        )
+        self.assertIn("idle", diagnostic["next_action"])
+        self.assertEqual(self.snapshot(), before)
+
+    def test_validate_applies_environment_override_precedence(self):
+        initialized = self.run_runtime("init", "--preset", "debug", "--json")
+        self.assertEqual(initialized.returncode, 0, initialized.stderr + initialized.stdout)
+        self.environment["CUBRID_CUBRID_PORT_ID"] = "15000"
+        matching = self.run_runtime("validate", "--preset", "debug", "--json")
+        self.assertEqual(matching.returncode, 0, matching.stderr + matching.stdout)
+
+        self.environment["CUBRID_CUBRID_PORT_ID"] = "15555"
+        before = self.snapshot()
+        conflicting = self.run_runtime("validate", "--preset", "debug", "--json")
+
+        self.assertEqual(conflicting.returncode, 4, conflicting.stderr + conflicting.stdout)
+        diagnostic = json.loads(conflicting.stdout)["diagnostic"]
+        self.assertEqual(diagnostic["code"], "configuration_drift")
+        self.assertEqual(diagnostic["source"], "CUBRID_CUBRID_PORT_ID")
+        self.assertEqual(diagnostic["expected_value"], "15000")
+        self.assertEqual(diagnostic["observed_value"], "15555")
+        self.assertEqual(self.snapshot(), before)
+
+    def test_validate_rejects_contradictory_pl_aliases(self):
+        initialized = self.run_runtime("init", "--preset", "debug", "--json")
+        self.assertEqual(initialized.returncode, 0, initialized.stderr + initialized.stdout)
+        engine_path = self.installation / "conf" / "cubrid.conf"
+        engine_path.write_text(
+            engine_path.read_text() + "java_stored_procedure_uds=no\n"
+        )
+        before = self.snapshot()
+
+        validated = self.run_runtime("validate", "--preset", "debug", "--json")
+
+        self.assertEqual(validated.returncode, 4, validated.stderr + validated.stdout)
+        diagnostic = json.loads(validated.stdout)["diagnostic"]
+        self.assertEqual(diagnostic["code"], "configuration_contradictory")
+        self.assertEqual(diagnostic["affected_object"]["value"], "stored_procedure_uds")
+        self.assertEqual(self.snapshot(), before)
+
+    def test_validate_rechecks_supported_service_and_pl_contract(self):
+        initialized = self.run_runtime("init", "--preset", "debug", "--json")
+        self.assertEqual(initialized.returncode, 0, initialized.stderr + initialized.stdout)
+        engine_path = self.installation / "conf" / "cubrid.conf"
+        managed = engine_path.read_text()
+        cases = {
+            "manager": (
+                managed.replace("service=server,broker", "service=server,broker,manager"),
+                "service",
+            ),
+            "ha": (managed + "ha_mode=yes\n", "ha_mode"),
+            "pl_tcp": (managed + "stored_procedure_port=15555\n", "stored_procedure_port"),
+            "pl_debug": (managed + "stored_procedure_debug=5005\n", "stored_procedure_debug"),
+        }
+        for component, (content, setting) in cases.items():
+            with self.subTest(component=component):
+                engine_path.write_text(content)
+                before = self.snapshot()
+                validated = self.run_runtime("validate", "--preset", "debug", "--json")
+                self.assertEqual(validated.returncode, 4, validated.stderr + validated.stdout)
+                diagnostic = json.loads(validated.stdout)["diagnostic"]
+                self.assertEqual(diagnostic["code"], "component_unsupported")
+                self.assertEqual(diagnostic["affected_object"]["value"], setting)
+                self.assertEqual(self.snapshot(), before)
+                engine_path.write_text(managed)
+
+    def test_validate_applies_ha_environment_precedence(self):
+        initialized = self.run_runtime("init", "--preset", "debug", "--json")
+        self.assertEqual(initialized.returncode, 0, initialized.stderr + initialized.stdout)
+        self.environment["CUBRID_HA_MODE"] = "yes"
+        before = self.snapshot()
+
+        validated = self.run_runtime("validate", "--preset", "debug", "--json")
+
+        self.assertEqual(validated.returncode, 4, validated.stderr + validated.stdout)
+        diagnostic = json.loads(validated.stdout)["diagnostic"]
+        self.assertEqual(diagnostic["code"], "component_unsupported")
+        self.assertEqual(diagnostic["affected_object"]["value"], "ha_mode")
+        self.assertEqual(diagnostic["source"], "CUBRID_HA_MODE")
+        self.assertEqual(diagnostic["expected_value"], "off")
+        self.assertEqual(diagnostic["observed_value"], "yes")
+        self.assertEqual(self.snapshot(), before)
+
+    def test_validate_rejects_newly_enabled_gateway_and_shard_components(self):
+        initialized = self.run_runtime("init", "--preset", "debug", "--json")
+        self.assertEqual(initialized.returncode, 0, initialized.stderr + initialized.stdout)
+        broker_path = self.installation / "conf" / "cubrid_broker.conf"
+        managed_broker = broker_path.read_text()
+
+        broker_path.write_text(managed_broker + "SHARD=ON\n")
+        before_shard = self.snapshot()
+        shard = self.run_runtime("validate", "--preset", "debug", "--json")
+        self.assertEqual(shard.returncode, 4, shard.stderr + shard.stdout)
+        shard_diagnostic = json.loads(shard.stdout)["diagnostic"]
+        self.assertEqual(shard_diagnostic["code"], "component_unsupported")
+        self.assertEqual(shard_diagnostic["affected_object"]["value"], "SHARD")
+        self.assertEqual(shard_diagnostic["expected_value"], "OFF")
+        self.assertEqual(shard_diagnostic["observed_value"], "ON")
+        self.assertEqual(self.snapshot(), before_shard)
+
+        broker_path.write_text(managed_broker)
+        gateway_path = self.installation / "conf" / "cubrid_gateway.conf"
+        gateway_path.write_text("[%gateway]\nSERVICE=ON\n")
+        before_gateway = self.snapshot()
+        gateway = self.run_runtime("validate", "--preset", "debug", "--json")
+        self.assertEqual(gateway.returncode, 4, gateway.stderr + gateway.stdout)
+        gateway_diagnostic = json.loads(gateway.stdout)["diagnostic"]
+        self.assertEqual(gateway_diagnostic["code"], "component_unsupported")
+        self.assertEqual(gateway_diagnostic["affected_object"]["value"], "%gateway")
+        self.assertEqual(self.snapshot(), before_gateway)
+
+    def test_validate_rechecks_every_enabled_broker_value(self):
+        broker_path = self.installation / "conf" / "cubrid_broker.conf"
+        broker_path.write_text(
+            broker_path.read_text()
+            + "\n[%reporting]\nSERVICE=ON\nBROKER_PORT=31000\n"
+            + "MAX_NUM_APPL_SERVER=1\nAPPL_SERVER_SHM_ID=31000\n"
+        )
+        initialized = self.run_runtime("init", "--preset", "debug", "--json")
+        self.assertEqual(initialized.returncode, 0, initialized.stderr + initialized.stdout)
+        broker_path.write_text(
+            broker_path.read_text().replace("BROKER_PORT=20001", "BROKER_PORT=29999")
+        )
+        before = self.snapshot()
+
+        validated = self.run_runtime("validate", "--preset", "debug", "--json")
+
+        self.assertEqual(validated.returncode, 4, validated.stderr + validated.stdout)
+        diagnostic = json.loads(validated.stdout)["diagnostic"]
+        self.assertEqual(diagnostic["code"], "configuration_drift")
+        self.assertEqual(diagnostic["affected_object"]["value"], "BROKER_PORT")
+        self.assertEqual(diagnostic["source"], "cubrid_broker.conf [%reporting] BROKER_PORT")
+        self.assertEqual(diagnostic["expected_value"], "20001")
+        self.assertEqual(diagnostic["observed_value"], "29999")
+        self.assertEqual(self.snapshot(), before)
+
+    def test_broker_spawn_environment_is_hashed_and_revalidated_without_secrets(self):
+        source_environment = self.configure_broker_spawn_environment(
+            "UNRELATED_SECRET do-not-publish\n"
+        )
+
+        initialized = self.run_runtime("init", "--preset", "debug", "--json")
+
+        self.assertEqual(initialized.returncode, 0, initialized.stderr + initialized.stdout)
+        manifest = self.manifest_for(initialized)
+        dependencies = manifest["configurations"]["broker"]["spawn_environments"]
+        self.assertEqual(dependencies[0]["path"], str(source_environment))
+        self.assertNotIn("do-not-publish", json.dumps(manifest))
+        source_environment.write_text("UNRELATED_SECRET changed-but-still-private\n")
+        before = self.snapshot()
+        validated = self.run_runtime("validate", "--preset", "debug", "--json")
+
+        self.assertEqual(validated.returncode, 4, validated.stderr + validated.stdout)
+        diagnostic = json.loads(validated.stdout)["diagnostic"]
+        self.assertEqual(diagnostic["code"], "configuration_drift")
+        self.assertEqual(diagnostic["affected_object"]["kind"], "broker spawn environment")
+        self.assertNotIn("changed-but-still-private", validated.stdout)
+        self.assertEqual(self.snapshot(), before)
+
+    def test_broker_spawn_environment_hash_is_stable_across_crlf_reads(self):
+        self.configure_broker_spawn_environment(
+            b"UNRELATED_SETTING value\r\nSECOND value\r\n"
+        )
+
+        initialized = self.run_runtime("init", "--preset", "debug", "--json")
+        self.assertEqual(initialized.returncode, 0, initialized.stderr + initialized.stdout)
+
+        validated = self.run_runtime("validate", "--preset", "debug", "--json")
+
+        self.assertEqual(validated.returncode, 0, validated.stderr + validated.stdout)
+        self.assertFalse(self.calls.exists())
+
+    def test_broker_spawn_environment_cannot_override_managed_identity(self):
+        self.configure_broker_spawn_environment("CUBRID /another/install\n")
+        before = self.snapshot()
+
+        initialized = self.run_runtime("init", "--preset", "debug", "--json")
+
+        self.assertEqual(initialized.returncode, 4, initialized.stderr + initialized.stdout)
+        diagnostic = json.loads(initialized.stdout)["diagnostic"]
+        self.assertEqual(diagnostic["code"], "configuration_contradictory")
+        self.assertEqual(diagnostic["affected_object"]["value"], "CUBRID")
+        self.assertNotIn("another", diagnostic["message"])
+        self.assertEqual(self.snapshot(), before)
+
+    def test_broker_spawn_environment_parses_first_two_columns_like_cubrid(self):
+        self.configure_broker_spawn_environment(
+            "CUBRID /another/install trailing-column\n"
+        )
+        before = self.snapshot()
+
+        initialized = self.run_runtime("init", "--preset", "debug", "--json")
+
+        self.assertEqual(initialized.returncode, 4, initialized.stderr + initialized.stdout)
+        diagnostic = json.loads(initialized.stdout)["diagnostic"]
+        self.assertEqual(diagnostic["code"], "configuration_contradictory")
+        self.assertEqual(diagnostic["affected_object"]["value"], "CUBRID")
+        self.assertNotIn("another", initialized.stdout)
+        self.assertEqual(self.snapshot(), before)
+
+    def test_validate_rejects_selected_build_directory_drift(self):
+        initialized = self.run_runtime("init", "--preset", "debug", "--json")
+        self.assertEqual(initialized.returncode, 0, initialized.stderr + initialized.stdout)
+        self.environment["CUBRID_BUILD_DIR"] = str(
+            self.worktree / "build_preset_release_gcc"
+        )
+        before = self.snapshot()
+
+        validated = self.run_runtime("validate", "--preset", "debug", "--json")
+
+        self.assertEqual(validated.returncode, 4, validated.stderr + validated.stdout)
+        diagnostic = json.loads(validated.stdout)["diagnostic"]
+        self.assertEqual(diagnostic["code"], "active_preset_inconsistent")
+        self.assertEqual(diagnostic["source"], "CUBRID_BUILD_DIR")
+        self.assertEqual(self.snapshot(), before)
+
+    def test_validate_rejects_a_different_active_preset(self):
+        initialized = self.run_runtime("init", "--preset", "debug", "--json")
+        self.assertEqual(initialized.returncode, 0, initialized.stderr + initialized.stdout)
+        before = self.snapshot()
+
+        validated = self.run_runtime("validate", "--preset", "release_gcc", "--json")
+
+        self.assertEqual(validated.returncode, 4, validated.stderr + validated.stdout)
+        diagnostic = json.loads(validated.stdout)["diagnostic"]
+        self.assertEqual(diagnostic["code"], "manifest_inconsistent")
+        self.assertEqual(diagnostic["affected_object"]["kind"], "active preset")
+        self.assertEqual(diagnostic["expected_value"], "debug")
+        self.assertEqual(diagnostic["observed_value"], "release_gcc")
+        self.assertEqual(self.snapshot(), before)
+
+    def test_human_configuration_drift_matches_structured_diagnostic(self):
+        initialized = self.run_runtime("init", "--preset", "debug", "--json")
+        self.assertEqual(initialized.returncode, 0, initialized.stderr + initialized.stdout)
+        engine_path = self.installation / "conf" / "cubrid.conf"
+        engine_path.write_text(
+            engine_path.read_text().replace("cubrid_port_id=15000", "cubrid_port_id=15555")
+        )
+        before = self.snapshot()
+
+        human = self.run_runtime("validate", "--preset", "debug")
+        structured = self.run_runtime("validate", "--preset", "debug", "--json")
+
+        self.assertEqual(human.returncode, 4, human.stderr + human.stdout)
+        self.assertIn("Affected configuration setting: cubrid_port_id", human.stdout)
+        self.assertIn("Normalized value: 15555", human.stdout)
+        self.assertIn("Source: cubrid.conf [common] cubrid_port_id", human.stdout)
+        self.assertIn("Expected value: 15000", human.stdout)
+        self.assertIn("Observed value: 15555", human.stdout)
+        self.assertIn("Evidence quality: definitive", human.stdout)
+        diagnostic = json.loads(structured.stdout)["diagnostic"]
+        self.assertEqual(diagnostic["normalized_value"], "15555")
+        self.assertEqual(diagnostic["expected_value"], "15000")
+        self.assertEqual(diagnostic["observed_value"], "15555")
+        self.assertEqual(self.snapshot(), before)
 
     def test_database_specific_engine_settings_are_managed_effectively(self):
         engine_path = self.installation / "conf" / "cubrid.conf"
@@ -1107,6 +1507,27 @@ class RuntimeGuardCliTest(unittest.TestCase):
         self.assertIn("cubrid_port_id=15000", selected_section)
         self.assertIn("stored_procedure_uds=yes", selected_section)
         self.assertIn("db_specific_setting=preserved", selected_section)
+        validated = self.run_runtime("validate", "--preset", "debug", "--json")
+        self.assertEqual(validated.returncode, 0, validated.stderr + validated.stdout)
+        self.assertFalse(self.calls.exists())
+
+    def test_database_section_names_remain_case_sensitive_like_cubrid(self):
+        engine_path = self.installation / "conf" / "cubrid.conf"
+        engine_path.write_text(
+            engine_path.read_text()
+            + "\n[@chosen_db1]\n"
+            + "cubrid_port_id=17777\n"
+            + "stored_procedure_uds=no\n"
+        )
+
+        initialized = self.run_runtime(
+            "init", "--preset", "debug", "--db-name", "Chosen_DB1", "--json"
+        )
+
+        self.assertEqual(initialized.returncode, 0, initialized.stderr + initialized.stdout)
+        selected_section = engine_path.read_text().split("[@chosen_db1]", 1)[1]
+        self.assertIn("cubrid_port_id=17777", selected_section)
+        self.assertIn("stored_procedure_uds=no", selected_section)
         validated = self.run_runtime("validate", "--preset", "debug", "--json")
         self.assertEqual(validated.returncode, 0, validated.stderr + validated.stdout)
         self.assertFalse(self.calls.exists())
@@ -1324,6 +1745,34 @@ class RuntimeGuardCliTest(unittest.TestCase):
         self.assertEqual(report["diagnostic"]["code"], "installation_identity_invalid")
         self.assertIn("cub_master", report["diagnostic"]["affected_object"]["value"])
         self.assertFalse(self.calls.exists())
+
+    def test_library_soname_symlink_is_supported_and_target_drift_is_rejected(self):
+        library_link = self.installation / "lib" / "libcubrid.so"
+        library_link.unlink()
+        cci_library = self.installation / "cci" / "lib"
+        cci_library.mkdir(parents=True)
+        library_target = cci_library / "libcubrid.so.11"
+        library_target.write_text("synthetic versioned library\n")
+        library_link.symlink_to(Path("..") / "cci" / "lib" / library_target.name)
+
+        initialized = self.run_runtime("init", "--preset", "debug", "--json")
+
+        self.assertEqual(initialized.returncode, 0, initialized.stderr + initialized.stdout)
+        manifest = self.manifest_for(initialized)
+        identities = manifest["installation"]["libraries"]
+        link_identity = next(
+            item for item in identities if item["path"] == str(library_link)
+        )
+        self.assertEqual(link_identity["resolved_path"], str(library_target))
+        library_target.write_text("reinstalled versioned library\n")
+        before = self.snapshot()
+        validated = self.run_runtime("validate", "--preset", "debug", "--json")
+
+        self.assertEqual(validated.returncode, 4, validated.stderr + validated.stdout)
+        diagnostic = json.loads(validated.stdout)["diagnostic"]
+        self.assertEqual(diagnostic["code"], "installation_identity_invalid")
+        self.assertEqual(diagnostic["affected_object"]["value"], str(library_link))
+        self.assertEqual(self.snapshot(), before)
 
     def test_validate_rejects_incomplete_installation_identity_lists(self):
         initialized = self.run_runtime("init", "--preset", "debug", "--json")

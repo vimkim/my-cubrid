@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import argparse
+from collections.abc import Callable
 from dataclasses import dataclass, replace
 import fcntl
 import hashlib
@@ -30,10 +31,7 @@ UNIX_SOCKET_PATH_BYTES = 107
 DEFAULT_MASTER_PORT_RANGE = (15000, 15999)
 DEFAULT_BROKER_PORT_RANGE = (20000, 29999)
 DEFAULT_SHM_KEY_RANGE = (0x60000000, 0x60FFFFFF)
-EFFECTIVE_CONFIGURATION_OVERRIDE_NAMES = (
-    "CUBRID_CONF_FILE",
-    "CUBRID_HA_CONF_FILE",
-    "CUBRID_BROKER_CONF_FILE",
+MANAGED_PARAMETER_OVERRIDE_NAMES = (
     "CUBRID_CUBRID_PORT_ID",
     "CUBRID_STORED_PROCEDURE_UDS",
     "CUBRID_STORED_PROCEDURE_PORT",
@@ -41,6 +39,11 @@ EFFECTIVE_CONFIGURATION_OVERRIDE_NAMES = (
     "CUBRID_JAVA_STORED_PROCEDURE_UDS",
     "CUBRID_JAVA_STORED_PROCEDURE_PORT",
     "CUBRID_JAVA_STORED_PROCEDURE_DEBUG",
+)
+HA_OVERRIDE_NAMES = (
+    "CUBRID_HA_CONF_FILE",
+    "CUBRID_HA_MODE",
+    "CUBRID_HA_MODE_FOR_SA_UTILS_ONLY",
 )
 REQUIRED_EXECUTABLE_NAMES = (
     "cubrid",
@@ -83,6 +86,15 @@ class AllocationRanges:
     master_ports: tuple[int, int]
     broker_ports: tuple[int, int]
     system_v_keys: tuple[int, int]
+
+
+@dataclass(frozen=True)
+class InstallationLayout:
+    root: Path
+    engine_configuration: Path
+    broker_configuration: Path
+    executable_directory: Path
+    library_directory: Path
 
 
 def require_string(document: dict[str, object], field: str) -> str:
@@ -244,22 +256,31 @@ class ResourceBundle:
             ),
         )
 
-    def for_installation(self, installation: Path) -> "ResourceBundle":
+    def installation_layout(self) -> InstallationLayout:
+        return InstallationLayout(
+            self.installation_root,
+            self.engine_configuration,
+            self.broker_configuration,
+            self.executable_directory,
+            self.library_directory,
+        )
+
+    def for_installation(self, layout: InstallationLayout) -> "ResourceBundle":
         return replace(
             self,
             pl_mutable_paths=(
                 (
                     "info",
-                    installation / "var" / "pl" / f"pl_{self.database_name}.info",
+                    layout.root / "var" / "pl" / f"pl_{self.database_name}.info",
                 ),
-                ("installation_tmp", installation / "tmp"),
-                ("log_root", installation / "log"),
+                ("installation_tmp", layout.root / "tmp"),
+                ("log_root", layout.root / "log"),
             ),
-            installation_root=installation,
-            executable_directory=installation / "bin",
-            library_directory=installation / "lib",
-            engine_configuration=installation / "conf" / "cubrid.conf",
-            broker_configuration=installation / "conf" / "cubrid_broker.conf",
+            installation_root=layout.root,
+            executable_directory=layout.executable_directory,
+            library_directory=layout.library_directory,
+            engine_configuration=layout.engine_configuration,
+            broker_configuration=layout.broker_configuration,
         )
 
     def to_dict(self) -> dict[str, object]:
@@ -483,6 +504,7 @@ class OperationError(ValueError):
         next_action: str,
         evidence_quality: Literal["definitive", "unknown"] = "definitive",
         *,
+        normalized_value: str | None = None,
         expected_owner: int | None = None,
         expected_value: str | None = None,
         observed_value: str | None = None,
@@ -492,7 +514,9 @@ class OperationError(ValueError):
         self.diagnostic = Diagnostic(
             code=code,
             affected_object=AffectedObject(kind, affected_value),
-            normalized_value=affected_value,
+            normalized_value=(
+                affected_value if normalized_value is None else normalized_value
+            ),
             source=source,
             expected_owner=expected_owner,
             expected_value=expected_value,
@@ -876,9 +900,52 @@ def file_hash(path: Path) -> str:
     return hashlib.sha256(path.read_bytes()).hexdigest()
 
 
+def text_hash(content: str) -> str:
+    return hashlib.sha256(content.encode()).hexdigest()
+
+
 def file_identity(path: Path, kind: str) -> dict[str, str]:
     require_owned_installation_path(path, "file", kind)
     return {"path": os.fspath(path), "sha256": file_hash(path)}
+
+
+def library_file_identity(
+    path: Path, layout: InstallationLayout
+) -> dict[str, str]:
+    metadata = path.lstat()
+    if stat.S_ISLNK(metadata.st_mode):
+        if metadata.st_uid != os.geteuid():
+            raise OperationError(
+                "path_wrong_owner",
+                "library symlink",
+                path,
+                "CUBRID installation",
+                "A runtime-library symlink must be owned by the current user.",
+                "Restore the private installation's library ownership.",
+                expected_owner=os.geteuid(),
+                observed_value=str(metadata.st_uid),
+            )
+        try:
+            resolved = path.resolve(strict=True)
+            resolved.relative_to(layout.root)
+        except (OSError, ValueError) as error:
+            raise OperationError(
+                "path_unsafe",
+                "library symlink",
+                path,
+                "CUBRID installation",
+                "A runtime-library symlink must resolve inside the private installation.",
+                "Restore an owner-controlled in-installation SONAME symlink.",
+            ) from error
+        require_owned_installation_path(resolved, "file", "library target")
+        return {
+            "path": os.fspath(path),
+            "resolved_path": os.fspath(resolved),
+            "sha256": file_hash(resolved),
+        }
+    identity = file_identity(path, "library")
+    identity["resolved_path"] = os.fspath(path)
+    return identity
 
 
 def require_owned_installation_path(path: Path, expected_kind: str, label: str) -> None:
@@ -958,6 +1025,11 @@ def allocation_ranges() -> AllocationRanges:
     )
 
 
+def normalize_section_name(name: str) -> str:
+    """Match CUBRID's INI section-name normalization."""
+    return name if name.startswith("@") else name.casefold()
+
+
 def parse_ini(content: str) -> dict[str, dict[str, str]]:
     sections: dict[str, dict[str, str]] = {}
     current = ""
@@ -967,7 +1039,7 @@ def parse_ini(content: str) -> dict[str, dict[str, str]]:
             continue
         section = re.fullmatch(r"\[([^]]+)\]", stripped)
         if section:
-            current = section.group(1)
+            current = normalize_section_name(section.group(1))
             sections.setdefault(current, {})
             continue
         assignment = re.match(r"\s*([^=#;\s]+)\s*=\s*([^#;]*?)\s*$", line)
@@ -976,44 +1048,138 @@ def parse_ini(content: str) -> dict[str, dict[str, str]]:
     return sections
 
 
+def normalize_decimal(value: str) -> str:
+    try:
+        return str(int(value.strip(), 10))
+    except ValueError:
+        return value.strip()
+
+
+def normalize_boolean(value: str) -> str:
+    normalized = value.strip().lower()
+    if normalized in ("yes", "on", "true", "1"):
+        return "yes"
+    if normalized in ("no", "off", "false", "0"):
+        return "no"
+    return normalized
+
+
+def normalize_ha_mode(value: str) -> str:
+    normalized = value.strip().lower()
+    return "off" if normalized in ("off", "no", "none", "false", "0") else normalized
+
+
+def effective_engine_setting(
+    content: str,
+    database_name: str,
+    names: tuple[str, ...],
+    environment_names: tuple[str, ...],
+    normalizer: Callable[[str], str],
+    default: str,
+) -> tuple[str, str]:
+    """Resolve common, database, and environment precedence for one setting."""
+    sections = parse_ini(content)
+    selected_value = normalizer(default)
+    selected_source = "CUBRID engine default"
+    for section in ("common", f"@{database_name}"):
+        declarations = [
+            (name, normalizer(sections.get(section, {}).get(name, "")))
+            for name in names
+            if name in sections.get(section, {})
+        ]
+        distinct_values = {value for _, value in declarations}
+        if len(distinct_values) > 1:
+            rendered = ", ".join(f"{name}={value}" for name, value in declarations)
+            raise OperationError(
+                "configuration_contradictory",
+                "engine setting",
+                names[0],
+                f"cubrid.conf [{section}]",
+                f"Contradictory aliases declare {rendered}.",
+                "Make aliases agree or keep only the canonical declaration, then rerun initialization while idle.",
+                expected_value="one effective value",
+                observed_value=rendered,
+            )
+        if declarations:
+            selected_name, selected_value = declarations[-1]
+            selected_source = f"cubrid.conf [{section}] {selected_name}"
+
+    environment_declarations = [
+        (name, normalizer(os.environ[name]))
+        for name in environment_names
+        if os.environ.get(name)
+    ]
+    environment_values = {value for _, value in environment_declarations}
+    if len(environment_values) > 1:
+        rendered = ", ".join(
+            f"{name}={value}" for name, value in environment_declarations
+        )
+        raise OperationError(
+            "configuration_contradictory",
+            "environment override",
+            names[0],
+            "process environment",
+            f"Contradictory environment aliases declare {rendered}.",
+            "Remove contradictory inherited overrides before using the runtime.",
+            expected_value="one effective value",
+            observed_value=rendered,
+        )
+    if environment_declarations:
+        environment_name, selected_value = environment_declarations[-1]
+        selected_source = environment_name
+    return selected_value, selected_source
+
+
 def patch_ini(content: str, managed: dict[str, dict[str, str]]) -> str:
     lines = content.splitlines(keepends=True)
     found: set[tuple[str, str]] = set()
-    current = ""
+    managed_by_name = {
+        normalize_section_name(section): section for section in managed
+    }
+    current_managed: str | None = managed_by_name.get("")
     output: list[str] = []
     for line in lines:
         section = re.fullmatch(r"\s*\[([^]]+)\]\s*(?:\r?\n)?", line)
         if section:
-            previous = current
-            current = section.group(1)
-            if previous in managed:
-                for key, value in managed[previous].items():
-                    if (previous, key.lower()) not in found:
+            if current_managed is not None:
+                for key, value in managed[current_managed].items():
+                    if (current_managed, key.lower()) not in found:
                         output.append(f"{key}={value}\n")
+            current_managed = managed_by_name.get(
+                normalize_section_name(section.group(1))
+            )
             output.append(line)
             continue
         assignment = re.match(
             r"(\s*)([^=#;\s]+)(\s*)=(\s*)([^#;\r\n]*?)(\s*(?:[#;].*)?)(\r?\n)?$",
             line,
         )
-        if assignment and current in managed:
+        if assignment and current_managed is not None:
             key = assignment.group(2)
-            selected = next((name for name in managed[current] if name.lower() == key.lower()), None)
+            selected = next(
+                (
+                    name
+                    for name in managed[current_managed]
+                    if name.lower() == key.lower()
+                ),
+                None,
+            )
             if selected is not None:
                 output.append(
                     f"{assignment.group(1)}{key}{assignment.group(3)}={assignment.group(4)}"
-                    f"{managed[current][selected]}{assignment.group(6)}"
+                    f"{managed[current_managed][selected]}{assignment.group(6)}"
                     f"{assignment.group(7) or ''}"
                 )
-                found.add((current, selected.lower()))
+                found.add((current_managed, selected.lower()))
                 continue
         output.append(line)
-    if current in managed:
-        for key, value in managed[current].items():
-            if (current, key.lower()) not in found:
+    if current_managed is not None:
+        for key, value in managed[current_managed].items():
+            if (current_managed, key.lower()) not in found:
                 output.append(f"{key}={value}\n")
+    existing_sections = set(parse_ini(content))
     for section, values in managed.items():
-        if section not in parse_ini(content):
+        if normalize_section_name(section) not in existing_sections:
             if output and not output[-1].endswith("\n"):
                 output[-1] += "\n"
             output.append(f"\n[{section}]\n")
@@ -1087,6 +1253,50 @@ def environment_assignment(name: str, value: str) -> str:
     return f"export {name}={shlex.quote(value)}\n"
 
 
+def generated_environment_content(
+    selection: RuntimeSelection,
+    runtime_identifier: str,
+    build_directory: str,
+    bundle: ResourceBundle,
+) -> str:
+    installation = bundle.installation_root
+    content = "# Generated by my-cubrid-runtime; source this file, do not eval command output.\n"
+    content += "unset " + " ".join(
+        (*HA_OVERRIDE_NAMES, *MANAGED_PARAMETER_OVERRIDE_NAMES)
+    ) + "\n"
+    content += environment_assignment("PRESET_MODE", selection.preset)
+    content += environment_assignment("CUBRID_WORKTREE_ID", runtime_identifier)
+    content += environment_assignment("CUBRID", os.fspath(installation))
+    if bundle.engine_configuration != installation / "conf" / "cubrid.conf":
+        content += environment_assignment(
+            "CUBRID_CONF_FILE", os.fspath(bundle.engine_configuration)
+        )
+    else:
+        content += "unset CUBRID_CONF_FILE\n"
+    if bundle.broker_configuration != installation / "conf" / "cubrid_broker.conf":
+        content += environment_assignment(
+            "CUBRID_BROKER_CONF_FILE", os.fspath(bundle.broker_configuration)
+        )
+    else:
+        content += "unset CUBRID_BROKER_CONF_FILE\n"
+    content += environment_assignment("CUBRID_BUILD_DIR", build_directory)
+    content += environment_assignment(
+        "CUBRID_DATABASES", os.fspath(bundle.database_registry)
+    )
+    content += environment_assignment("CUBRID_TMP", os.fspath(bundle.cubrid_tmp))
+    content += environment_assignment("CUBRID_RUNTIME_READY", "1")
+    content += (
+        f"export PATH={shlex.quote(os.fspath(bundle.executable_directory))}"
+        "${PATH:+:$PATH}\n"
+    )
+    content += (
+        "export LD_LIBRARY_PATH="
+        f"{shlex.quote(os.fspath(bundle.library_directory))}"
+        "${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}\n"
+    )
+    return content
+
+
 def read_json_file(path: Path, description: str) -> dict[str, object]:
     try:
         document = json.loads(path.read_text())
@@ -1135,7 +1345,43 @@ def load_registry(path: Path) -> dict[str, object]:
     return registry
 
 
-def installation_paths() -> tuple[Path, Path, Path, Path, Path]:
+def selected_configuration_path(
+    installation: Path,
+    environment_name: str,
+    default_name: str,
+    label: str,
+) -> Path:
+    raw = os.environ.get(environment_name)
+    path = Path(raw) if raw else installation / "conf" / default_name
+    if not path.is_absolute():
+        raise OperationError(
+            "configuration_selection_invalid",
+            label,
+            path,
+            environment_name if raw else "CUBRID installation",
+            f"The selected {label} path must be absolute.",
+            "Select a canonical configuration file in the private installation.",
+            expected_value="absolute canonical path",
+            observed_value=os.fspath(path),
+        )
+    require_owned_installation_path(path, "file", label)
+    try:
+        path.relative_to(installation / "conf")
+    except ValueError as error:
+        raise OperationError(
+            "configuration_selection_invalid",
+            label,
+            path,
+            environment_name if raw else "CUBRID installation",
+            f"The selected {label} is outside the private installation configuration directory.",
+            "Select an owner-controlled file under the private installation's conf directory.",
+            expected_value=os.fspath(installation / "conf"),
+            observed_value=os.fspath(path),
+        ) from error
+    return path
+
+
+def installation_paths() -> InstallationLayout:
     raw = os.environ.get("CUBRID")
     if not raw:
         raise OperationError(
@@ -1161,40 +1407,48 @@ def installation_paths() -> tuple[Path, Path, Path, Path, Path]:
             "The selected CUBRID installation directory does not exist.",
             "Complete the selected preset installation before initialization.",
         )
-    engine = installation / "conf" / "cubrid.conf"
-    broker = installation / "conf" / "cubrid_broker.conf"
+    engine = selected_configuration_path(
+        installation, "CUBRID_CONF_FILE", "cubrid.conf", "engine configuration"
+    )
+    broker = selected_configuration_path(
+        installation,
+        "CUBRID_BROKER_CONF_FILE",
+        "cubrid_broker.conf",
+        "broker configuration",
+    )
     binary = installation / "bin"
     library = installation / "lib"
     for path, expected_kind, label in (
-        (engine, "file", "engine configuration"),
-        (broker, "file", "broker configuration"),
         (binary, "directory", "executable directory"),
         (library, "directory", "library directory"),
     ):
         require_owned_installation_path(path, expected_kind, label)
-    return installation, engine, broker, binary, library
+    return InstallationLayout(installation, engine, broker, binary, library)
 
 
 def capture_installation_identity(
-    installation: Path, binary_path: Path, library_path: Path
+    layout: InstallationLayout,
 ) -> dict[str, object]:
     executables = [
-        file_identity(binary_path / name, "executable")
+        file_identity(layout.executable_directory / name, "executable")
         for name in REQUIRED_EXECUTABLE_NAMES
     ]
-    library_files = runtime_library_paths(library_path)
+    library_files = runtime_library_paths(layout.library_directory)
     if not library_files:
         raise OperationError(
-            "installation_incomplete", "library directory", library_path,
+            "installation_incomplete", "library directory", layout.library_directory,
             "CUBRID installation", "The selected installation contains no runtime libraries.",
             "Complete the selected preset installation before initialization.",
         )
     return {
-        "root": os.fspath(installation),
-        "bin": os.fspath(binary_path),
-        "lib": os.fspath(library_path),
+        "root": os.fspath(layout.root),
+        "bin": os.fspath(layout.executable_directory),
+        "lib": os.fspath(layout.library_directory),
         "executables": executables,
-        "libraries": [file_identity(path, "library") for path in library_files],
+        "libraries": [
+            library_file_identity(path, layout)
+            for path in library_files
+        ],
     }
 
 
@@ -1211,7 +1465,21 @@ def broker_inventory(content: str) -> list[BrokerSpec]:
         )
     enabled: list[BrokerSpec] = []
     for section, values in sections.items():
-        if not section.startswith("%") or values.get("service", "OFF").upper() not in ("ON", "YES"):
+        if not section.startswith("%"):
+            continue
+        service = values.get("service", "ON").upper()
+        if service not in ("ON", "OFF"):
+            raise OperationError(
+                "broker_configuration_invalid",
+                "broker setting",
+                "SERVICE",
+                f"cubrid_broker.conf [{section}] SERVICE",
+                "SERVICE must use CUBRID's ON or OFF broker grammar.",
+                "Correct the broker configuration before initialization.",
+                expected_value="ON or OFF",
+                observed_value=service,
+            )
+        if service == "OFF":
             continue
         name = section[1:]
         if not re.fullmatch(r"[A-Za-z0-9_]+", name):
@@ -1221,7 +1489,7 @@ def broker_inventory(content: str) -> list[BrokerSpec]:
                 "Use a broker name containing only letters, digits, and underscore.",
             )
         try:
-            maximum = int(values.get("max_num_appl_server", "1"), 10)
+            maximum = int(values.get("max_num_appl_server", "40"), 10)
         except ValueError as error:
             raise OperationError(
                 "broker_configuration_invalid", "broker", section, "cubrid_broker.conf",
@@ -1248,68 +1516,516 @@ def broker_inventory(content: str) -> list[BrokerSpec]:
     return enabled
 
 
-def refuse_unsupported_configuration(
+def broker_spawn_environment_selections(
+    broker_content: str,
+    installation: Path,
+    brokers: list[BrokerSpec] | tuple[BrokerAllocation, ...],
+) -> list[tuple[str, Path]]:
+    sections = parse_ini(broker_content)
+    selections: list[tuple[str, Path]] = []
+    for broker in brokers:
+        raw = sections.get(broker.section, {}).get("source_env", "").strip()
+        if not raw:
+            continue
+        path = Path(raw)
+        if not path.is_absolute():
+            path = installation / path
+        require_owned_installation_path(
+            path, "file", "broker spawn environment"
+        )
+        try:
+            path.relative_to(installation)
+        except ValueError as error:
+            raise OperationError(
+                "configuration_selection_invalid",
+                "broker spawn environment",
+                path,
+                f"cubrid_broker.conf [{broker.section}] SOURCE_ENV",
+                "The broker spawn environment is outside the private installation.",
+                "Select an owner-controlled spawn environment in the private installation.",
+                expected_value=os.fspath(installation),
+                observed_value=os.fspath(path),
+            ) from error
+        selections.append((broker.section, path))
+    return selections
+
+
+def parse_broker_spawn_environment(content: str) -> dict[str, str]:
+    values: dict[str, str] = {}
+    for line in content.splitlines():
+        if not line or line.startswith("#"):
+            continue
+        columns = line.split()
+        if len(columns) >= 2:
+            values[columns[0]] = columns[1]
+    return values
+
+
+def validate_broker_spawn_environment_values(
+    content: str,
+    source: str,
+    layout: InstallationLayout,
+    bundle: ResourceBundle | None = None,
+) -> None:
+    values = parse_broker_spawn_environment(content)
+    expected_identity = {
+        "CUBRID": os.fspath(layout.root),
+        "CUBRID_CONF_FILE": os.fspath(layout.engine_configuration),
+        "CUBRID_BROKER_CONF_FILE": os.fspath(layout.broker_configuration),
+        "PATH": os.fspath(layout.executable_directory),
+        "LD_LIBRARY_PATH": os.fspath(layout.library_directory),
+    }
+    unsupported_or_deferred = set(HA_OVERRIDE_NAMES)
+    if bundle is not None:
+        expected_identity.update({
+            "CUBRID_TMP": os.fspath(bundle.cubrid_tmp),
+            "CUBRID_DATABASES": os.fspath(bundle.database_registry),
+            "CUBRID_CUBRID_PORT_ID": str(bundle.master_port),
+            "CUBRID_STORED_PROCEDURE_UDS": "yes",
+            "CUBRID_JAVA_STORED_PROCEDURE_UDS": "yes",
+            "CUBRID_STORED_PROCEDURE_PORT": "0",
+            "CUBRID_JAVA_STORED_PROCEDURE_PORT": "0",
+            "CUBRID_STORED_PROCEDURE_DEBUG": "-1",
+            "CUBRID_JAVA_STORED_PROCEDURE_DEBUG": "-1",
+        })
+    else:
+        unsupported_or_deferred.update(MANAGED_PARAMETER_OVERRIDE_NAMES)
+        unsupported_or_deferred.update(("CUBRID_TMP", "CUBRID_DATABASES"))
+    conflicting_name = next(
+        (name for name in unsupported_or_deferred if name in values), None
+    )
+    if conflicting_name is not None:
+        raise OperationError(
+            "configuration_contradictory",
+            "broker spawn environment setting",
+            conflicting_name,
+            source,
+            f"{conflicting_name} cannot override the managed runtime configuration.",
+            "Remove the broker spawn override before initialization.",
+            observed_value="<redacted>",
+        )
+    for name, expected in expected_identity.items():
+        if name not in values:
+            continue
+        observed = values[name]
+        if name.endswith("_UDS"):
+            matches = normalize_boolean(observed) == normalize_boolean(expected)
+        elif name.endswith(("_PORT", "_DEBUG")):
+            matches = normalize_decimal(observed) == normalize_decimal(expected)
+        else:
+            matches = observed == expected
+        if not matches:
+            raise OperationError(
+                "configuration_contradictory",
+                "broker spawn environment setting",
+                name,
+                source,
+                f"{name} contradicts the managed runtime identity.",
+                "Remove the contradictory broker spawn override before initialization.",
+                expected_value=expected,
+                observed_value="<redacted>",
+            )
+
+
+def capture_broker_spawn_environments(
+    broker_content: str,
+    layout: InstallationLayout,
+    brokers: list[BrokerSpec] | tuple[BrokerAllocation, ...],
+    bundle: ResourceBundle | None = None,
+) -> list[dict[str, object]]:
+    grouped: dict[Path, list[str]] = {}
+    source_contents: dict[Path, str] = {}
+    for section, path in broker_spawn_environment_selections(
+        broker_content, layout.root, brokers
+    ):
+        content = path.read_text()
+        validate_broker_spawn_environment_values(
+            content,
+            f"cubrid_broker.conf [{section}] SOURCE_ENV",
+            layout,
+            bundle,
+        )
+        grouped.setdefault(path, []).append(section)
+        source_contents[path] = content
+    return [
+        {
+            "path": os.fspath(path),
+            "sha256": text_hash(source_contents[path]),
+            "broker_sections": sections,
+        }
+        for path, sections in sorted(grouped.items(), key=lambda item: os.fspath(item[0]))
+    ]
+
+
+def raise_configuration_drift(
+    setting: str,
+    source: str,
+    expected: str,
+    observed: str,
+    message: str,
+) -> None:
+    raise OperationError(
+        "configuration_drift",
+        "configuration setting",
+        setting,
+        source,
+        message,
+        "Rerun initialization while the selected runtime is idle.",
+        normalized_value=observed,
+        expected_value=expected,
+        observed_value=observed,
+    )
+
+
+def validate_pl_configuration(
+    engine_content: str,
+    database_name: str,
+    *,
+    initializing: bool,
+) -> None:
+    uds_value, uds_source = effective_engine_setting(
+        engine_content,
+        database_name,
+        ("stored_procedure_uds", "java_stored_procedure_uds"),
+        (
+            "CUBRID_STORED_PROCEDURE_UDS",
+            "CUBRID_JAVA_STORED_PROCEDURE_UDS",
+        ),
+        normalize_boolean,
+        "yes",
+    )
+    sections = parse_ini(engine_content)
+    legacy_uds_disabled = None
+    for section in ("common", f"@{database_name}"):
+        legacy_uds = sections.get(section, {}).get("java_stored_procedure_uds")
+        if legacy_uds is not None and normalize_boolean(legacy_uds) != "yes":
+            legacy_uds_disabled = (section, normalize_boolean(legacy_uds))
+            break
+    if initializing and legacy_uds_disabled is not None:
+        section, observed = legacy_uds_disabled
+        raise OperationError(
+            "component_unsupported",
+            "engine setting",
+            "java_stored_procedure_uds",
+            f"cubrid.conf [{section}] java_stored_procedure_uds",
+            "The legacy PL setting disables Unix-domain sockets.",
+            "Set java_stored_procedure_uds=yes or remove the legacy alias.",
+            expected_value="yes",
+            observed_value=observed,
+        )
+    if not initializing and uds_value != "yes":
+        raise OperationError(
+            "component_unsupported",
+            "engine setting",
+            "stored_procedure_uds",
+            uds_source,
+            "PL must use Unix-domain sockets in the supported component scope.",
+            "Enable stored_procedure_uds and rerun initialization while idle.",
+            expected_value="yes",
+            observed_value=uds_value,
+        )
+
+    for canonical, alias, environment_names, disabled in (
+        (
+            "stored_procedure_port",
+            "java_stored_procedure_port",
+            ("CUBRID_STORED_PROCEDURE_PORT", "CUBRID_JAVA_STORED_PROCEDURE_PORT"),
+            "0",
+        ),
+        (
+            "stored_procedure_debug",
+            "java_stored_procedure_debug",
+            ("CUBRID_STORED_PROCEDURE_DEBUG", "CUBRID_JAVA_STORED_PROCEDURE_DEBUG"),
+            "-1",
+        ),
+    ):
+        value, source = effective_engine_setting(
+            engine_content,
+            database_name,
+            (canonical, alias),
+            environment_names,
+            normalize_decimal,
+            disabled,
+        )
+        if value != disabled:
+            component = "PL TCP" if canonical.endswith("port") else "PL JDWP/debug"
+            next_action = (
+                f"Set {canonical}={disabled} before initialization."
+                if initializing
+                else f"Set {canonical}={disabled} and rerun initialization while idle."
+            )
+            raise OperationError(
+                "component_unsupported",
+                "engine setting",
+                canonical,
+                source,
+                f"{component} listeners are outside the supported component scope.",
+                next_action,
+                expected_value=disabled,
+                observed_value=value,
+            )
+
+
+def validate_effective_configuration(
+    bundle: ResourceBundle,
     engine_content: str,
     broker_content: str,
     gateway_content: str | None,
 ) -> None:
-    engine = parse_ini(engine_content)
-    for values in engine.values():
-        if values.get("ha_mode", "off").lower() not in ("off", "no", "none"):
+    validate_pl_configuration(
+        engine_content, bundle.database_name, initializing=False
+    )
+    for setting, environment_name in (
+        ("ha_mode", "CUBRID_HA_MODE"),
+        ("ha_mode_for_sa_utils_only", "CUBRID_HA_MODE_FOR_SA_UTILS_ONLY"),
+    ):
+        value, source = effective_engine_setting(
+            engine_content,
+            bundle.database_name,
+            (setting,),
+            (environment_name,),
+            normalize_ha_mode,
+            "off",
+        )
+        if value != "off":
             raise OperationError(
-                "component_unsupported", "engine setting", "ha_mode", "cubrid.conf",
+                "component_unsupported",
+                "engine setting",
+                setting,
+                source,
+                "HA is outside the supported runtime-guard component scope.",
+                "Disable HA and rerun initialization while idle.",
+                expected_value="off",
+                observed_value=value,
+            )
+
+    refuse_unsupported_configuration(
+        engine_content,
+        broker_content,
+        gateway_content,
+        check_engine_ha=False,
+    )
+    engine = parse_ini(engine_content)
+    services = ",".join(
+        token.strip().lower()
+        for token in engine.get("service", {}).get("service", "").split(",")
+        if token.strip()
+    )
+    if services != "server,broker":
+        raise_configuration_drift(
+            "service",
+            "cubrid.conf [service] service",
+            "server,broker",
+            services,
+            "The effective service list must contain server and broker in managed order.",
+        )
+    master_port, master_port_source = effective_engine_setting(
+        engine_content,
+        bundle.database_name,
+        ("cubrid_port_id",),
+        ("CUBRID_CUBRID_PORT_ID",),
+        normalize_decimal,
+        "1523",
+    )
+    if master_port != str(bundle.master_port):
+        raise_configuration_drift(
+            "cubrid_port_id",
+            master_port_source,
+            str(bundle.master_port),
+            master_port,
+            "The effective engine master port differs from the managed allocation.",
+        )
+
+    broker_sections = parse_ini(broker_content)
+    current_brokers = broker_inventory(broker_content)
+    current_names = [broker.section for broker in current_brokers]
+    expected_names = [broker.section for broker in bundle.brokers]
+    if current_names != expected_names:
+        raise_configuration_drift(
+            "enabled brokers",
+            "cubrid_broker.conf SERVICE declarations",
+            json.dumps(expected_names),
+            json.dumps(current_names),
+            "The enabled broker set or order differs from the managed resource bundle.",
+        )
+    master_value = broker_sections.get("broker", {}).get("master_shm_id")
+    if master_value is None:
+        raise_configuration_drift(
+            "MASTER_SHM_ID",
+            "cubrid_broker.conf [broker] MASTER_SHM_ID",
+            hexadecimal_key(bundle.master_shm_key),
+            "missing",
+            "The broker master shared-memory key is missing.",
+        )
+    observed_master_key = parse_broker_shm_key(
+        master_value, "MASTER_SHM_ID", "broker"
+    )
+    if observed_master_key != bundle.master_shm_key:
+        raise_configuration_drift(
+            "MASTER_SHM_ID",
+            "cubrid_broker.conf [broker] MASTER_SHM_ID",
+            hexadecimal_key(bundle.master_shm_key),
+            hexadecimal_key(observed_master_key),
+            "The broker master shared-memory key differs from the managed allocation.",
+        )
+    for broker in bundle.brokers:
+        values = broker_sections[broker.section]
+        checks = (
+            (
+                "BROKER_PORT",
+                normalize_decimal(values.get("broker_port", "missing")),
+                str(broker.port),
+            ),
+            (
+                "MAX_NUM_APPL_SERVER",
+                normalize_decimal(values.get("max_num_appl_server", "40")),
+                str(broker.max_appl_servers),
+            ),
+        )
+        for setting, observed, expected in checks:
+            if observed != expected:
+                raise_configuration_drift(
+                    setting,
+                    f"cubrid_broker.conf [{broker.section}] {setting}",
+                    expected,
+                    observed,
+                    f"The enabled broker's {setting} differs from its managed allocation.",
+                )
+        appl_value = values.get("appl_server_shm_id")
+        if appl_value is None:
+            raise_configuration_drift(
+                "APPL_SERVER_SHM_ID",
+                f"cubrid_broker.conf [{broker.section}] APPL_SERVER_SHM_ID",
+                hexadecimal_key(broker.appl_server_shm_key),
+                "missing",
+                "The enabled broker's application shared-memory key is missing.",
+            )
+        observed_appl_key = parse_broker_shm_key(
+            appl_value, "APPL_SERVER_SHM_ID", broker.section
+        )
+        if observed_appl_key != broker.appl_server_shm_key:
+            raise_configuration_drift(
+                "APPL_SERVER_SHM_ID",
+                f"cubrid_broker.conf [{broker.section}] APPL_SERVER_SHM_ID",
+                hexadecimal_key(broker.appl_server_shm_key),
+                hexadecimal_key(observed_appl_key),
+                "The enabled broker's application shared-memory key differs from its managed allocation.",
+            )
+
+
+def expected_effective_configuration(bundle: ResourceBundle) -> dict[str, object]:
+    return {
+        "engine": {
+            "database_section": f"@{bundle.database_name}",
+            "service": "server,broker",
+            "cubrid_port_id": str(bundle.master_port),
+            "stored_procedure_uds": "yes",
+            "stored_procedure_port": "0",
+            "stored_procedure_debug": "-1",
+        },
+        "broker": {
+            "MASTER_SHM_ID": hexadecimal_key(bundle.master_shm_key),
+            "enabled_sections": [
+                {
+                    "section": broker.section,
+                    "BROKER_PORT": str(broker.port),
+                    "MAX_NUM_APPL_SERVER": str(broker.max_appl_servers),
+                    "APPL_SERVER_SHM_ID": hexadecimal_key(
+                        broker.appl_server_shm_key
+                    ),
+                }
+                for broker in bundle.brokers
+            ],
+        },
+    }
+
+
+def configuration_manifest(
+    bundle: ResourceBundle,
+    spawn_environments: list[dict[str, object]],
+    engine_hash: str | None,
+    broker_hash: str | None,
+) -> dict[str, object]:
+    return {
+        "engine": {
+            "path": os.fspath(bundle.engine_configuration),
+            "sha256": engine_hash,
+        },
+        "broker": {
+            "path": os.fspath(bundle.broker_configuration),
+            "sha256": broker_hash,
+            "spawn_environments": spawn_environments,
+        },
+        "effective": expected_effective_configuration(bundle),
+    }
+
+
+def refuse_unsupported_configuration(
+    engine_content: str,
+    broker_content: str,
+    gateway_content: str | None,
+    *,
+    allow_service_correction: bool = False,
+    check_engine_ha: bool = True,
+) -> None:
+    engine = parse_ini(engine_content)
+    service_tokens = {
+        token.strip().lower()
+        for token in engine.get("service", {}).get("service", "").split(",")
+        if token.strip()
+    }
+    unsupported_services = service_tokens - {"server", "broker"}
+    if allow_service_correction:
+        unsupported_services -= {"manager"}
+    if unsupported_services:
+        observed = ",".join(sorted(unsupported_services))
+        raise OperationError(
+            "component_unsupported",
+            "engine setting",
+            "service",
+            "cubrid.conf [service] service",
+            "The service list enables components outside the supported server and broker scope.",
+            "Keep service=server,broker, then rerun initialization while idle.",
+            expected_value="server,broker",
+            observed_value=observed,
+        )
+    if check_engine_ha:
+        unsupported_ha = next(
+            (
+                (setting, normalize_ha_mode(values[setting]))
+                for values in engine.values()
+                for setting in ("ha_mode", "ha_mode_for_sa_utils_only")
+                if setting in values and normalize_ha_mode(values[setting]) != "off"
+            ),
+            None,
+        )
+        if unsupported_ha is not None:
+            setting, observed = unsupported_ha
+            raise OperationError(
+                "component_unsupported", "engine setting", setting, "cubrid.conf",
                 "HA is outside the supported runtime-guard component scope.",
                 "Disable HA before initializing this worktree runtime.",
-            )
-        for port_name in ("stored_procedure_port", "java_stored_procedure_port"):
-            port = values.get(port_name)
-            if port is not None:
-                try:
-                    disabled = int(port.strip(), 10) == 0
-                except ValueError:
-                    disabled = False
-                if not disabled:
-                    raise OperationError(
-                        "component_unsupported", "engine setting", port_name,
-                        "cubrid.conf", "PL TCP is outside the supported component scope.",
-                        "Use stored_procedure_uds=yes and disable the PL TCP port.",
-                    )
-        for debug_name in ("stored_procedure_debug", "java_stored_procedure_debug"):
-            debug = values.get(debug_name)
-            if debug is not None:
-                try:
-                    disabled = int(debug.strip(), 10) == -1
-                except ValueError:
-                    disabled = False
-                if not disabled:
-                    raise OperationError(
-                        "component_unsupported", "engine setting", debug_name,
-                        "cubrid.conf",
-                        "PL JDWP/debug listeners are outside the supported component scope.",
-                        "Set the stored-procedure debug port to -1 before initialization.",
-                    )
-        legacy_uds = values.get("java_stored_procedure_uds")
-        if legacy_uds is not None and legacy_uds.lower() not in ("yes", "on", "true", "1"):
-            raise OperationError(
-                "component_unsupported", "engine setting", "java_stored_procedure_uds",
-                "cubrid.conf", "The legacy PL setting disables Unix-domain sockets.",
-                "Set java_stored_procedure_uds=yes or remove the legacy alias.",
+                expected_value="off",
+                observed_value=observed,
             )
     for section, values in parse_ini(broker_content).items():
-        if section.startswith("%") and values.get("service", "OFF").upper() in ("ON", "YES"):
+        if section.startswith("%") and values.get("service", "ON").upper() == "ON":
             shard_enabled = values.get("shard", "OFF").upper() in (
                 "ON",
                 "YES",
                 "TRUE",
                 "1",
             )
-            if shard_enabled or any(
-                token in section.lower() for token in ("gateway", "shard")
-            ):
+            if shard_enabled:
                 raise OperationError(
-                    "component_unsupported", "broker section", section, "cubrid_broker.conf",
-                    "Gateway and shard components are outside the supported component scope.",
-                    "Disable the unsupported section before initialization.",
+                    "component_unsupported",
+                    "broker setting",
+                    "SHARD",
+                    f"cubrid_broker.conf [{section}] SHARD",
+                    "Shard components are outside the supported component scope.",
+                    "Disable shard mode before initialization.",
+                    expected_value="OFF",
+                    observed_value=values.get("shard", "OFF"),
                 )
     if gateway_content is not None:
         enabled_gateway = next(
@@ -1317,7 +2033,7 @@ def refuse_unsupported_configuration(
                 section
                 for section, values in parse_ini(gateway_content).items()
                 if section.startswith("%")
-                and values.get("service", "OFF").upper() in ("ON", "YES")
+                and values.get("service", "ON").upper() == "ON"
             ),
             None,
         )
@@ -1329,12 +2045,18 @@ def refuse_unsupported_configuration(
                 "cubrid_gateway.conf",
                 "Gateway components are outside the supported component scope.",
                 "Disable every gateway section before initialization.",
+                expected_value="SERVICE=OFF",
+                observed_value="SERVICE=ON",
             )
 
 
 def refuse_effective_configuration_overrides() -> None:
     selected = next(
-        (name for name in EFFECTIVE_CONFIGURATION_OVERRIDE_NAMES if os.environ.get(name)),
+        (
+            name
+            for name in (*HA_OVERRIDE_NAMES, *MANAGED_PARAMETER_OVERRIDE_NAMES)
+            if os.environ.get(name)
+        ),
         None,
     )
     if selected is not None:
@@ -1343,6 +2065,8 @@ def refuse_effective_configuration_overrides() -> None:
             "process environment",
             f"{selected} can contradict the private configuration managed by the runtime guard.",
             f"Unset {selected} before initializing this worktree runtime.",
+            expected_value="unset",
+            observed_value="<redacted>",
         )
 
 
@@ -1769,16 +2493,23 @@ def validate_resource_bundle(
         expected_installation_paths = (
             bundle.installation_root / "bin",
             bundle.installation_root / "lib",
-            bundle.installation_root / "conf" / "cubrid.conf",
-            bundle.installation_root / "conf" / "cubrid_broker.conf",
         )
         if (
             bundle.executable_directory,
             bundle.library_directory,
-            bundle.engine_configuration,
-            bundle.broker_configuration,
         ) != expected_installation_paths:
             raise ValueError("installation paths are inconsistent")
+        configuration_root = bundle.installation_root / "conf"
+        for configuration_path in (
+            bundle.engine_configuration,
+            bundle.broker_configuration,
+        ):
+            try:
+                configuration_path.relative_to(configuration_root)
+            except ValueError as error:
+                raise ValueError(
+                    "configuration paths must remain inside the private installation"
+                ) from error
         if any(
             os.pathsep in os.fspath(path)
             for path in (
@@ -1956,10 +2687,17 @@ def initialize(
             "Keep one valid CUBRID_WORKTREE_ID assignment before retrying.",
         ) from error
     runtime_identifier = selected_id or uuid.uuid4().hex[:16]
-    installation, engine_path, broker_path, binary_path, library_path = installation_paths()
-    installation_document = capture_installation_identity(
-        installation, binary_path, library_path
+    preview_database_name = database_override or default_database_name(
+        selection.worktree, runtime_identifier
     )
+    validate_database_name(preview_database_name)
+    layout = installation_paths()
+    installation = layout.root
+    engine_path = layout.engine_configuration
+    broker_path = layout.broker_configuration
+    binary_path = layout.executable_directory
+    library_path = layout.library_directory
+    installation_document = capture_installation_identity(layout)
     engine_content = engine_path.read_text()
     broker_content = broker_path.read_text()
     gateway_path = installation / "conf" / "cubrid_gateway.conf"
@@ -1969,10 +2707,21 @@ def initialize(
             gateway_path, "file", "gateway configuration"
         )
         gateway_content = gateway_path.read_text()
+    validate_pl_configuration(
+        engine_content, preview_database_name, initializing=True
+    )
     refuse_unsupported_configuration(
-        engine_content, broker_content, gateway_content
+        engine_content,
+        broker_content,
+        gateway_content,
+        allow_service_correction=True,
     )
     brokers = broker_inventory(broker_content)
+    capture_broker_spawn_environments(
+        broker_content,
+        layout,
+        brokers,
+    )
     guard_root = state_root()
     state_home = guard_root.parent
     ensure_safe_root(state_home, "XDG_STATE_HOME")
@@ -1985,10 +2734,6 @@ def initialize(
     manifest_path = runtime_directory / "manifest.json"
     environment_path = runtime_directory / "env.sh"
     ensure_safe_root(Path.home(), "HOME")
-    preview_database_name = database_override or default_database_name(
-        selection.worktree, runtime_identifier
-    )
-    validate_database_name(preview_database_name)
     preflight_resource_paths(runtime_identifier, preview_database_name, brokers)
     make_private_directory(guard_root)
     lock_descriptor = open_private_lock(lock_path)
@@ -2029,6 +2774,7 @@ def initialize(
                 observations,
                 guard_root,
             )
+            bundle = bundle.for_installation(layout)
         else:
             bundle, database_name = retained
             if database_override is not None and database_override != database_name:
@@ -2037,12 +2783,22 @@ def initialize(
                     f"The runtime already owns database identity {database_name!r}.",
                     "Omit --db-name or use the manifest's existing database name.",
                 )
-            bundle = bundle.for_installation(installation)
+            bundle = bundle.for_installation(layout)
         reject_managed_claim_collisions(
             bundle, registry, runtime_identifier, guard_root
         )
+        spawn_environments = capture_broker_spawn_environments(
+            broker_content,
+            layout,
+            bundle.brokers,
+            bundle,
+        )
         claims = bundle.claims().to_dict()
         generation = int(registry["generation"]) + 1
+        build_directory = os.environ.get(
+            "CUBRID_BUILD_DIR",
+            os.fspath(selection.worktree / f"build_preset_{selection.preset}"),
+        )
         initializing_manifest: dict[str, object] = {
             "schema_version": STATE_SCHEMA_VERSION,
             "generation": generation,
@@ -2051,14 +2807,14 @@ def initialize(
             "worktree_path": os.fspath(selection.worktree),
             "git_common_dir": os.fspath(selection.git_common_dir),
             "active_preset": selection.preset,
+            "build_directory": build_directory,
             "database_name": database_name,
             "resource_bundle": bundle.to_dict(),
             "normalized_claims": claims,
             "installation": installation_document,
-            "configurations": {
-                "engine": {"path": os.fspath(engine_path), "sha256": None},
-                "broker": {"path": os.fspath(broker_path), "sha256": None},
-            },
+            "configurations": configuration_manifest(
+                bundle, spawn_environments, None, None
+            ),
             "generated_environment": {"path": os.fspath(environment_path), "sha256": None},
         }
         allocations = registry["allocations"]
@@ -2104,30 +2860,22 @@ def initialize(
         atomic_write(engine_path, patch_ini(engine_content, engine_managed), stat.S_IMODE(engine_path.stat().st_mode))
         atomic_write(broker_path, patch_ini(broker_content, broker_managed), stat.S_IMODE(broker_path.stat().st_mode))
         write_worktree_identity(selection.worktree, runtime_identifier)
-        environment_content = "# Generated by my-cubrid-runtime; source this file, do not eval command output.\n"
-        environment_content += "unset " + " ".join(EFFECTIVE_CONFIGURATION_OVERRIDE_NAMES) + "\n"
-        environment_content += environment_assignment("PRESET_MODE", selection.preset)
-        environment_content += environment_assignment("CUBRID_WORKTREE_ID", runtime_identifier)
-        environment_content += environment_assignment("CUBRID", os.fspath(installation))
-        environment_content += environment_assignment("CUBRID_BUILD_DIR", os.environ.get("CUBRID_BUILD_DIR", os.fspath(selection.worktree / f"build_preset_{selection.preset}")))
-        environment_content += environment_assignment("CUBRID_DATABASES", os.fspath(bundle.database_registry))
-        environment_content += environment_assignment("CUBRID_TMP", os.fspath(bundle.cubrid_tmp))
-        environment_content += environment_assignment("CUBRID_RUNTIME_READY", "1")
-        environment_content += (
-            f"export PATH={shlex.quote(os.fspath(binary_path))}${{PATH:+:$PATH}}\n"
-        )
-        environment_content += (
-            "export LD_LIBRARY_PATH="
-            f"{shlex.quote(os.fspath(library_path))}"
-            "${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}\n"
+        environment_content = generated_environment_content(
+            selection,
+            runtime_identifier,
+            build_directory,
+            bundle,
         )
         atomic_write(environment_path, environment_content, 0o600)
-        initializing_manifest["configurations"] = {
-            "engine": {"path": os.fspath(engine_path), "sha256": file_hash(engine_path)},
-            "broker": {"path": os.fspath(broker_path), "sha256": file_hash(broker_path)},
-        }
+        initializing_manifest["configurations"] = configuration_manifest(
+            bundle,
+            spawn_environments,
+            text_hash(engine_path.read_text()),
+            text_hash(broker_path.read_text()),
+        )
         initializing_manifest["generated_environment"] = {
-            "path": os.fspath(environment_path), "sha256": file_hash(environment_path)
+            "path": os.fspath(environment_path),
+            "sha256": text_hash(environment_path.read_text()),
         }
         initializing_manifest["state"] = "ready"
         allocations[runtime_identifier] = {
@@ -2147,7 +2895,6 @@ def validate(
     adapter: ObservationAdapter,
     selection: RuntimeSelection,
 ) -> tuple[ValidationResult, int]:
-    refuse_effective_configuration_overrides()
     worktree = selection.worktree
     try:
         selected_runtime_id = runtime_id(adapter, worktree)
@@ -2270,16 +3017,42 @@ def validate(
     )
     for actual, expected, label, kind, source, next_action in comparisons:
         if actual != expected:
+            diagnostic_expected = actual if label == "active preset" else expected
+            diagnostic_observed = expected if label == "active preset" else actual
             return invalid_result(
-                selection, actual, "manifest_inconsistent",
+                selection, diagnostic_observed, "manifest_inconsistent",
                 f"Manifest {label} does not match the selected worktree runtime.",
                 affected_kind=kind,
                 source=source,
                 next_action=next_action,
-                normalized_value=actual,
-                expected_value=expected,
-                observed_value=actual,
+                normalized_value=diagnostic_observed,
+                expected_value=diagnostic_expected,
+                observed_value=diagnostic_observed,
             ), EXIT_INVALID
+    selected_build_directory = os.environ.get("CUBRID_BUILD_DIR")
+    recorded_build_directory = document.get("build_directory")
+    if recorded_build_directory is not None and not isinstance(
+        recorded_build_directory, str
+    ):
+        return reject_manifest(
+            "manifest_malformed", "Manifest build_directory must be a string."
+        )
+    if (
+        recorded_build_directory is not None
+        and selected_build_directory is not None
+        and selected_build_directory != recorded_build_directory
+    ):
+        return invalid_result(
+            selection,
+            selected_build_directory,
+            "active_preset_inconsistent",
+            "CUBRID_BUILD_DIR does not match the active preset's recorded build directory.",
+            affected_kind="build directory",
+            source="CUBRID_BUILD_DIR",
+            next_action="Select only the manifest's active preset before using the runtime.",
+            expected_value=recorded_build_directory,
+            observed_value=selected_build_directory,
+        ), EXIT_INVALID
     if document["state"] != "ready":
         return reject_manifest("manifest_not_ready", "Manifest transaction state is not ready.")
     if not document["resource_bundle"]:
@@ -2314,6 +3087,45 @@ def validate(
         return reject_manifest(
             "manifest_incomplete", "Manifest does not contain a complete resource bundle."
         )
+    for kind, environment_name in (
+        ("engine", "CUBRID_CONF_FILE"),
+        ("broker", "CUBRID_BROKER_CONF_FILE"),
+    ):
+        record = configurations.get(kind)
+        if not isinstance(record, dict) or not isinstance(record.get("path"), str):
+            return reject_manifest(
+                "manifest_incomplete",
+                f"Manifest {kind} configuration identity is incomplete.",
+            )
+        expected_path = record["path"]
+        selected_path = os.environ.get(environment_name)
+        if selected_path and selected_path != expected_path:
+            return invalid_result(
+                selection,
+                selected_path,
+                "configuration_selection_drift",
+                f"{environment_name} selects a different {kind} configuration.",
+                affected_kind=f"{kind} configuration",
+                source=environment_name,
+                next_action=(
+                    "Select the manifest configuration or rerun initialization "
+                    "while the runtime is idle."
+                ),
+                expected_value=expected_path,
+                observed_value=selected_path,
+            ), EXIT_INVALID
+    if os.environ.get("CUBRID_HA_CONF_FILE"):
+        return invalid_result(
+            selection,
+            "CUBRID_HA_CONF_FILE",
+            "component_unsupported",
+            "HA configuration is outside the supported runtime-guard component scope.",
+            affected_kind="environment override",
+            source="process environment",
+            next_action="Unset CUBRID_HA_CONF_FILE and keep HA disabled.",
+            expected_value="unset",
+            observed_value="set",
+        ), EXIT_INVALID
     try:
         bundle = ResourceBundle.from_dict(document["resource_bundle"])
     except (KeyError, ValueError) as error:
@@ -2404,6 +3216,16 @@ def validate(
         return reject_manifest(
             "manifest_incomplete", "Manifest normalized claims do not match its resource bundle."
         )
+    recorded_effective_configuration = configurations.get("effective")
+    if (
+        recorded_effective_configuration is not None
+        and recorded_effective_configuration
+        != expected_effective_configuration(bundle)
+    ):
+        return reject_manifest(
+            "manifest_incomplete",
+            "Manifest effective configuration does not match its resource bundle.",
+        )
     managed_paths = {
         "cubrid_tmp": bundle.cubrid_tmp,
         "database_registry": bundle.database_registry,
@@ -2474,6 +3296,8 @@ def validate(
             affected_kind="allocation registry", source="guard state",
             next_action="Restore matching registry and manifest state before using this runtime.",
         ), EXIT_INVALID
+    configuration_contents: dict[str, str] = {}
+    configuration_hashes: dict[str, tuple[Path, str, str]] = {}
     for kind in ("engine", "broker"):
         record = configurations.get(kind)
         if not isinstance(record, dict) or not isinstance(record.get("path"), str) or not isinstance(record.get("sha256"), str):
@@ -2493,13 +3317,146 @@ def validate(
                 affected_kind=f"{kind} configuration", source=f"manifest configurations.{kind}",
                 next_action="Restore the installation and rerun initialization while idle.",
             ), EXIT_INVALID
-        digest = hashlib.sha256(observed.content.encode()).hexdigest()
-        if digest != record["sha256"]:
+        digest = text_hash(observed.content)
+        configuration_contents[kind] = observed.content
+        configuration_hashes[kind] = (path, record["sha256"], digest)
+
+    gateway_path = bundle.installation_root / "conf" / "cubrid_gateway.conf"
+    gateway_observation = adapter.inspect_file(gateway_path)
+    gateway_content = None
+    if gateway_observation.exists:
+        if (
+            gateway_observation.kind != "file"
+            or gateway_observation.content is None
+            or gateway_observation.owner != os.geteuid()
+            or gateway_observation.mode is None
+            or gateway_observation.mode & 0o022
+            or gateway_observation.canonical is not True
+        ):
+            return invalid_result(
+                selection,
+                gateway_path,
+                "configuration_missing",
+                "The gateway configuration cannot be inspected safely.",
+                affected_kind="gateway configuration",
+                source="CUBRID installation",
+                next_action="Restore the private installation configuration before validation.",
+            ), EXIT_INVALID
+        gateway_content = gateway_observation.content
+    try:
+        validate_effective_configuration(
+            bundle,
+            configuration_contents["engine"],
+            configuration_contents["broker"],
+            gateway_content,
+        )
+    except OperationError as error:
+        return ValidationResult(
+            outcome="invalid", selection=selection, diagnostic=error.diagnostic
+        ), EXIT_INVALID
+
+    broker_record = configurations["broker"]
+    assert isinstance(broker_record, dict)
+    spawn_records = broker_record.get("spawn_environments")
+    if not isinstance(spawn_records, list):
+        return reject_manifest(
+            "manifest_incomplete",
+            "Manifest broker spawn-environment identity is incomplete.",
+        )
+    try:
+        current_selections = broker_spawn_environment_selections(
+            configuration_contents["broker"],
+            bundle.installation_root,
+            bundle.brokers,
+        )
+    except OperationError as error:
+        return ValidationResult(
+            outcome="invalid", selection=selection, diagnostic=error.diagnostic
+        ), EXIT_INVALID
+    expected_selection_pairs = sorted(
+        (record.get("path"), section)
+        for record in spawn_records
+        if isinstance(record, dict)
+        for section in record.get("broker_sections", [])
+        if isinstance(section, str)
+    )
+    observed_selection_pairs = sorted(
+        (os.fspath(path), section) for section, path in current_selections
+    )
+    if expected_selection_pairs != observed_selection_pairs:
+        return invalid_result(
+            selection,
+            "SOURCE_ENV",
+            "configuration_drift",
+            "The enabled brokers select different spawn-environment sources.",
+            affected_kind="broker spawn environment",
+            source="cubrid_broker.conf SOURCE_ENV",
+            next_action="Rerun initialization while the selected runtime is idle.",
+            expected_value=json.dumps(expected_selection_pairs),
+            observed_value=json.dumps(observed_selection_pairs),
+        ), EXIT_INVALID
+    for record in spawn_records:
+        if (
+            not isinstance(record, dict)
+            or not isinstance(record.get("path"), str)
+            or not isinstance(record.get("sha256"), str)
+            or not isinstance(record.get("broker_sections"), list)
+        ):
+            return reject_manifest(
+                "manifest_incomplete",
+                "Manifest broker spawn-environment identity is malformed.",
+            )
+        source_path = Path(record["path"])
+        source_observation = adapter.inspect_file(source_path)
+        if (
+            source_observation.kind != "file"
+            or source_observation.content is None
+            or source_observation.owner != os.geteuid()
+            or source_observation.mode is None
+            or source_observation.mode & 0o022
+            or source_observation.canonical is not True
+        ):
+            return invalid_result(
+                selection,
+                source_path,
+                "configuration_missing",
+                "A broker spawn environment is missing or unreadable.",
+                affected_kind="broker spawn environment",
+                source="manifest configurations.broker.spawn_environments",
+                next_action="Restore the installation and rerun initialization while idle.",
+            ), EXIT_INVALID
+        try:
+            validate_broker_spawn_environment_values(
+                source_observation.content,
+                "broker SOURCE_ENV",
+                bundle.installation_layout(),
+                bundle,
+            )
+        except OperationError as error:
+            return ValidationResult(
+                outcome="invalid", selection=selection, diagnostic=error.diagnostic
+            ), EXIT_INVALID
+        observed_hash = text_hash(source_observation.content)
+        if observed_hash != record["sha256"]:
+            return invalid_result(
+                selection,
+                source_path,
+                "configuration_drift",
+                "A broker spawn environment changed since initialization.",
+                affected_kind="broker spawn environment",
+                source="manifest configurations.broker.spawn_environments.sha256",
+                next_action="Rerun initialization while the selected runtime is idle.",
+                expected_value=record["sha256"],
+                observed_value=observed_hash,
+            ), EXIT_INVALID
+
+    for kind, (path, expected_hash, digest) in configuration_hashes.items():
+        if digest != expected_hash:
             return invalid_result(
                 selection, path, "configuration_drift", f"The selected {kind} configuration has changed since initialization.",
                 affected_kind=f"{kind} configuration", source=f"manifest configurations.{kind}.sha256",
                 next_action="Rerun initialization while the selected runtime is idle.",
-                expected_value=record["sha256"], observed_value=digest,
+                expected_value=expected_hash, observed_value=digest,
             ), EXIT_INVALID
     environment_path = generated_environment.get("path")
     environment_hash = generated_environment.get("sha256")
@@ -2529,7 +3486,27 @@ def validate(
             next_action="Rerun initialization while the selected runtime is idle.",
             expected_owner=os.geteuid(),
         ), EXIT_INVALID
-    observed_environment_hash = hashlib.sha256(environment_observation.content.encode()).hexdigest()
+    observed_environment_hash = text_hash(environment_observation.content)
+    if isinstance(recorded_build_directory, str):
+        expected_environment_content = generated_environment_content(
+            selection,
+            selected_runtime_id,
+            recorded_build_directory,
+            bundle,
+        )
+        expected_content_hash = text_hash(expected_environment_content)
+        if environment_observation.content != expected_environment_content:
+            return invalid_result(
+                selection,
+                expected_environment_path,
+                "environment_drift",
+                "The generated environment is not coherent with the manifest runtime identity.",
+                affected_kind="generated environment",
+                source="manifest runtime and installation identity",
+                next_action="Rerun initialization while the selected runtime is idle.",
+                expected_value=expected_content_hash,
+                observed_value=observed_environment_hash,
+            ), EXIT_INVALID
     if observed_environment_hash != environment_hash:
         return invalid_result(
             selection, expected_environment_path, "environment_drift",
@@ -2656,8 +3633,7 @@ def validate(
                 sort_keys=True,
             ),
         ), EXIT_INVALID
-    identity_records = [*executable_records, *library_records]
-    for record in identity_records:
+    for record in executable_records:
         assert isinstance(record, dict)
         identity_path = Path(record["path"])
         try:
@@ -2677,6 +3653,45 @@ def validate(
                 affected_kind="installation file", source="manifest installation identity",
                 next_action="Rerun initialization after the installation is idle.",
                 expected_value=record["sha256"], observed_value=observed_hash,
+            ), EXIT_INVALID
+    for record in library_records:
+        assert isinstance(record, dict)
+        identity_path = Path(record["path"])
+        try:
+            observed_identity = library_file_identity(
+                identity_path, bundle.installation_layout()
+            )
+        except (OSError, OperationError):
+            return invalid_result(
+                selection, identity_path, "installation_identity_invalid",
+                "A required runtime library or its SONAME target is missing or unsafe.",
+                affected_kind="installation file", source="manifest installation identity",
+                next_action="Complete the selected preset installation and rerun initialization.",
+            ), EXIT_INVALID
+        expected_resolved_path = record.get("resolved_path", record["path"])
+        if (
+            observed_identity["resolved_path"] != expected_resolved_path
+            or observed_identity["sha256"] != record["sha256"]
+        ):
+            return invalid_result(
+                selection, identity_path, "installation_identity_invalid",
+                "A required runtime library identity has changed since initialization.",
+                affected_kind="installation file", source="manifest installation identity",
+                next_action="Rerun initialization after the installation is idle.",
+                expected_value=json.dumps(
+                    {
+                        "resolved_path": expected_resolved_path,
+                        "sha256": record["sha256"],
+                    },
+                    sort_keys=True,
+                ),
+                observed_value=json.dumps(
+                    {
+                        "resolved_path": observed_identity["resolved_path"],
+                        "sha256": observed_identity["sha256"],
+                    },
+                    sort_keys=True,
+                ),
             ), EXIT_INVALID
     if any((runtime_observations.processes, runtime_observations.sockets, runtime_observations.listeners, runtime_observations.system_v_ipc)):
         return invalid_result(

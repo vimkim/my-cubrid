@@ -24,9 +24,43 @@ state as requiring recovery.
 
 The recognized transaction states are `initializing`, `ready`, `deinitializing`,
 and `recovery_required`. Adoption uses the same publication and recovery path as
-initialization. Deinitialization remains a future command; its refusal-only handler
-enforces the unfinished-operation fence and cannot release claims. A retained
-`deinitializing` operation blocks `init` and `adopt`.
+initialization. A retained `deinitializing` operation blocks `init` and `adopt`.
+
+## Explicit deinitialization
+
+Run `my-cubrid-runtime deinit --preset PRESET` to release one idle runtime's guard
+metadata. The command binds to the worktree's stable identity before waiting for
+the registry lock; a replacement identity requires a new explicit invocation.
+It validates the selected preset, installation, effective configuration, private
+storage association, and fresh process/endpoint/socket/IPC observations under
+that lock. Even correctly owned live resources prevent release. Unknown or
+contradictory evidence also refuses release without cleanup or lifecycle calls.
+
+Deinitialization records a new generation with state `deinitializing`, retaining
+the complete manifest and predecessor in the journal. It removes only the
+`CUBRID_WORKTREE_ID` assignment from `.env` (preserving unrelated bytes and mode),
+the generated `env.sh`, the manifest, and that identity's allocation entry. The
+journal is removed and its directory flushed last: this is the release commit
+point. Allocation continues to include the journal's complete claims until then.
+The registry generation never decreases, including after an interleaved runtime
+allocation. Shared guard directories, the registry file, and its lock remain.
+
+Retry the original `deinit` with the same preset and installation after an
+interruption. Recovery validates the journal's manifest even if earlier release
+steps removed `.env` identity, generated environment, manifest, or allocation
+entry. It preserves the original generation and rechecks all runtime evidence;
+failed checks leave the `deinitializing` journal and its claims intact. No age,
+missing worktree, or process absence releases a claim. Once release succeeds, an
+already absent identity is a successful no-op; first-fit allocation can then reuse
+released ports and keys.
+
+Human and JSON results list the released metadata and claims, and the retained
+database name, registry/storage roots, runtime and installation directories,
+socket pathnames, and System V keys. These retained entries describe the scopes
+left untouched, including potential socket/IPC objects; successful release
+requires claimed sockets and IPC objects to be absent. Database registries,
+volumes, logs, runtime directories, and installation/configuration files are
+never removed or rewritten. Existing adopted databases remain in place.
 
 ## Database adoption and helpers
 
@@ -103,3 +137,12 @@ with an incomplete observation and a later healthy retry; the failure state keep
 the interrupted generation instead of relabeling the predecessor generation.
 All observations and installation files are synthetic. Run it with
 `python3 tests/runtime-guard-test.py`.
+
+The deinitialization matrix interrupts before and after journal creation,
+deinitializing registry/manifest publication, identity removal, environment and
+manifest removal, allocation release, and final journal removal (16 scenarios).
+Each unfinished case proves that another worktree skips the retained ports/keys;
+successful explicit retry then permits reuse. Additional CLI cases cover exact
+unrelated `.env` preservation, adopted data inventories, absent-state no-ops,
+live/unknown refusal, stale writers, replacement identities, concurrent retries,
+same-generation recovery, and command spies for lifecycle and cleanup utilities.

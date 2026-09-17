@@ -373,7 +373,7 @@ class Diagnostic:
 
 @dataclass(frozen=True)
 class ValidationResult:
-    outcome: Literal["uninitialized", "invalid", "ready"]
+    outcome: Literal["uninitialized", "invalid", "ready", "deinitialized"]
     selection: RuntimeSelection
     diagnostic: Diagnostic | None = None
     command: Literal["init", "validate", "adopt", "deinit"] = "validate"
@@ -381,6 +381,7 @@ class ValidationResult:
     manifest_path: str | None = None
     environment_path: str | None = None
     live_ownership: dict[str, object] | None = None
+    release_inventory: dict[str, object] | None = None
 
     def to_dict(self) -> dict[str, object]:
         result: dict[str, object] = {
@@ -404,6 +405,8 @@ class ValidationResult:
             result["diagnostic"] = self.diagnostic.to_dict()
         if self.live_ownership is not None:
             result["live_ownership"] = self.live_ownership
+        if self.release_inventory is not None:
+            result.update(self.release_inventory)
         return result
 
 
@@ -1504,6 +1507,13 @@ class TransactionPublisher:
     def json(self, name: str, path: Path, document: Mapping[str, object]) -> None:
         self.text(name, path, json.dumps(document, indent=2, sort_keys=True) + "\n", 0o600)
 
+    def remove(self, name: str, path: Path) -> None:
+        self.boundary(f"before_{name}")
+        path.unlink(missing_ok=True)
+        fsync_directory(path.parent)
+        self.expected[path] = None
+        self.boundary(f"after_{name}")
+
 
 def read_transaction(path: Path) -> GuardTransaction:
     if not is_owner_only_canonical_regular_file(path, path.lstat()):
@@ -1655,6 +1665,9 @@ def require_transaction_generation(
             predecessor = transaction["predecessor"]
             allowed_manifests.append(predecessor["manifest"])
             allowed_allocations.append(predecessor["allocation"])
+            if transaction["operation"] == "deinit":
+                allowed_manifests.append(None)
+                allowed_allocations.append(None)
         consistent = published in allowed_manifests and allocation in allowed_allocations
     if allocation is not None:
         consistent = consistent and (
@@ -1690,27 +1703,6 @@ def patched_configurations(
             "APPL_SERVER_SHM_ID": hexadecimal_key(broker.appl_server_shm_key),
         }
     return patch_ini(engine_content, engine_managed), patch_ini(broker_content, broker_managed)
-
-
-def refuse_unimplemented_mutation(command: str, selection: RuntimeSelection) -> None:
-    """Keep future mutation commands behind the same unfinished-operation fence."""
-    guard_root = state_root()
-    lock_path = guard_root / "registry.lock"
-    if lock_path.exists():
-        descriptor = open_private_lock(lock_path)
-        try:
-            fcntl.flock(descriptor, fcntl.LOCK_EX)
-            for transaction in retained_transactions(guard_root).values():
-                if (transaction["state"] != "ready"
-                    and transaction["manifest"]["worktree_path"] == os.fspath(selection.worktree)):
-                    require_transaction_operation(transaction, command, selection)
-        finally:
-            os.close(descriptor)
-    raise OperationError(
-        "operation_not_implemented", "guard command", command, "runtime guard",
-        f"{command} is not implemented yet; no state was changed.",
-        "Complete any unfinished init with its original selection.",
-    )
 
 
 def file_hash(path: Path) -> str:
@@ -4597,6 +4589,7 @@ def require_mutation_safe_ownership(
 def validate(
     adapter: ObservationAdapter,
     selection: RuntimeSelection,
+    deinitializing: GuardTransaction | None = None,
 ) -> tuple[ValidationResult, int]:
     worktree = selection.worktree
     try:
@@ -4611,6 +4604,8 @@ def validate(
                 "then retry validation"
             ),
         ), EXIT_INVALID
+    if selected_runtime_id is None and deinitializing is not None:
+        selected_runtime_id = deinitializing["manifest"]["worktree_id"]
     if selected_runtime_id is None:
         return uninitialized_result(selection), EXIT_UNINITIALIZED
     state_home = Path(
@@ -4623,7 +4618,10 @@ def validate(
         / selected_runtime_id
         / "manifest.json"
     )
-    manifest = adapter.inspect_file(manifest_path)
+    # Locked deinit recovery validates the authoritative journal's manifest after
+    # generation fencing admits metadata already removed by this transaction.
+    manifest_source = manifest_path if deinitializing is None else manifest_path.parent / "transaction.json"
+    manifest = adapter.inspect_file(manifest_source)
     if not manifest.exists:
         return uninitialized_result(selection), EXIT_UNINITIALIZED
 
@@ -4663,6 +4661,10 @@ def validate(
         return reject_manifest("manifest_unreadable", "Manifest could not be read.", "unknown")
     try:
         document = json.loads(manifest.content)
+        if deinitializing is not None:
+            if document != deinitializing:
+                return reject_manifest("transaction_generation_conflict", "The deinitialization journal changed during validation.")
+            document = document["manifest"]
     except (json.JSONDecodeError, UnicodeError):
         return reject_manifest("manifest_malformed", "Manifest is not valid JSON.")
     if not isinstance(document, dict):
@@ -4756,7 +4758,7 @@ def validate(
             expected_value=recorded_build_directory,
             observed_value=selected_build_directory,
         ), EXIT_INVALID
-    if document["state"] != "ready":
+    if document["state"] != "ready" and deinitializing is None:
         return reject_manifest("manifest_not_ready", "Manifest transaction state is not ready.")
     transaction_observation = adapter.inspect_file(manifest_path.parent / "transaction.json")
     if transaction_observation.exists:
@@ -4768,7 +4770,7 @@ def validate(
                 and transaction_observation.mode == 0o600
                 and transaction_observation.canonical is True
                 and transaction["schema_version"] == STATE_SCHEMA_VERSION
-                and transaction["state"] == "ready"
+                and (transaction["state"] == "ready" or deinitializing is not None)
                 and transaction["generation"] == document["generation"]
             )
         except (ValueError, KeyError, TypeError):
@@ -5004,7 +5006,9 @@ def validate(
         ), EXIT_INVALID
     try:
         registry_document = json.loads(registry_observation.content)
-        allocation = registry_document["allocations"][selected_runtime_id]
+        if not isinstance(registry_document["allocations"], dict):
+            raise TypeError("allocations must be an object")
+        allocation = registry_document["allocations"].get(selected_runtime_id)
     except (json.JSONDecodeError, KeyError, TypeError):
         return invalid_result(
             selection, registry_path, "allocation_registry_inconsistent",
@@ -5012,7 +5016,7 @@ def validate(
             affected_kind="allocation registry", source="guard state",
             next_action="Restore the matching retained allocation before using this runtime.",
         ), EXIT_INVALID
-    if (
+    if deinitializing is None and (
         registry_document.get("schema_version") != STATE_SCHEMA_VERSION
         or type(registry_document.get("generation")) is not int
         or registry_document["generation"] < document["generation"]
@@ -5213,7 +5217,7 @@ def validate(
         or environment_observation.mode != 0o600
         or environment_observation.content is None
         or environment_observation.canonical is not True
-    ):
+    ) and not (deinitializing is not None and not environment_observation.exists):
         return invalid_result(
             selection, expected_environment_path, "environment_unsafe",
             "The generated environment must be a readable owner-only regular file.",
@@ -5221,7 +5225,10 @@ def validate(
             next_action="Rerun initialization while the selected runtime is idle.",
             expected_owner=os.geteuid(),
         ), EXIT_INVALID
-    observed_environment_hash = text_hash(environment_observation.content)
+    observed_environment_hash = (
+        text_hash(environment_observation.content)
+        if environment_observation.content is not None else None
+    )
     if isinstance(recorded_build_directory, str):
         expected_environment_content = generated_environment_content(
             selection,
@@ -5230,7 +5237,7 @@ def validate(
             bundle,
         )
         expected_content_hash = text_hash(expected_environment_content)
-        if environment_observation.content != expected_environment_content:
+        if environment_observation.exists and environment_observation.content != expected_environment_content:
             return invalid_result(
                 selection,
                 expected_environment_path,
@@ -5242,7 +5249,7 @@ def validate(
                 expected_value=expected_content_hash,
                 observed_value=observed_environment_hash,
             ), EXIT_INVALID
-    if observed_environment_hash != environment_hash:
+    if environment_observation.exists and observed_environment_hash != environment_hash:
         return invalid_result(
             selection, expected_environment_path, "environment_drift",
             "The generated environment has changed since initialization.",
@@ -5431,7 +5438,7 @@ def validate(
     if transaction_observation.exists and (
         transaction.get("manifest") != document
         or adapter.inspect_file(manifest_path.parent / "transaction.json") != transaction_observation
-        or adapter.inspect_file(manifest_path) != manifest
+        or adapter.inspect_file(manifest_source) != manifest
     ):
         return reject_manifest(
             "transaction_not_ready",
@@ -5457,7 +5464,204 @@ def validate(
     return result, 0
 
 
+def deinitialized_result(
+    selection: RuntimeSelection, manifest: dict[str, Any] | None = None,
+) -> ValidationResult:
+    released: list[dict[str, str]] = []
+    retained: list[dict[str, str]] = []
+    claims: dict[str, object] = {"tcp_ports": [], "system_v_keys": [], "paths": []}
+    runtime_identifier = None
+    if manifest is not None:
+        runtime_identifier = manifest["worktree_id"]
+        directory = state_root() / "worktrees" / runtime_identifier
+        released = [
+            {"kind": kind, "value": str(value)} for kind, value in (
+                ("worktree identity", str(selection.worktree / ".env") + ":CUBRID_WORKTREE_ID"),
+                ("worktree manifest", directory / "manifest.json"),
+                ("generated environment", directory / "env.sh"),
+                ("allocation registry entry", str(state_root() / "allocations.json") + ":" + runtime_identifier),
+                ("guard transaction", directory / "transaction.json"),
+            )
+        ]
+        bundle = ResourceBundle.from_dict(manifest["resource_bundle"])
+        claims = bundle.claims().to_dict()
+        retained = [
+            {"kind": kind, "value": str(value)} for kind, value in (
+                ("database", bundle.database_name),
+                ("database registry and contents", bundle.database_registry),
+                ("data volumes", bundle.data_root),
+                ("database logs", bundle.log_root),
+                ("LOB storage", bundle.lob_root),
+                ("runtime directory and contents", bundle.cubrid_tmp.parent),
+                ("installation and contents", bundle.installation_root),
+                ("unrelated environment content", selection.worktree / ".env"),
+                *(("socket pathname (no removal)", path) for path in bundle.socket_paths),
+                *(("System V key (no IPC removal)", hexadecimal_key(key)) for key in bundle.claims().system_v_keys),
+            )
+        ]
+    return ValidationResult(
+        outcome="deinitialized", selection=selection, command="deinit",
+        worktree_id=runtime_identifier,
+        release_inventory={"released": released, "retained": retained, "released_claims": claims},
+    )
+
+
+def deinitialization_identity(adapter: ObservationAdapter, worktree: Path) -> str | None:
+    path = worktree / ".env"
+    try:
+        identifier = runtime_id(adapter, worktree)
+        observed = adapter.inspect_file(path)
+        if observed.exists and (observed.canonical is not True or path.stat().st_nlink != 1):
+            raise WorktreeIdentityError("Worktree environment must not alias another file.")
+        return identifier
+    except WorktreeIdentityError as error:
+        raise OperationError(
+            "worktree_identity_invalid", "worktree environment", path, "worktree selection",
+            str(error), "Restore the original canonical worktree environment before retrying deinit.",
+        ) from error
+
+
+def deinitialize(
+    adapter: ObservationAdapter, selection: RuntimeSelection,
+) -> tuple[ValidationResult, int]:
+    guard_root = state_root()
+    identity_path = selection.worktree / ".env"
+    selected_id = deinitialization_identity(adapter, selection.worktree)
+    if not guard_root.exists() and selected_id is None:
+        return deinitialized_result(selection), 0
+    require_private_directory_chain(guard_root.parent, guard_root, "guard state")
+    lock_path = guard_root / "registry.lock"
+    if not lock_path.exists():
+        raise OperationError(
+            "allocation_lock_unsafe", "allocation lock", lock_path, "guard state",
+            "Retained identity cannot be released without its allocation lock.",
+            "Restore the matching guard state before retrying deinit.",
+        )
+    requested_ids = {selected_id} if selected_id is not None else {
+        identifier for identifier, record in retained_transactions(guard_root).items()
+        if record["manifest"]["worktree_path"] == str(selection.worktree)
+    }
+    descriptor = open_private_lock(lock_path)
+    try:
+        adapter.publication_boundary("before_lock")
+        fcntl.flock(descriptor, fcntl.LOCK_EX)
+        selected_id = deinitialization_identity(adapter, selection.worktree)
+        registry_path = guard_root / "allocations.json"
+        registry = load_registry(registry_path)
+        allocations = registry["allocations"]
+        assert isinstance(allocations, dict)
+        transactions = retained_transactions(guard_root)
+        matching = {
+            identifier for identifier, record in transactions.items()
+            if record["manifest"]["worktree_path"] == str(selection.worktree)
+        }
+        matching.update(identifier for identifier, record in allocations.items()
+                        if record.get("worktree_path") == str(selection.worktree))
+        for path in (guard_root / "worktrees").glob("*/manifest.json"):
+            if read_json_file(path, "worktree_manifest").get("worktree_path") == str(selection.worktree):
+                matching.add(path.parent.name)
+        if len(matching) > 1 or (matching and selected_id is not None and selected_id not in matching):
+            raise OperationError(
+                "transaction_operation_mismatch", "worktree identity", selected_id or "missing",
+                "retained guard state", "The selected identity disagrees with this worktree's retained claims.",
+                "Restore the original worktree identity before retrying deinit.",
+            )
+        runtime_identifier = selected_id or next(iter(matching), None)
+        if runtime_identifier is None:
+            return deinitialized_result(selection), 0
+        if requested_ids != {runtime_identifier}:
+            raise OperationError(
+                "transaction_operation_mismatch", "worktree identity", runtime_identifier,
+                "original deinit selection", "The worktree identity changed while deinit waited for its lock.",
+                "Inspect the replacement runtime and explicitly deinitialize it only if intended.",
+            )
+        directory = guard_root / "worktrees" / runtime_identifier
+        manifest_path = directory / "manifest.json"
+        transaction_path = directory / "transaction.json"
+        environment_path = directory / "env.sh"
+        transaction = transactions.get(runtime_identifier)
+        recovering = transaction is not None and transaction["state"] != "ready"
+        if recovering:
+            assert transaction is not None
+            require_transaction_operation(transaction, "deinit", selection)
+        published = require_transaction_generation(transaction, manifest_path, registry, runtime_identifier)
+        source_manifest = transaction["manifest"] if recovering and transaction is not None else published
+        if source_manifest is None:
+            raise OperationError(
+                "manifest_missing", "worktree manifest", manifest_path, "retained guard state",
+                "The selected identity has no complete retained manifest.",
+                "Restore the original manifest before retrying deinit; absence never releases claims.",
+            )
+        bundle = ResourceBundle.from_dict(source_manifest["resource_bundle"])
+        publisher = TransactionPublisher(adapter, (
+            registry_path, manifest_path, transaction_path, environment_path, identity_path,
+            bundle.engine_configuration, bundle.broker_configuration,
+        ))
+        validated, status = validate(adapter, selection, transaction if recovering else None)
+        if status:
+            if validated.diagnostic is not None:
+                validated = replace(validated, diagnostic=replace(
+                    validated.diagnostic,
+                    next_action=validated.diagnostic.next_action + " Restore consistent evidence, then retry deinit with the original selection; claims remain retained.",
+                ))
+            return replace(validated, command="deinit"), status
+        observations = adapter.inspect_runtime()
+        require_complete_mutation_observation(observations, selection)
+        ownership = classify_live_ownership(adapter, observations, bundle, source_manifest)
+        if ownership.classification != "free":
+            raise ownership_operation_error(observations, runtime_identifier, ownership)
+        generation = (transaction["generation"] if recovering and transaction is not None else
+                      max(require_integer(registry, "generation"),
+                          *(record["generation"] for record in transactions.values()), 0) + 1)
+        manifest = {**source_manifest, "generation": generation, "state": "deinitializing"}
+        if not recovering:
+            transaction = {
+                "schema_version": STATE_SCHEMA_VERSION, "generation": generation,
+                "operation": "deinit", "state": "deinitializing", "manifest": manifest,
+                "predecessor": {"manifest": published, "allocation": allocations.get(runtime_identifier)},
+                "configuration_inputs": {
+                    kind: [source_manifest["configurations"][kind]["sha256"]] * 2
+                    for kind in ("engine", "broker")
+                },
+            }
+        assert transaction is not None
+        transaction["state"] = "deinitializing"
+        transaction["manifest"] = manifest
+        publisher.json("deinit_transaction", transaction_path, transaction)
+        allocations[runtime_identifier] = allocation_record(manifest, "deinitializing")
+        registry["generation"] = max(require_integer(registry, "generation"), generation)
+        publisher.json("deinit_registry", registry_path, registry)
+        publisher.json("deinit_manifest", manifest_path, manifest)
+        if selected_id is not None:
+            with identity_path.open(newline="") as stream:
+                content = stream.read()
+            preserved = "".join(line for line in content.splitlines(keepends=True)
+                                if not re.match(r"\s*(?:export\s+)?CUBRID_WORKTREE_ID\b", line))
+            publisher.text("release_identity", identity_path, preserved, stat.S_IMODE(identity_path.stat().st_mode))
+        publisher.remove("release_environment", environment_path)
+        publisher.remove("release_manifest", manifest_path)
+        del allocations[runtime_identifier]
+        publisher.json("release_allocation", registry_path, registry)
+        # Until this durable final unlink, the journal retains the complete claim.
+        publisher.remove("release_transaction", transaction_path)
+        return deinitialized_result(selection, manifest), 0
+    finally:
+        os.close(descriptor)
+
+
 def render_human(result: ValidationResult) -> str:
+    if result.release_inventory is not None:
+        output = f"Outcome: deinitialized\nWorktree: {result.selection.worktree}\n"
+        if result.worktree_id is not None:
+            output += f"Worktree runtime: {result.worktree_id}\n"
+        for label, key in (("Released metadata", "released"), ("Retained runtime data", "retained")):
+            output += label + ":\n"
+            for item in result.release_inventory[key]:
+                output += f"  {item['kind']}: {item['value']}\n"
+            if not result.release_inventory[key]:
+                output += "  none (identity already absent)\n"
+        output += "Released claims: " + json.dumps(result.release_inventory["released_claims"], sort_keys=True) + "\n"
+        return output
     diagnostic = result.diagnostic
     if diagnostic is None:
         output = (
@@ -5525,7 +5729,7 @@ def parse_arguments() -> argparse.Namespace:
     initialize_parser = subparsers.add_parser("init", help="initialize a worktree runtime")
     validate_parser = subparsers.add_parser("validate", help="validate runtime guard state")
     adopt_parser = subparsers.add_parser("adopt", help="adopt one existing private database")
-    deinit_parser = subparsers.add_parser("deinit", help="reserved; refuses unfinished operations")
+    deinit_parser = subparsers.add_parser("deinit", help="release an idle runtime's guard metadata")
     for command_parser in (initialize_parser, validate_parser, adopt_parser, deinit_parser):
         command_parser.add_argument("--worktree", help="CUBRID Git worktree (default: current worktree)")
         command_parser.add_argument("--preset", help="active build preset (default: PRESET_MODE)")
@@ -5570,7 +5774,7 @@ def main() -> int:
                                      "Select the existing private database; discovery never adopts it.")
             result, exit_status = initialize(adapter, selection, arguments.db_name, Path(arguments.registry))
         else:
-            refuse_unimplemented_mutation(arguments.command, selection)
+            result, exit_status = deinitialize(adapter, selection)
     except OperationError as error:
         result = ValidationResult(
             outcome="invalid",

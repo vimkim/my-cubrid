@@ -69,7 +69,8 @@ class RuntimeGuardCliTest(unittest.TestCase):
         self.calls = self.root / "lifecycle-calls"
         fake_bin = self.root / "bin"
         fake_bin.mkdir()
-        for command in ("cubrid", "cub_master", "cub_server", "broker", "cub_pl"):
+        for command in ("cubrid", "cub_master", "cub_server", "cub_broker", "broker", "cub_pl",
+                        "pkill", "killall", "kill", "ipcrm", "ipcmk", "rm", "rmdir"):
             executable = fake_bin / command
             executable.write_text(
                 "#!/bin/sh\nprintf '%s\\n' \"$0 $*\" >>\"$LIFECYCLE_CALLS\"\n"
@@ -158,6 +159,308 @@ class RuntimeGuardCliTest(unittest.TestCase):
         entry.write_text(f"{name} {roots[0]} localhost {roots[1]} file:{roots[2]}\n")
         entry.chmod(0o600)
         return registry, roots
+
+    def test_deinit_releases_only_guard_metadata_and_is_absent_idempotent(self):
+        unrelated = "# personal settings\r\nPRESET_MODE=debug\r\n\r\nOTHER='keep me'\r\n"
+        (self.worktree / ".env").write_bytes(unrelated.encode())
+        initialized = self.run_runtime("init", "--preset", "debug", "--json")
+        self.assertEqual(initialized.returncode, 0, initialized.stdout + initialized.stderr)
+        manifest = self.manifest_for(initialized)
+        manifest_path = Path(json.loads(initialized.stdout)["manifest_path"])
+        # Preserve the bytes presented to deinit, including CRLF and no final newline.
+        identity = f"export CUBRID_WORKTREE_ID='{manifest['worktree_id']}'\r\n"
+        (self.worktree / ".env").write_bytes((identity + unrelated + "TAIL=value").encode())
+        bundle = manifest["resource_bundle"]
+        retained = [Path(bundle["log_root"]) / "user.log",
+                    Path(bundle["cubrid_tmp"]) / "unrelated-socket-stand-in",
+                    self.installation / "var" / "runtime-data"]
+        for path in retained:
+            path.write_text("must survive\n")
+        installation_before = {str(path): path.read_bytes() for path in self.installation.rglob("*") if path.is_file()}
+        result = self.run_runtime("deinit", "--preset", "debug", "--json")
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        report = json.loads(result.stdout)
+        self.assertEqual(report["outcome"], "deinitialized")
+        self.assertFalse(report["ready"])
+        self.assertEqual(report["worktree_id"], manifest["worktree_id"])
+        self.assertEqual({item["kind"] for item in report["released"]},
+                         {"worktree identity", "worktree manifest", "generated environment",
+                          "allocation registry entry", "guard transaction"})
+        self.assertEqual(report["released_claims"], manifest["normalized_claims"])
+        self.assertTrue(any(item["value"] == bundle["database_registry"] for item in report["retained"]))
+        self.assertEqual((self.worktree / ".env").read_bytes(), (unrelated + "TAIL=value").encode())
+        self.assertFalse(manifest_path.exists())
+        self.assertFalse((manifest_path.parent / "env.sh").exists())
+        self.assertFalse((manifest_path.parent / "transaction.json").exists())
+        registry = self.state_home / "cubrid-worktree-guard" / "allocations.json"
+        self.assertNotIn(manifest["worktree_id"], json.loads(registry.read_text())["allocations"])
+        self.assertEqual(installation_before, {str(path): path.read_bytes() for path in self.installation.rglob("*") if path.is_file()})
+        for path in retained:
+            self.assertEqual(path.read_text(), "must survive\n")
+        before = self.snapshot()
+        again = self.run_runtime("deinit", "--preset", "debug", "--json")
+        self.assertEqual(again.returncode, 0, again.stdout + again.stderr)
+        self.assertEqual(json.loads(again.stdout)["released"], [])
+        self.assertEqual(self.snapshot(), before)
+        self.assertFalse(self.calls.exists())
+
+    def test_deinit_retry_retains_claims_until_the_final_durable_release(self):
+        publications = ("deinit_transaction", "deinit_registry", "deinit_manifest",
+                        "release_identity", "release_environment", "release_manifest",
+                        "release_allocation", "release_transaction")
+        for publication in publications:
+            for when in ("before", "after"):
+                with self.subTest(boundary=f"{when}_{publication}"):
+                    self.setUp()
+                    initial = self.run_runtime("init", "--preset", "debug", "--json")
+                    self.assertEqual(initial.returncode, 0, initial.stdout + initial.stderr)
+                    manifest = self.manifest_for(initial)
+                    transaction_path = Path(json.loads(initial.stdout)["manifest_path"]).parent / "transaction.json"
+                    fixture = json.loads(self.fixture.read_text())
+                    fixture["publication_failure"] = f"{when}_{publication}"
+                    self.fixture.write_text(json.dumps(fixture))
+                    interrupted = self.run_runtime("deinit", "--preset", "debug", "--json")
+                    self.assertEqual(interrupted.returncode, 86, interrupted.stdout + interrupted.stderr)
+                    fixture.pop("publication_failure")
+                    self.fixture.write_text(json.dumps(fixture))
+                    committed = publication == "release_transaction" and when == "after"
+                    if not committed:
+                        retained = json.loads(transaction_path.read_text())
+                        self.assertEqual(retained["manifest"]["normalized_claims"], manifest["normalized_claims"])
+                        self.assertEqual(retained["state"], "ready" if publication == "deinit_transaction" and when == "before" else "deinitializing")
+                    other_worktree, _, other_environment = self.create_additional_runtime("other")
+                    other = self.run_runtime_for(other_worktree, other_environment, "init", "--preset", "debug", "--json")
+                    self.assertEqual(other.returncode, 0, other.stdout + other.stderr)
+                    other_claims = self.manifest_for(other)["normalized_claims"]
+                    for kind in ("tcp_ports", "system_v_keys"):
+                        self.assertEqual(set(other_claims[kind]).isdisjoint(manifest["normalized_claims"][kind]), not committed)
+                    retried = self.run_runtime("deinit", "--preset", "debug", "--json")
+                    self.assertEqual(retried.returncode, 0, retried.stdout + retried.stderr)
+                    self.assertFalse(transaction_path.exists())
+                    third_worktree, _, third_environment = self.create_additional_runtime("third")
+                    third = self.run_runtime_for(third_worktree, third_environment, "init", "--preset", "debug", "--json")
+                    self.assertEqual(third.returncode, 0, third.stdout + third.stderr)
+                    if not committed:
+                        for kind in ("tcp_ports", "system_v_keys"):
+                            self.assertEqual(self.manifest_for(third)["normalized_claims"][kind], manifest["normalized_claims"][kind])
+                    self.assertFalse(self.calls.exists())
+
+    def test_deinit_refuses_live_unknown_and_inconsistent_ownership_without_writes(self):
+        for problem in ("live", "endpoint", "process", "ipc", "socket", "incomplete",
+                        "preset", "configuration", "storage", "installation", "identity-alias"):
+            with self.subTest(problem=problem):
+                self.setUp()
+                initial = self.run_runtime("init", "--preset", "debug", "--json")
+                self.assertEqual(initial.returncode, 0, initial.stdout + initial.stderr)
+                manifest = self.manifest_for(initial)
+                bundle = manifest["resource_bundle"]
+                options = []
+                if problem in ("live", "endpoint"):
+                    process = self.runtime_process(manifest)
+                    self.replace_observations({
+                        "processes": [process] if problem == "live" else [],
+                        "listeners": [{"protocol": "tcp", "address": "0.0.0.0",
+                                       "port": bundle["master_port"], "inode": 7001,
+                                       "namespace": self.observation_scope()["namespaces"]["network"],
+                                       "owner_pid": process["pid"], "owner_start_time": process["start_time"]}],
+                    })
+                elif problem == "process":
+                    self.replace_observations({"processes": [self.runtime_process(manifest)]})
+                elif problem == "ipc":
+                    self.replace_observations({"system_v_ipc": [{"key": bundle["master_shm_key"]}]})
+                elif problem == "socket":
+                    Path(bundle["socket_paths"][0]).write_text("stale socket stand-in\n")
+                elif problem == "incomplete":
+                    self.replace_observations({"complete": False})
+                elif problem == "preset":
+                    options = ["--preset", "release_gcc"]
+                elif problem == "configuration":
+                    config = self.installation / "conf" / "cubrid.conf"
+                    config.write_text(config.read_text().replace("cubrid_port_id=15000", "cubrid_port_id=15042"))
+                elif problem == "storage":
+                    (Path(bundle["database_registry"]) / "databases.txt").write_text("contradictory registry\n")
+                elif problem == "installation":
+                    (self.installation / "bin" / "cub_master").write_text("reinstalled\n")
+                elif problem == "identity-alias":
+                    identity = self.worktree / ".env"
+                    outside = self.root / "outside-env"
+                    identity.rename(outside)
+                    identity.symlink_to(outside)
+                before = self.snapshot()
+                refused = self.run_runtime("deinit", "--preset", "debug", *options, "--json")
+                self.assertNotEqual(refused.returncode, 0, refused.stdout + refused.stderr)
+                report = json.loads(refused.stdout)
+                self.assertEqual(report["command"], "deinit")
+                self.assertIn("diagnostic", report)
+                self.assertEqual(self.snapshot(), before)
+                self.assertFalse(self.calls.exists())
+
+    def test_waiting_deinit_cannot_release_a_replacement_identity(self):
+        initial = self.run_runtime("init", "--preset", "debug", "--json")
+        self.assertEqual(initial.returncode, 0, initial.stdout + initial.stderr)
+        fixture = json.loads(self.fixture.read_text())
+        fixture["publication_pause"] = "before_lock"
+        self.fixture.write_text(json.dumps(fixture))
+        waiting = subprocess.Popen([str(CLI), "deinit", "--preset", "debug", "--json"],
+                                   cwd=self.worktree, env=self.environment,
+                                   text=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+        self.addCleanup(lambda: waiting.communicate(timeout=15))
+        self.wait_for_publication(waiting)
+        fixture.pop("publication_pause")
+        self.fixture.write_text(json.dumps(fixture))
+        removed = self.run_runtime("deinit", "--preset", "debug", "--json")
+        self.assertEqual(removed.returncode, 0, removed.stdout + removed.stderr)
+        replacement = self.run_runtime("init", "--preset", "debug", "--json")
+        self.assertEqual(replacement.returncode, 0, replacement.stdout + replacement.stderr)
+        replacement_manifest = self.manifest_for(replacement)
+        self.fixture.with_suffix(".resume").touch()
+        before = self.snapshot()
+        stdout, stderr = waiting.communicate(timeout=10)
+        self.assertEqual(waiting.returncode, 4, stdout + stderr)
+        self.assertEqual(json.loads(stdout)["diagnostic"]["code"], "transaction_operation_mismatch")
+        self.assertEqual(self.manifest_for(replacement), replacement_manifest)
+        self.assertEqual(self.snapshot(), before)
+
+    def test_deinit_absent_identity_does_not_create_guard_state(self):
+        before = self.snapshot()
+        result = self.run_runtime("deinit", "--preset", "debug", "--json")
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertEqual(json.loads(result.stdout)["released"], [])
+        self.assertEqual(self.snapshot(), before)
+
+    def test_deinit_preserves_adopted_database_and_reports_human_inventory(self):
+        registry, roots = self.adoption_database()
+        adopted = self.run_runtime("adopt", "--preset", "debug", "--db-name", "CBRD-12345",
+                                   "--registry", str(registry), "--json")
+        self.assertEqual(adopted.returncode, 0, adopted.stdout + adopted.stderr)
+        paths = [registry, *roots, self.installation]
+        before = {str(path): path.read_bytes() for root in paths for path in root.rglob("*") if path.is_file()}
+        released = self.run_runtime("deinit", "--preset", "debug")
+        self.assertEqual(released.returncode, 0, released.stdout + released.stderr)
+        self.assertIn("Released metadata:", released.stdout)
+        self.assertIn("Retained runtime data:", released.stdout)
+        self.assertIn("database: CBRD-12345", released.stdout)
+        for path in paths:
+            self.assertIn(str(path), released.stdout)
+        self.assertEqual(before, {str(path): path.read_bytes() for root in paths for path in root.rglob("*") if path.is_file()})
+        self.assertFalse(self.calls.exists())
+
+    def test_deinit_recovery_refuses_changed_command_identity_and_unknown_evidence(self):
+        initial = self.run_runtime("init", "--preset", "debug", "--json")
+        self.assertEqual(initial.returncode, 0, initial.stdout + initial.stderr)
+        path = Path(json.loads(initial.stdout)["manifest_path"]).parent / "transaction.json"
+        fixture = json.loads(self.fixture.read_text())
+        fixture["publication_failure"] = "after_release_allocation"
+        self.fixture.write_text(json.dumps(fixture))
+        interrupted = self.run_runtime("deinit", "--preset", "debug", "--json")
+        self.assertEqual(interrupted.returncode, 86, interrupted.stdout + interrupted.stderr)
+        fixture.pop("publication_failure")
+        self.fixture.write_text(json.dumps(fixture))
+        transaction = json.loads(path.read_text())
+        for command, options in (("init", []), ("adopt", []), ("deinit", ["--preset", "release_gcc"])):
+            before = self.snapshot()
+            result = self.run_runtime(command, "--preset", "debug", *options, "--json")
+            self.assertEqual(result.returncode, 4, result.stdout + result.stderr)
+            self.assertEqual(json.loads(result.stdout)["diagnostic"]["code"], "transaction_operation_mismatch")
+            self.assertEqual(self.snapshot(), before)
+        for problem in ("observation", "configuration", "identity", "generation"):
+            with self.subTest(problem=problem):
+                engine = self.installation / "conf" / "cubrid.conf"
+                original_engine = engine.read_bytes()
+                identity = self.worktree / ".env"
+                original_identity = identity.read_bytes()
+                allocation_path = path.parents[2] / "allocations.json"
+                original_allocation = allocation_path.read_bytes()
+                if problem == "observation":
+                    fixture["observations"]["complete"] = False
+                    self.fixture.write_text(json.dumps(fixture))
+                elif problem == "configuration":
+                    engine.write_bytes(original_engine + b"\n# changed identity\n")
+                elif problem == "identity":
+                    identity.write_text("CUBRID_WORKTREE_ID=replacement\n")
+                else:
+                    allocation = json.loads(original_allocation)
+                    allocation["generation"] += 1
+                    allocation["allocations"][transaction["manifest"]["worktree_id"]] = {
+                        "generation": allocation["generation"], "state": "ready",
+                        "claims": transaction["manifest"]["normalized_claims"],
+                        "worktree_path": str(self.worktree),
+                    }
+                    allocation_path.write_text(json.dumps(allocation))
+                before = self.snapshot()
+                refused = self.run_runtime("deinit", "--preset", "debug", "--json")
+                self.assertEqual(refused.returncode, 4, refused.stdout + refused.stderr)
+                self.assertEqual(json.loads(path.read_text()), transaction)
+                self.assertEqual(self.snapshot(), before)
+                fixture["observations"]["complete"] = True
+                self.fixture.write_text(json.dumps(fixture))
+                engine.write_bytes(original_engine)
+                identity.write_bytes(original_identity)
+                allocation_path.write_bytes(original_allocation)
+        recovered = self.run_runtime("deinit", "--preset", "debug", "--json")
+        self.assertEqual(recovered.returncode, 0, recovered.stdout + recovered.stderr)
+        self.assertEqual(json.loads(allocation_path.read_text())["generation"], transaction["generation"])
+        self.assertFalse(path.exists())
+        self.assertFalse(self.calls.exists())
+
+    def test_concurrent_deinit_retries_release_only_once(self):
+        initial = self.run_runtime("init", "--preset", "debug", "--json")
+        self.assertEqual(initial.returncode, 0, initial.stdout + initial.stderr)
+        fixture = json.loads(self.fixture.read_text())
+        fixture["publication_pause"] = "before_release_identity"
+        self.fixture.write_text(json.dumps(fixture))
+        command = [str(CLI), "deinit", "--preset", "debug", "--json"]
+        first = subprocess.Popen(command, cwd=self.worktree, env=self.environment,
+                                 text=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+        self.addCleanup(lambda: first.communicate(timeout=15))
+        reached = self.wait_for_publication(first)
+        reached.unlink()
+        fixture["publication_pause"] = "before_lock"
+        self.fixture.write_text(json.dumps(fixture))
+        second = subprocess.Popen(command, cwd=self.worktree, env=self.environment,
+                                  text=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+        self.addCleanup(lambda: second.communicate(timeout=15))
+        self.wait_for_publication(second)
+        self.fixture.with_suffix(".resume").touch()
+        reports = []
+        for process in (first, second):
+            stdout, stderr = process.communicate(timeout=10)
+            self.assertEqual(process.returncode, 0, stdout + stderr)
+            reports.append(json.loads(stdout))
+        self.assertEqual(sum(bool(report["released"]) for report in reports), 1)
+        self.assertEqual(json.loads((self.state_home / "cubrid-worktree-guard" / "allocations.json").read_text())["allocations"], {})
+        self.assertFalse(self.calls.exists())
+
+    def test_deinit_stale_writer_cannot_release_changed_generation_or_configuration(self):
+        for target in ("manifest", "identity", "configuration"):
+            with self.subTest(target=target):
+                self.setUp()
+                initial = self.run_runtime("init", "--preset", "debug", "--json")
+                self.assertEqual(initial.returncode, 0, initial.stdout + initial.stderr)
+                fixture = json.loads(self.fixture.read_text())
+                fixture["publication_pause"] = "before_release_identity"
+                self.fixture.write_text(json.dumps(fixture))
+                process = subprocess.Popen([str(CLI), "deinit", "--preset", "debug", "--json"],
+                                           cwd=self.worktree, env=self.environment,
+                                           text=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+                self.addCleanup(lambda: process.communicate(timeout=15))
+                self.wait_for_publication(process)
+                if target == "manifest":
+                    path = Path(json.loads(initial.stdout)["manifest_path"])
+                    changed = json.loads(path.read_text())
+                    changed["generation"] += 1
+                    path.write_text(json.dumps(changed))
+                else:
+                    path = (self.worktree / ".env" if target == "identity" else
+                            self.installation / "conf" / "cubrid.conf")
+                    path.write_text(path.read_text() + "\n# concurrent user edit\n")
+                self.fixture.with_suffix(".resume").touch()
+                before = self.snapshot()
+                stdout, stderr = process.communicate(timeout=10)
+                self.assertEqual(process.returncode, 4, stdout + stderr)
+                self.assertEqual(json.loads(stdout)["diagnostic"]["code"], "transaction_generation_conflict")
+                self.assertEqual(self.snapshot(), before)
+                self.assertFalse(self.calls.exists())
 
     def test_adopt_preserves_name_and_disjoint_storage_without_lifecycle(self):
         registry, roots = self.adoption_database()

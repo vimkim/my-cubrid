@@ -1,0 +1,551 @@
+#!/usr/bin/env python3
+"""Validate a CUBRID worktree runtime without changing host state."""
+
+from __future__ import annotations
+
+import argparse
+from dataclasses import dataclass
+import json
+import os
+from pathlib import Path
+import re
+import stat
+import subprocess
+import sys
+from typing import Literal, Protocol
+
+
+EXIT_UNINITIALIZED = 3
+EXIT_INVALID = 4
+RUNTIME_ID_PATTERN = re.compile(r"[A-Za-z0-9][A-Za-z0-9_-]{0,63}\Z")
+PRESET_PATTERN = re.compile(r"[A-Za-z0-9][A-Za-z0-9_.-]{0,127}\Z")
+
+
+@dataclass(frozen=True)
+class FileObservation:
+    exists: bool
+    kind: str | None = None
+    owner: int | None = None
+    mode: int | None = None
+    content: str | None = None
+
+
+@dataclass(frozen=True)
+class RuntimeObservationSnapshot:
+    complete: bool
+    processes: tuple[dict[str, object], ...]
+    sockets: tuple[dict[str, object], ...]
+    listeners: tuple[dict[str, object], ...]
+    system_v_ipc: tuple[dict[str, object], ...]
+    source: str
+
+
+@dataclass(frozen=True)
+class RuntimeSelection:
+    worktree: Path
+    git_common_dir: Path
+    preset: str
+
+
+@dataclass(frozen=True)
+class AffectedObject:
+    kind: str
+    value: str
+
+
+@dataclass(frozen=True)
+class Diagnostic:
+    code: str
+    affected_object: AffectedObject
+    normalized_value: str
+    source: str
+    evidence_quality: Literal["definitive", "unknown"]
+    message: str
+    next_action: str
+    expected_owner: int | None = None
+    expected_value: str | None = None
+    observed_value: str | None = None
+
+    def to_dict(self) -> dict[str, object]:
+        return {
+            "code": self.code,
+            "affected_object": {
+                "kind": self.affected_object.kind,
+                "value": self.affected_object.value,
+            },
+            "normalized_value": self.normalized_value,
+            "source": self.source,
+            "expected_owner": self.expected_owner,
+            "expected_value": self.expected_value,
+            "observed_value": self.observed_value,
+            "evidence_quality": self.evidence_quality,
+            "message": self.message,
+            "next_action": self.next_action,
+        }
+
+
+@dataclass(frozen=True)
+class ValidationResult:
+    outcome: Literal["uninitialized", "invalid"]
+    selection: RuntimeSelection
+    diagnostic: Diagnostic
+
+    def to_dict(self) -> dict[str, object]:
+        return {
+            "schema_version": 1,
+            "command": "validate",
+            "outcome": self.outcome,
+            "ready": False,
+            "worktree": os.fspath(self.selection.worktree),
+            "preset": self.selection.preset,
+            "diagnostic": self.diagnostic.to_dict(),
+        }
+
+
+class ObservationAdapter(Protocol):
+    def inspect_file(self, path: Path) -> FileObservation:
+        pass
+
+    def inspect_runtime(self) -> RuntimeObservationSnapshot:
+        pass
+
+
+class LinuxObservationAdapter:
+    """Read the filesystem without changing it."""
+
+    def inspect_file(self, path: Path) -> FileObservation:
+        try:
+            metadata = path.lstat()
+        except FileNotFoundError:
+            return FileObservation(exists=False)
+        if stat.S_ISREG(metadata.st_mode):
+            kind = "file"
+        elif stat.S_ISDIR(metadata.st_mode):
+            kind = "directory"
+        elif stat.S_ISLNK(metadata.st_mode):
+            kind = "symlink"
+        else:
+            kind = "other"
+        content = None
+        if kind == "file":
+            try:
+                content = path.read_text()
+            except (OSError, UnicodeError):
+                content = None
+        return FileObservation(
+            exists=True,
+            kind=kind,
+            owner=metadata.st_uid,
+            mode=stat.S_IMODE(metadata.st_mode),
+            content=content,
+        )
+
+    def inspect_runtime(self) -> RuntimeObservationSnapshot:
+        return RuntimeObservationSnapshot(
+            complete=False,
+            processes=(),
+            sockets=(),
+            listeners=(),
+            system_v_ipc=(),
+            source="Linux observation adapter",
+        )
+
+
+class FakeObservationAdapter:
+    """Supply deterministic test observations at the same internal seam."""
+
+    def __init__(self, fixture_path: Path):
+        fixture = json.loads(fixture_path.read_text())
+        self.filesystem = fixture["filesystem"]
+        observations = fixture["observations"]
+        if type(observations["complete"]) is not bool:
+            raise ValueError("fake observation completeness must be Boolean")
+        observation_lists = (
+            observations["processes"],
+            observations["sockets"],
+            observations["listeners"],
+            observations["system_v_ipc"],
+        )
+        if any(not isinstance(items, list) for items in observation_lists):
+            raise ValueError("fake runtime observations must be lists")
+        self.runtime_snapshot = RuntimeObservationSnapshot(
+            complete=observations["complete"],
+            processes=tuple(observations["processes"]),
+            sockets=tuple(observations["sockets"]),
+            listeners=tuple(observations["listeners"]),
+            system_v_ipc=tuple(observations["system_v_ipc"]),
+            source="fake observation fixture",
+        )
+
+    def inspect_file(self, path: Path) -> FileObservation:
+        record = self.filesystem.get(os.fspath(path))
+        if record is None:
+            return FileObservation(exists=False)
+        if record.get("type") == "missing":
+            return FileObservation(exists=False)
+        return FileObservation(
+            exists=True,
+            kind=record["type"],
+            owner=record.get("owner"),
+            mode=int(record["mode"], 8),
+            content=record.get("content"),
+        )
+
+    def inspect_runtime(self) -> RuntimeObservationSnapshot:
+        return self.runtime_snapshot
+
+
+def observation_adapter() -> ObservationAdapter:
+    fixture = os.environ.get("MY_CUBRID_RUNTIME_TEST_OBSERVATIONS")
+    if fixture:
+        return FakeObservationAdapter(Path(fixture))
+    if not sys.platform.startswith("linux"):
+        raise ValueError("runtime validation is supported only on Linux")
+    return LinuxObservationAdapter()
+
+
+class WorktreeIdentityError(ValueError):
+    pass
+
+
+def resolve_worktree(selected: str | None) -> Path:
+    candidate = Path(selected or os.getcwd())
+    try:
+        result = subprocess.run(
+            ["git", "-C", os.fspath(candidate), "rev-parse", "--show-toplevel"],
+            check=True,
+            capture_output=True,
+            text=True,
+        )
+    except (OSError, subprocess.CalledProcessError) as error:
+        raise ValueError(f"not a CUBRID Git worktree: {candidate}") from error
+    worktree = Path(result.stdout.strip()).resolve(strict=True)
+    required_files = ("CMakeLists.txt", "VERSION")
+    required_directories = ("src", "broker", "pl_engine")
+    if (
+        any(not (worktree / name).is_file() for name in required_files)
+        or any(not (worktree / name).is_dir() for name in required_directories)
+    ):
+        raise ValueError(f"not a CUBRID Git worktree: {candidate}")
+    return worktree
+
+
+def resolve_git_common_dir(worktree: Path) -> Path:
+    result = subprocess.run(
+        ["git", "-C", os.fspath(worktree), "rev-parse", "--git-common-dir"],
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+    common_directory = Path(result.stdout.strip())
+    if not common_directory.is_absolute():
+        common_directory = worktree / common_directory
+    return common_directory.resolve(strict=True)
+
+
+def uninitialized_result(selection: RuntimeSelection) -> ValidationResult:
+    worktree = os.fspath(selection.worktree)
+    return ValidationResult(
+        outcome="uninitialized",
+        selection=selection,
+        diagnostic=Diagnostic(
+            code="runtime_uninitialized",
+            affected_object=AffectedObject("worktree runtime", worktree),
+            normalized_value=worktree,
+            source="selected Git worktree",
+            evidence_quality="definitive",
+            message="No worktree runtime manifest exists.",
+            next_action=(
+                "Keep this worktree build-only; do not run CUBRID services until its "
+                "runtime guard has been initialized."
+            ),
+        ),
+    )
+
+
+def invalid_result(
+    selection: RuntimeSelection,
+    affected_path: str | Path,
+    code: str,
+    message: str,
+    evidence_quality: Literal["definitive", "unknown"] = "definitive",
+    affected_kind: str = "worktree manifest",
+    source: str = "guard state",
+    next_action: str = "inspect or restore the manifest, then retry validation",
+    normalized_value: str | None = None,
+    expected_owner: int | None = None,
+    expected_value: str | None = None,
+    observed_value: str | None = None,
+) -> ValidationResult:
+    affected_value = os.fspath(affected_path)
+    return ValidationResult(
+        outcome="invalid",
+        selection=selection,
+        diagnostic=Diagnostic(
+            code=code,
+            affected_object=AffectedObject(affected_kind, affected_value),
+            normalized_value=(
+                affected_value if normalized_value is None else normalized_value
+            ),
+            source=source,
+            expected_owner=expected_owner,
+            expected_value=expected_value,
+            observed_value=observed_value,
+            evidence_quality=evidence_quality,
+            message=message,
+            next_action=next_action,
+        ),
+    )
+
+
+def runtime_id(adapter: ObservationAdapter, worktree: Path) -> str | None:
+    environment_path = worktree / ".env"
+    environment_file = adapter.inspect_file(environment_path)
+    if not environment_file.exists:
+        return None
+    if environment_file.kind != "file" or environment_file.content is None:
+        raise WorktreeIdentityError("Worktree environment is not a readable regular file.")
+    values = []
+    for line in environment_file.content.splitlines():
+        if not re.match(r"\s*(?:export\s+)?CUBRID_WORKTREE_ID\b", line):
+            continue
+        match = re.fullmatch(r"\s*(?:export\s+)?CUBRID_WORKTREE_ID\s*=\s*([^\s#]+)\s*", line)
+        if not match:
+            raise WorktreeIdentityError("CUBRID_WORKTREE_ID has invalid assignment syntax.")
+        encoded_value = match.group(1)
+        if encoded_value[:1] in ("'", '"'):
+            if encoded_value[-1:] != encoded_value[0] or len(encoded_value) < 2:
+                raise WorktreeIdentityError("CUBRID_WORKTREE_ID has invalid quoting.")
+            encoded_value = encoded_value[1:-1]
+        values.append(encoded_value)
+    if not values:
+        return None
+    if len(values) != 1:
+        raise WorktreeIdentityError("CUBRID_WORKTREE_ID must appear exactly once.")
+    if not RUNTIME_ID_PATTERN.fullmatch(values[0]):
+        raise WorktreeIdentityError("CUBRID_WORKTREE_ID has an invalid value.")
+    return values[0]
+
+
+def validate(
+    adapter: ObservationAdapter,
+    selection: RuntimeSelection,
+) -> tuple[ValidationResult, int]:
+    worktree = selection.worktree
+    try:
+        selected_runtime_id = runtime_id(adapter, worktree)
+    except WorktreeIdentityError as error:
+        return invalid_result(
+            selection, worktree / ".env", "worktree_identity_invalid",
+            str(error), affected_kind="worktree environment",
+            source="worktree selection",
+            next_action=(
+                "Keep exactly one valid CUBRID_WORKTREE_ID in .env, "
+                "then retry validation"
+            ),
+        ), EXIT_INVALID
+    if selected_runtime_id is None:
+        return uninitialized_result(selection), EXIT_UNINITIALIZED
+    state_home = Path(
+        os.environ.get("XDG_STATE_HOME", Path.home() / ".local" / "state")
+    )
+    manifest_path = (
+        state_home
+        / "cubrid-worktree-guard"
+        / "worktrees"
+        / selected_runtime_id
+        / "manifest.json"
+    )
+    manifest = adapter.inspect_file(manifest_path)
+    if not manifest.exists:
+        return uninitialized_result(selection), EXIT_UNINITIALIZED
+
+    def reject_manifest(
+        code: str,
+        message: str,
+        evidence_quality: Literal["definitive", "unknown"] = "definitive",
+    ) -> tuple[ValidationResult, int]:
+        return invalid_result(
+            selection,
+            manifest_path,
+            code,
+            message,
+            evidence_quality,
+            expected_owner=os.geteuid(),
+        ), EXIT_INVALID
+
+    if manifest.kind != "file":
+        return reject_manifest(
+            "manifest_wrong_type", f"Manifest must be a regular file, not {manifest.kind}."
+        )
+    if manifest.owner != os.geteuid():
+        return reject_manifest(
+            "manifest_wrong_owner",
+            f"Manifest owner is {manifest.owner}; expected {os.geteuid()}.",
+        )
+    if manifest.mode != 0o600:
+        actual_mode = "unknown" if manifest.mode is None else f"{manifest.mode:04o}"
+        return reject_manifest(
+            "manifest_wrong_mode", f"Manifest mode is {actual_mode}; expected 0600."
+        )
+    if manifest.content is None:
+        return reject_manifest("manifest_unreadable", "Manifest could not be read.", "unknown")
+    try:
+        document = json.loads(manifest.content)
+    except (json.JSONDecodeError, UnicodeError):
+        return reject_manifest("manifest_malformed", "Manifest is not valid JSON.")
+    if not isinstance(document, dict):
+        return reject_manifest("manifest_malformed", "Manifest root must be a JSON object.")
+    version = document.get("schema_version")
+    if type(version) is not int:
+        return reject_manifest(
+            "manifest_malformed", "Manifest schema_version must be an integer."
+        )
+    if version != 1:
+        return reject_manifest(
+            "manifest_unsupported_version",
+            f"Manifest schema version {version} is unsupported; expected version 1.",
+        )
+    required_types = {
+        "generation": int,
+        "state": str,
+        "worktree_id": str,
+        "worktree_path": str,
+        "git_common_dir": str,
+        "active_preset": str,
+        "resource_bundle": dict,
+    }
+    if any(type(document.get(field)) is not expected for field, expected in required_types.items()):
+        return reject_manifest(
+            "manifest_malformed",
+            "Manifest is missing required state fields or contains fields of the wrong type.",
+        )
+    if document["generation"] < 1:
+        return reject_manifest(
+            "manifest_malformed", "Manifest generation must be a positive integer."
+        )
+    comparisons = (
+        (
+            document["worktree_id"], selected_runtime_id, "worktree ID",
+            "worktree identity", "worktree manifest worktree_id",
+            "Make .env and the manifest select the same CUBRID_WORKTREE_ID, then retry.",
+        ),
+        (
+            document["worktree_path"], os.fspath(worktree), "worktree path",
+            "worktree path", "worktree manifest worktree_path",
+            "Use the manifest from this canonical worktree path, then retry.",
+        ),
+        (
+            document["git_common_dir"], os.fspath(selection.git_common_dir),
+            "Git common directory", "Git common directory",
+            "worktree manifest git_common_dir",
+            "Restore the manifest associated with this Git worktree, then retry.",
+        ),
+        (
+            document["active_preset"], selection.preset, "active preset",
+            "active preset", "worktree manifest active_preset",
+            "Select the manifest's active preset or keep the worktree build-only.",
+        ),
+    )
+    for actual, expected, label, kind, source, next_action in comparisons:
+        if actual != expected:
+            return invalid_result(
+                selection, actual, "manifest_inconsistent",
+                f"Manifest {label} does not match the selected worktree runtime.",
+                affected_kind=kind,
+                source=source,
+                next_action=next_action,
+                normalized_value=actual,
+                expected_value=expected,
+                observed_value=actual,
+            ), EXIT_INVALID
+    if document["state"] != "ready":
+        return reject_manifest("manifest_not_ready", "Manifest transaction state is not ready.")
+    if not document["resource_bundle"]:
+        return reject_manifest(
+            "manifest_incomplete",
+            "Manifest does not contain a complete resource bundle.",
+        )
+    runtime_observations = adapter.inspect_runtime()
+    if not runtime_observations.complete:
+        return invalid_result(
+            selection,
+            os.fspath(worktree),
+            "observation_incomplete",
+            "Runtime process, socket, listener, or System V IPC evidence is incomplete.",
+            "unknown",
+            affected_kind="runtime observation snapshot",
+            source=runtime_observations.source,
+            next_action="Retry validation when every runtime observation source is readable.",
+        ), EXIT_INVALID
+    return reject_manifest(
+        "manifest_incomplete",
+        "Manifest resource validation is not available in this guard version.",
+    )
+
+
+def render_human(result: ValidationResult) -> str:
+    diagnostic = result.diagnostic
+    affected = diagnostic.affected_object
+    lines = [
+        f"Outcome: {result.outcome}",
+        f"Affected {affected.kind}: {affected.value}",
+        f"Normalized value: {diagnostic.normalized_value}",
+        f"Source: {diagnostic.source}",
+    ]
+    if diagnostic.expected_owner is not None:
+        lines.append(f"Expected owner: {diagnostic.expected_owner}")
+    if diagnostic.observed_value is not None:
+        lines.append(f"Observed value: {diagnostic.observed_value}")
+    if diagnostic.expected_value is not None:
+        lines.append(f"Expected value: {diagnostic.expected_value}")
+    lines.extend((
+        f"Evidence quality: {diagnostic.evidence_quality}",
+        f"Details: {diagnostic.message}",
+        f"Next action: {diagnostic.next_action}",
+    ))
+    return "\n".join(lines) + "\n"
+
+
+def parse_arguments() -> argparse.Namespace:
+    parser = argparse.ArgumentParser(prog="my-cubrid-runtime")
+    subparsers = parser.add_subparsers(dest="command", required=True)
+    validate = subparsers.add_parser("validate", help="validate runtime guard state")
+    validate.add_argument("--worktree", help="CUBRID Git worktree (default: current worktree)")
+    validate.add_argument("--preset", help="active build preset (default: PRESET_MODE)")
+    validate.add_argument("--json", action="store_true", help="emit structured diagnostics")
+    return parser.parse_args()
+
+
+def main() -> int:
+    arguments = parse_arguments()
+    try:
+        worktree = resolve_worktree(arguments.worktree)
+        git_common_dir = resolve_git_common_dir(worktree)
+    except (OSError, subprocess.CalledProcessError, ValueError) as error:
+        print(f"my-cubrid-runtime: {error}", file=sys.stderr)
+        return 2
+    preset = arguments.preset or os.environ.get("PRESET_MODE")
+    if not preset:
+        print("my-cubrid-runtime: --preset or PRESET_MODE is required", file=sys.stderr)
+        return 2
+    if not PRESET_PATTERN.fullmatch(preset):
+        print("my-cubrid-runtime: preset has an invalid value", file=sys.stderr)
+        return 2
+    selection = RuntimeSelection(worktree, git_common_dir, preset)
+
+    try:
+        adapter = observation_adapter()
+        result, exit_status = validate(adapter, selection)
+    except (KeyError, TypeError, ValueError, OSError, json.JSONDecodeError) as error:
+        print(f"my-cubrid-runtime: cannot load observation input: {error}", file=sys.stderr)
+        return 2
+    if arguments.json:
+        print(json.dumps(result.to_dict(), sort_keys=True))
+    else:
+        print(render_human(result), end="")
+    return exit_status
+
+
+if __name__ == "__main__":
+    sys.exit(main())

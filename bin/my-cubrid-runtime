@@ -13,10 +13,13 @@ import os
 from pathlib import Path
 import re
 import shlex
+import socket
 import stat
+import struct
 import subprocess
 import sys
 import tempfile
+import time
 from typing import Literal, Protocol
 import uuid
 
@@ -52,16 +55,27 @@ REQUIRED_EXECUTABLE_NAMES = (
     "cub_broker",
     "cub_pl",
 )
+NETLINK_SOCK_DIAG = 4
+SOCK_DIAG_BY_FAMILY = 20
+UNIX_DIAG_SHOW_NAME_AND_VFS = 0x00000003
+UNIX_DIAG_NAME = 0
+UNIX_DIAG_VFS = 1
+NETLINK_REQUEST_DUMP = 0x00000301
+NETLINK_DONE = 3
+NETLINK_ERROR = 2
 
 
 @dataclass(frozen=True)
 class FileObservation:
     exists: bool
+    accessible: bool = True
     kind: str | None = None
     owner: int | None = None
     mode: int | None = None
     content: str | None = None
     canonical: bool | None = None
+    device: int | None = None
+    inode: int | None = None
 
 
 @dataclass(frozen=True)
@@ -72,6 +86,7 @@ class RuntimeObservationSnapshot:
     listeners: tuple[dict[str, object], ...]
     system_v_ipc: tuple[dict[str, object], ...]
     source: str
+    scope: dict[str, object]
 
 
 @dataclass(frozen=True)
@@ -322,9 +337,13 @@ class Diagnostic:
     evidence_quality: Literal["definitive", "unknown"]
     message: str
     next_action: str
-    expected_owner: int | None = None
+    expected_owner: int | str | None = None
+    observed_owner: int | str | None = None
     expected_value: str | None = None
     observed_value: str | None = None
+    evidence: tuple[str, ...] = ()
+    missing_evidence: tuple[str, ...] = ()
+    observation_scope: dict[str, object] | None = None
 
     def to_dict(self) -> dict[str, object]:
         return {
@@ -336,9 +355,13 @@ class Diagnostic:
             "normalized_value": self.normalized_value,
             "source": self.source,
             "expected_owner": self.expected_owner,
+            "observed_owner": self.observed_owner,
             "expected_value": self.expected_value,
             "observed_value": self.observed_value,
             "evidence_quality": self.evidence_quality,
+            "evidence": list(self.evidence),
+            "missing_evidence": list(self.missing_evidence),
+            "observation_scope": self.observation_scope,
             "message": self.message,
             "next_action": self.next_action,
         }
@@ -353,6 +376,7 @@ class ValidationResult:
     worktree_id: str | None = None
     manifest_path: str | None = None
     environment_path: str | None = None
+    live_ownership: dict[str, object] | None = None
 
     def to_dict(self) -> dict[str, object]:
         result: dict[str, object] = {
@@ -374,6 +398,8 @@ class ValidationResult:
             result["kernel_acquisition_can_race"] = True
         if self.diagnostic is not None:
             result["diagnostic"] = self.diagnostic.to_dict()
+        if self.live_ownership is not None:
+            result["live_ownership"] = self.live_ownership
         return result
 
 
@@ -393,12 +419,16 @@ class LinuxObservationAdapter:
             metadata = path.lstat()
         except FileNotFoundError:
             return FileObservation(exists=False)
+        except OSError:
+            return FileObservation(exists=True, accessible=False)
         if stat.S_ISREG(metadata.st_mode):
             kind = "file"
         elif stat.S_ISDIR(metadata.st_mode):
             kind = "directory"
         elif stat.S_ISLNK(metadata.st_mode):
             kind = "symlink"
+        elif stat.S_ISSOCK(metadata.st_mode):
+            kind = "socket"
         else:
             kind = "other"
         content = None
@@ -414,17 +444,490 @@ class LinuxObservationAdapter:
             mode=stat.S_IMODE(metadata.st_mode),
             content=content,
             canonical=is_canonical_existing_path(path),
+            device=metadata.st_dev,
+            inode=metadata.st_ino,
         )
 
     def inspect_runtime(self) -> RuntimeObservationSnapshot:
-        return RuntimeObservationSnapshot(
-            complete=False,
-            processes=(),
-            sockets=(),
-            listeners=(),
-            system_v_ipc=(),
-            source="Linux observation adapter",
+        namespace_files = {
+            "pid": "pid",
+            "network": "net",
+            "ipc": "ipc",
+            "mount": "mnt",
+        }
+        namespaces: dict[str, str] = {}
+        sources: dict[str, str] = {}
+        for label, filename in namespace_files.items():
+            try:
+                namespaces[label] = os.readlink(f"/proc/self/ns/{filename}")
+                sources[f"namespace:{label}"] = "complete"
+            except OSError:
+                sources[f"namespace:{label}"] = "inaccessible"
+        try:
+            boot_id = Path("/proc/sys/kernel/random/boot_id").read_text().strip()
+            sources["boot_id"] = "complete"
+        except (OSError, UnicodeError):
+            boot_id = None
+            sources["boot_id"] = "inaccessible"
+        processes, inaccessible = self._inspect_processes()
+        process_complete = inaccessible != [-1]
+        sources["processes"] = "complete" if process_complete else "inaccessible"
+        listeners, tcp_complete = self._inspect_tcp(
+            namespaces.get("network"), processes
         )
+        sockets, unix_complete = self._inspect_unix(namespaces, processes)
+        segments, ipc_complete = self._inspect_ipc(
+            namespaces.get("ipc"), processes
+        )
+        sources.update({
+            "listeners": "complete" if tcp_complete else "inaccessible",
+            "sockets": "complete" if unix_complete else "inaccessible",
+            "system_v_ipc": "complete" if ipc_complete else "inaccessible",
+            "filesystem": "complete",
+            "configuration": "per-process when readable",
+        })
+        scope: dict[str, object] = {
+            "observer": "linux-procfs",
+            "captured_at_ns": time.time_ns(),
+            "uid": os.geteuid(),
+            "boot_id": boot_id,
+            "namespaces": namespaces,
+            "sources": sources,
+            "inaccessible_processes": inaccessible,
+        }
+        return RuntimeObservationSnapshot(
+            complete=(
+                len(namespaces) == len(namespace_files)
+                and boot_id is not None
+                and process_complete
+                and tcp_complete
+                and unix_complete
+                and ipc_complete
+            ),
+            processes=tuple(processes),
+            sockets=tuple(sockets),
+            listeners=tuple(listeners),
+            system_v_ipc=tuple(segments),
+            source="Linux /proc read-only observation",
+            scope=scope,
+        )
+
+    @staticmethod
+    def _start_time(content: str) -> int:
+        closing = content.rfind(")")
+        return int(content[closing + 2 :].split()[19])
+
+    @staticmethod
+    def _configuration(
+        environment: dict[str, str],
+        process_start_wall_ns: int,
+        command_line: list[str],
+    ) -> dict[str, object]:
+        installation = environment.get("CUBRID")
+        if not installation:
+            return {}
+        root = Path(installation)
+        engine = Path(environment.get("CUBRID_CONF_FILE", root / "conf" / "cubrid.conf"))
+        broker = Path(environment.get("CUBRID_BROKER_CONF_FILE", root / "conf" / "cubrid_broker.conf"))
+        result: dict[str, object] = {
+            "installation_root": installation,
+            "cubrid_tmp": environment.get("CUBRID_TMP"),
+            "database_registry": environment.get("CUBRID_DATABASES"),
+            "active_preset": environment.get("PRESET_MODE"),
+            "engine_configuration": os.fspath(engine),
+            "broker_configuration": os.fspath(broker),
+            "process_start_wall_ns": process_start_wall_ns,
+            "command_line": command_line,
+        }
+        unchanged_since_launch = True
+        for field, path in (
+            ("engine_configuration_sha256", engine),
+            ("broker_configuration_sha256", broker),
+        ):
+            try:
+                result[field] = file_hash(path)
+                if path.stat().st_mtime_ns > process_start_wall_ns:
+                    unchanged_since_launch = False
+            except OSError:
+                result[field] = None
+                unchanged_since_launch = False
+        selected_configuration_paths = {os.fspath(engine), os.fspath(broker)}
+        explicit_configuration_paths = {
+            argument
+            for argument in command_line
+            if argument.endswith(".conf")
+        }
+        if explicit_configuration_paths - selected_configuration_paths:
+            unchanged_since_launch = False
+        result["evidence"] = (
+            "launch-correlated"
+            if unchanged_since_launch
+            else "current-files-only"
+        )
+        return result
+
+    def _inspect_processes(self) -> tuple[list[dict[str, object]], list[int]]:
+        processes: list[dict[str, object]] = []
+        inaccessible: list[int] = []
+        try:
+            entries = list(Path("/proc").iterdir())
+            boot_time_seconds = int(next(
+                line.split()[1]
+                for line in Path("/proc/stat").read_text().splitlines()
+                if line.startswith("btime ")
+            ))
+            clock_ticks = os.sysconf("SC_CLK_TCK")
+        except (OSError, StopIteration, ValueError):
+            return processes, [-1]
+        for entry in entries:
+            if not entry.name.isdigit():
+                continue
+            pid = int(entry.name)
+            try:
+                status = (entry / "status").read_text()
+                uid = int(next(
+                    line for line in status.splitlines() if line.startswith("Uid:")
+                ).split()[1])
+                if uid != os.geteuid():
+                    continue
+            except (OSError, UnicodeError, StopIteration, ValueError):
+                inaccessible.append(pid)
+                continue
+            record: dict[str, object] = {"pid": pid, "accessible": True}
+            try:
+                record["name"] = (entry / "comm").read_text().strip()
+                start_time = self._start_time((entry / "stat").read_text())
+                record["start_time"] = start_time
+                record["executable"] = os.readlink(entry / "exe")
+                command_line = [
+                    os.fsdecode(argument)
+                    for argument in (entry / "cmdline").read_bytes().split(b"\0")
+                    if argument
+                ]
+                environment: dict[str, str] = {}
+                for assignment in (entry / "environ").read_bytes().split(b"\0"):
+                    if b"=" in assignment:
+                        key, value = assignment.split(b"=", 1)
+                        environment[os.fsdecode(key)] = os.fsdecode(value)
+                process_start_wall_ns = (
+                    boot_time_seconds * 1_000_000_000
+                    + start_time * 1_000_000_000 // clock_ticks
+                )
+                record["start_wall_ns"] = process_start_wall_ns
+                record["configuration"] = self._configuration(
+                    environment, process_start_wall_ns, command_line
+                )
+                if environment.get("CUBRID_WORKTREE_ID"):
+                    record["managed_runtime_id"] = environment["CUBRID_WORKTREE_ID"]
+                library_root = (
+                    Path(environment["CUBRID"]) / "lib"
+                    if environment.get("CUBRID")
+                    else None
+                )
+                libraries: set[str] = set()
+                loaded_files: set[str] = set()
+                deleted_libraries: set[str] = set()
+                system_v_keys: set[int] = set()
+                for line in (entry / "maps").read_text().splitlines():
+                    fields = line.split()
+                    mapped_text = " ".join(fields[5:]) if len(fields) > 5 else ""
+                    system_v_match = re.fullmatch(
+                        r"/SYSV([0-9a-fA-F]{8})(?: \(deleted\))?",
+                        mapped_text,
+                    )
+                    if system_v_match:
+                        system_v_keys.add(int(system_v_match.group(1), 16))
+                    if mapped_text.startswith("/") and not system_v_match:
+                        deleted = mapped_text.endswith(" (deleted)")
+                        mapped = Path(mapped_text.removesuffix(" (deleted)"))
+                        loaded_files.add(os.fspath(mapped))
+                        if library_root is not None and (
+                            mapped == library_root or library_root in mapped.parents
+                        ):
+                            libraries.add(os.fspath(mapped))
+                            if deleted:
+                                deleted_libraries.add(os.fspath(mapped))
+                record["libraries"] = sorted(libraries)
+                record["loaded_files"] = sorted(loaded_files)
+                record["deleted_libraries"] = sorted(deleted_libraries)
+                record["system_v_keys"] = sorted(system_v_keys)
+                record["namespaces"] = {
+                    label: os.readlink(entry / "ns" / filename)
+                    for label, filename in (
+                        ("pid", "pid"), ("network", "net"),
+                        ("ipc", "ipc"), ("mount", "mnt"),
+                    )
+                }
+                descriptors: list[dict[str, object]] = []
+                for descriptor in (entry / "fd").iterdir():
+                    try:
+                        target = os.readlink(descriptor)
+                    except OSError:
+                        continue
+                    match = re.fullmatch(r"socket:\[(\d+)\]", target)
+                    if match:
+                        descriptors.append({
+                            "fd": int(descriptor.name),
+                            "socket_inode": int(match.group(1)),
+                        })
+                record["fds"] = descriptors
+            except (OSError, UnicodeError, ValueError):
+                record["accessible"] = False
+                inaccessible.append(pid)
+            processes.append(record)
+        return processes, sorted(set(inaccessible))
+
+    @staticmethod
+    def _owners(inode: int, processes: list[dict[str, object]]) -> list[dict[str, object]]:
+        return [process for process in processes if process_owns_socket_inode(process, inode)]
+
+    def _inspect_tcp(
+        self, namespace: str | None, processes: list[dict[str, object]]
+    ) -> tuple[list[dict[str, object]], bool]:
+        listeners: list[dict[str, object]] = []
+        complete = True
+        for path, family in ((Path("/proc/net/tcp"), socket.AF_INET), (Path("/proc/net/tcp6"), socket.AF_INET6)):
+            try:
+                lines = path.read_text().splitlines()[1:]
+            except (OSError, UnicodeError):
+                complete = False
+                continue
+            for line in lines:
+                fields = line.split()
+                if len(fields) < 10 or fields[3] != "0A":
+                    continue
+                encoded_address, encoded_port = fields[1].split(":")
+                if family == socket.AF_INET:
+                    packed = bytes.fromhex(encoded_address)[::-1]
+                else:
+                    packed = b"".join(
+                        bytes.fromhex(encoded_address[index:index + 8])[::-1]
+                        for index in range(0, 32, 8)
+                    )
+                inode = int(fields[9])
+                owners = self._owners(inode, processes)
+                record: dict[str, object] = {
+                    "protocol": "tcp",
+                    "address": socket.inet_ntop(family, packed),
+                    "port": int(encoded_port, 16),
+                    "inode": inode,
+                    "namespace": namespace,
+                }
+                if len(owners) == 1:
+                    record["owner_pid"] = owners[0].get("pid")
+                    record["owner_start_time"] = owners[0].get("start_time")
+                listeners.append(record)
+        return listeners, complete
+
+    @staticmethod
+    def _unix_table() -> tuple[list[tuple[int, Path]], bool]:
+        try:
+            lines = Path("/proc/net/unix").read_text().splitlines()[1:]
+        except (OSError, UnicodeError):
+            return [], False
+        rows: list[tuple[int, Path]] = []
+        complete = True
+        for line in lines:
+            fields = line.split(maxsplit=7)
+            if len(fields) < 8 or not fields[7].startswith("/"):
+                continue
+            try:
+                rows.append((int(fields[6]), Path(fields[7])))
+            except ValueError:
+                complete = False
+        return rows, complete
+
+    @staticmethod
+    def _unix_vfs_identities() -> tuple[dict[int, tuple[str, int, int]], bool]:
+        sequence = time.time_ns() & 0xFFFFFFFF
+        request_body = struct.pack(
+            "=BBHIIIII",
+            socket.AF_UNIX,
+            0,
+            0,
+            0xFFFFFFFF,
+            0,
+            UNIX_DIAG_SHOW_NAME_AND_VFS,
+            0xFFFFFFFF,
+            0xFFFFFFFF,
+        )
+        request = struct.pack(
+            "=IHHII",
+            16 + len(request_body),
+            SOCK_DIAG_BY_FAMILY,
+            NETLINK_REQUEST_DUMP,
+            sequence,
+            0,
+        ) + request_body
+        identities: dict[int, tuple[str, int, int]] = {}
+        try:
+            with socket.socket(
+                socket.AF_NETLINK, socket.SOCK_RAW, NETLINK_SOCK_DIAG
+            ) as diagnostic_socket:
+                diagnostic_socket.settimeout(1.0)
+                diagnostic_socket.sendto(request, (0, 0))
+                while True:
+                    packet = diagnostic_socket.recv(1024 * 1024)
+                    offset = 0
+                    while offset + 16 <= len(packet):
+                        length, message_type, _, response_sequence, _ = struct.unpack_from(
+                            "=IHHII", packet, offset
+                        )
+                        if length < 16 or offset + length > len(packet):
+                            return {}, False
+                        if response_sequence != sequence:
+                            offset += (length + 3) & ~3
+                            continue
+                        if message_type == NETLINK_DONE:
+                            return identities, True
+                        if message_type == NETLINK_ERROR:
+                            return {}, False
+                        if message_type != SOCK_DIAG_BY_FAMILY or length < 32:
+                            offset += (length + 3) & ~3
+                            continue
+                        _, _, _, _, inode, _, _ = struct.unpack_from(
+                            "=BBBBIII", packet, offset + 16
+                        )
+                        name: str | None = None
+                        vfs_identity: tuple[int, int] | None = None
+                        attribute_offset = offset + 32
+                        while attribute_offset + 4 <= offset + length:
+                            attribute_length, attribute_type = struct.unpack_from(
+                                "=HH", packet, attribute_offset
+                            )
+                            if (
+                                attribute_length < 4
+                                or attribute_offset + attribute_length > offset + length
+                            ):
+                                return {}, False
+                            payload_offset = attribute_offset + 4
+                            payload_length = attribute_length - 4
+                            if attribute_type == UNIX_DIAG_NAME:
+                                raw_name = packet[
+                                    payload_offset : payload_offset + payload_length
+                                ].rstrip(b"\0")
+                                if raw_name.startswith(b"/"):
+                                    name = os.fsdecode(raw_name)
+                            elif attribute_type == UNIX_DIAG_VFS and payload_length >= 8:
+                                vfs_inode, encoded_device = struct.unpack_from(
+                                    "=II", packet, payload_offset
+                                )
+                                device_major = encoded_device >> 20
+                                device_minor = encoded_device & ((1 << 20) - 1)
+                                vfs_identity = (
+                                    os.makedev(device_major, device_minor),
+                                    vfs_inode,
+                                )
+                            attribute_offset += (attribute_length + 3) & ~3
+                        if name is not None and vfs_identity is not None:
+                            identities[inode] = (name, *vfs_identity)
+                        offset += (length + 3) & ~3
+        except (OSError, TimeoutError, struct.error, UnicodeError, ValueError):
+            return {}, False
+
+    def _inspect_unix(
+        self, namespaces: dict[str, str], processes: list[dict[str, object]]
+    ) -> tuple[list[dict[str, object]], bool]:
+        rows, initial_complete = self._unix_table()
+        if not initial_complete and not rows:
+            return [], False
+        initial_vfs, initial_vfs_complete = self._unix_vfs_identities()
+        observations = [
+            (inode, path, self._owners(inode, processes), self.inspect_file(path))
+            for inode, path in rows
+        ]
+        refreshed_vfs, refreshed_vfs_complete = self._unix_vfs_identities()
+        sockets: list[dict[str, object]] = []
+        for inode, path, owners, filesystem in observations:
+            owner_namespaces = (
+                owners[0].get("namespaces")
+                if len(owners) == 1
+                and isinstance(owners[0].get("namespaces"), dict)
+                else {}
+            )
+            filesystem_identity = (
+                filesystem.accessible
+                and filesystem.exists
+                and filesystem.kind == "socket"
+                and filesystem.canonical is True
+                and filesystem.device is not None
+                and filesystem.inode is not None
+                and initial_vfs.get(inode) == (
+                    os.fspath(path), filesystem.device, filesystem.inode
+                )
+                and refreshed_vfs.get(inode) == initial_vfs.get(inode)
+            )
+            filesystem_identity_correlated = (
+                len(owners) == 1
+                and owner_namespaces.get("network") == namespaces.get("network")
+                and owner_namespaces.get("mount") == namespaces.get("mount")
+                and filesystem_identity
+            )
+            record: dict[str, object] = {
+                "path": os.fspath(path),
+                "inode": inode,
+                "namespace": namespaces.get("network"),
+                "device": filesystem.device,
+                "path_inode": filesystem.inode,
+                "filesystem_identity_correlated": filesystem_identity_correlated,
+            }
+            if len(owners) == 1:
+                record["owner_pid"] = owners[0].get("pid")
+                record["owner_start_time"] = owners[0].get("start_time")
+            sockets.append(record)
+        return (
+            sockets,
+            initial_complete and initial_vfs_complete and refreshed_vfs_complete,
+        )
+
+    def _inspect_ipc(
+        self, namespace: str | None, processes: list[dict[str, object]]
+    ) -> tuple[list[dict[str, object]], bool]:
+        try:
+            lines = Path("/proc/sysvipc/shm").read_text().splitlines()
+        except (OSError, UnicodeError):
+            return [], False
+        if not lines:
+            return [], True
+        headings = lines[0].split()
+        segments: list[dict[str, object]] = []
+        complete = True
+        for line in lines[1:]:
+            values = line.split()
+            if len(values) != len(headings):
+                complete = False
+                continue
+            raw = dict(zip(headings, values))
+            try:
+                segment: dict[str, object] = {
+                    "key": int(raw["key"], 0), "shmid": int(raw["shmid"]),
+                    "uid": int(raw["uid"]), "cpid": int(raw["cpid"]),
+                    "ctime": int(raw["ctime"]), "nattch": int(raw["nattch"]),
+                    "namespace": namespace,
+                }
+            except (KeyError, ValueError):
+                complete = False
+                continue
+            if segment["uid"] != os.geteuid():
+                segment["owner_classification"] = "unmanaged"
+            creators = [
+                process
+                for process in processes
+                if process.get("pid") == segment["cpid"]
+            ]
+            if len(creators) == 1:
+                creator = creators[0]
+                start_wall_ns = creator.get("start_wall_ns")
+                if type(start_wall_ns) is int:
+                    creator_start_second = start_wall_ns // 1_000_000_000
+                    if creator_start_second > segment["ctime"]:
+                        segment["creator_pid_reused"] = True
+                    elif creator_start_second == segment["ctime"]:
+                        segment["creator_generation_ambiguous"] = True
+                    else:
+                        segment["process_start_time"] = creator.get("start_time")
+            segments.append(segment)
+        return segments, complete
 
 
 class FakeObservationAdapter:
@@ -463,6 +966,11 @@ class FakeObservationAdapter:
             listeners=tuple(observations["listeners"]),
             system_v_ipc=tuple(observations["system_v_ipc"]),
             source="fake observation fixture",
+            scope=(
+                observations["scope"]
+                if isinstance(observations.get("scope"), dict)
+                else {}
+            ),
         )
 
     def inspect_file(self, path: Path) -> FileObservation:
@@ -473,11 +981,14 @@ class FakeObservationAdapter:
             return FileObservation(exists=False)
         return FileObservation(
             exists=True,
+            accessible=record.get("accessible", True),
             kind=record["type"],
             owner=record.get("owner"),
             mode=int(record["mode"], 8),
             content=record.get("content"),
             canonical=record.get("canonical", True),
+            device=record.get("device"),
+            inode=record.get("inode"),
         )
 
 def observation_adapter() -> ObservationAdapter:
@@ -505,9 +1016,13 @@ class OperationError(ValueError):
         evidence_quality: Literal["definitive", "unknown"] = "definitive",
         *,
         normalized_value: str | None = None,
-        expected_owner: int | None = None,
+        expected_owner: int | str | None = None,
+        observed_owner: int | str | None = None,
         expected_value: str | None = None,
         observed_value: str | None = None,
+        evidence: tuple[str, ...] = (),
+        missing_evidence: tuple[str, ...] = (),
+        observation_scope: dict[str, object] | None = None,
     ):
         super().__init__(message)
         affected_value = os.fspath(value)
@@ -519,8 +1034,12 @@ class OperationError(ValueError):
             ),
             source=source,
             expected_owner=expected_owner,
+            observed_owner=observed_owner,
             expected_value=expected_value,
             observed_value=observed_value,
+            evidence=evidence,
+            missing_evidence=missing_evidence,
+            observation_scope=observation_scope,
             evidence_quality=evidence_quality,
             message=message,
             next_action=next_action,
@@ -592,9 +1111,13 @@ def invalid_result(
     source: str = "guard state",
     next_action: str = "inspect or restore the manifest, then retry validation",
     normalized_value: str | None = None,
-    expected_owner: int | None = None,
+    expected_owner: int | str | None = None,
+    observed_owner: int | str | None = None,
     expected_value: str | None = None,
     observed_value: str | None = None,
+    evidence: tuple[str, ...] = (),
+    missing_evidence: tuple[str, ...] = (),
+    observation_scope: dict[str, object] | None = None,
 ) -> ValidationResult:
     affected_value = os.fspath(affected_path)
     return ValidationResult(
@@ -608,8 +1131,12 @@ def invalid_result(
             ),
             source=source,
             expected_owner=expected_owner,
+            observed_owner=observed_owner,
             expected_value=expected_value,
             observed_value=observed_value,
+            evidence=evidence,
+            missing_evidence=missing_evidence,
+            observation_scope=observation_scope,
             evidence_quality=evidence_quality,
             message=message,
             next_action=next_action,
@@ -2735,33 +3262,60 @@ def initialize(
     environment_path = runtime_directory / "env.sh"
     ensure_safe_root(Path.home(), "HOME")
     preflight_resource_paths(runtime_identifier, preview_database_name, brokers)
+    observations = adapter.inspect_runtime()
+    if not observations.complete:
+        raise OperationError(
+            "observation_incomplete", "runtime observation snapshot", selection.worktree,
+            observations.source,
+            "Initialization cannot prove that the selected runtime is idle.",
+            "Retry when process, socket, listener, and System V IPC observations are complete.",
+            "unknown",
+            missing_evidence=("complete process, socket, listener, filesystem, configuration, and System V IPC visibility",),
+            observation_scope=observations.scope,
+        )
+    guard_setup_would_mutate = False
+    try:
+        guard_metadata = guard_root.lstat()
+    except FileNotFoundError:
+        guard_setup_would_mutate = True
+    else:
+        if (
+            stat.S_ISDIR(guard_metadata.st_mode)
+            and guard_metadata.st_uid == os.geteuid()
+            and is_canonical_existing_path(guard_root)
+        ):
+            guard_setup_would_mutate = (
+                stat.S_IMODE(guard_metadata.st_mode) != 0o700
+                or not lock_path.exists()
+            )
+    if guard_setup_would_mutate:
+        preview_registry = load_registry(registry_path)
+        preview_bundle = create_resource_bundle(
+            runtime_identifier,
+            preview_database_name,
+            installation,
+            brokers,
+            preview_registry,
+            observations,
+            guard_root,
+        ).for_installation(layout)
+        require_mutation_safe_ownership(
+            adapter,
+            observations,
+            selection,
+            runtime_identifier,
+            preview_bundle,
+            installation_document,
+            broker_content,
+            layout,
+            engine_content,
+        )
     make_private_directory(guard_root)
     lock_descriptor = open_private_lock(lock_path)
     try:
         fcntl.flock(lock_descriptor, fcntl.LOCK_EX)
-        make_private_directory(guard_root / "worktrees")
         registry = load_registry(registry_path)
         retained = existing_bundle(manifest_path, runtime_identifier, selection)
-        observations = adapter.inspect_runtime()
-        if not observations.complete:
-            raise OperationError(
-                "observation_incomplete", "runtime observation snapshot", selection.worktree,
-                observations.source,
-                "Initialization cannot prove that the selected runtime is idle.",
-                "Retry when process, socket, listener, and System V IPC observations are complete.",
-                "unknown",
-            )
-        occupied_retained_resource = retained is not None and any(
-            (observations.listeners, observations.system_v_ipc)
-        )
-        if any((observations.processes, observations.sockets)) or occupied_retained_resource:
-            raise OperationError(
-                "runtime_not_idle", "runtime observation snapshot", selection.worktree,
-                observations.source,
-                "Initialization found a live or potentially owned runtime resource.",
-                "Stop the runtime through normal CUBRID lifecycle commands and retry.",
-                "unknown",
-            )
         if retained is None:
             database_name = database_override or default_database_name(selection.worktree, runtime_identifier)
             validate_database_name(database_name)
@@ -2787,11 +3341,16 @@ def initialize(
         reject_managed_claim_collisions(
             bundle, registry, runtime_identifier, guard_root
         )
-        spawn_environments = capture_broker_spawn_environments(
+        spawn_environments = require_mutation_safe_ownership(
+            adapter,
+            observations,
+            selection,
+            runtime_identifier,
+            bundle,
+            installation_document,
             broker_content,
             layout,
-            bundle.brokers,
-            bundle,
+            engine_content,
         )
         claims = bundle.claims().to_dict()
         generation = int(registry["generation"]) + 1
@@ -2819,6 +3378,7 @@ def initialize(
         }
         allocations = registry["allocations"]
         assert isinstance(allocations, dict)
+        make_private_directory(guard_root / "worktrees")
         make_private_directory(runtime_directory)
         allocations[runtime_identifier] = {
             "generation": generation,
@@ -2889,6 +3449,591 @@ def initialize(
     finally:
         os.close(lock_descriptor)
     return ready_result("init", selection, runtime_identifier, manifest_path, environment_path), 0
+
+
+def process_owns_socket_inode(process: dict[str, object], inode: int) -> bool:
+    descriptors = process.get("fds")
+    return isinstance(descriptors, list) and any(
+        isinstance(descriptor, dict)
+        and descriptor.get("socket_inode") == inode
+        for descriptor in descriptors
+    )
+
+
+@dataclass(frozen=True)
+class OwnershipAssessment:
+    classification: Literal["free", "same-runtime", "conflict", "unknown"]
+    kind: str = "runtime resource"
+    value: str = ""
+    normalized_value: str = ""
+    observed_owner: str | None = None
+    evidence: tuple[str, ...] = ()
+    missing_evidence: tuple[str, ...] = ()
+    message: str = ""
+
+
+def ownership_assessment(
+    classification: Literal["same-runtime", "conflict", "unknown"],
+    kind: str,
+    value: str,
+    *,
+    normalized_value: str | None = None,
+    observed_owner: str | None = None,
+    evidence: tuple[str, ...] = (),
+    missing_evidence: tuple[str, ...] = (),
+    message: str,
+) -> OwnershipAssessment:
+    return OwnershipAssessment(
+        classification,
+        kind,
+        value,
+        value if normalized_value is None else normalized_value,
+        observed_owner,
+        evidence,
+        missing_evidence,
+        message,
+    )
+
+
+def classify_process_identity(
+    process: dict[str, object],
+    snapshot: RuntimeObservationSnapshot,
+    bundle: ResourceBundle,
+    document: dict[str, object],
+) -> tuple[Literal["same-runtime", "conflict", "unknown"], tuple[str, ...], tuple[str, ...], str]:
+    pid = process.get("pid")
+    owner = f"pid={pid}" if type(pid) is int else "unidentified process"
+    if process.get("accessible") is not True:
+        return "unknown", (), ("readable process metadata",), owner
+    missing = tuple(
+        field
+        for field in (
+            "pid", "start_time", "executable", "libraries", "loaded_files",
+            "deleted_libraries", "namespaces", "configuration", "fds",
+        )
+        if process.get(field) is None
+    )
+    if missing:
+        return "unknown", (), missing, owner
+    scope_namespaces = snapshot.scope.get("namespaces")
+    if not isinstance(scope_namespaces, dict) or process.get("namespaces") != scope_namespaces:
+        return "unknown", ("process namespace view",), ("matching observer namespace view",), owner
+    evidence = ("process start time", "process executable", "loaded libraries", "namespace view")
+    runtime_id = process.get("managed_runtime_id")
+    if isinstance(runtime_id, str) and runtime_id != document.get("worktree_id"):
+        return "conflict", evidence + ("managed runtime identity",), (), f"worktree runtime {runtime_id} ({owner})"
+    executable = process.get("executable")
+    expected_executables = {
+        os.fspath(bundle.executable_directory / name)
+        for name in REQUIRED_EXECUTABLE_NAMES
+    }
+    if executable not in expected_executables:
+        return "conflict", evidence, (), f"foreign executable {executable!r} ({owner})"
+    libraries = process.get("libraries")
+    installation = document.get("installation")
+    if not isinstance(libraries, list) or not libraries or not isinstance(installation, dict):
+        return "unknown", evidence, ("loaded-library identity",), owner
+    library_records = installation.get("libraries")
+    if not isinstance(library_records, list):
+        return "unknown", evidence, ("manifest library identity",), owner
+    expected_libraries = {
+        record.get("resolved_path", record.get("path"))
+        for record in library_records
+        if isinstance(record, dict)
+    }
+    loaded_files = process.get("loaded_files")
+    deleted_libraries = process.get("deleted_libraries")
+    if not isinstance(loaded_files, list) or not isinstance(deleted_libraries, list):
+        return "unknown", evidence, ("complete loaded-file identity",), owner
+    if deleted_libraries:
+        return "unknown", evidence, ("non-deleted loaded-library identity",), owner
+    expected_library_names = {
+        Path(path).name for path in expected_libraries if isinstance(path, str)
+    }
+    foreign_named_libraries = {
+        path
+        for path in loaded_files
+        if isinstance(path, str)
+        and Path(path).name in expected_library_names
+        and path not in expected_libraries
+    }
+    if (
+        any(library not in expected_libraries for library in libraries)
+        or foreign_named_libraries
+    ):
+        return "conflict", evidence, (), f"foreign loaded libraries ({owner})"
+    configuration = process.get("configuration")
+    configurations = document.get("configurations")
+    if not isinstance(configuration, dict) or not isinstance(configurations, dict):
+        return "unknown", evidence, ("effective process configuration",), owner
+    if configuration.get("evidence") != "launch-correlated":
+        return "unknown", evidence, ("launch-correlated effective configuration",), owner
+    engine = configurations.get("engine")
+    broker = configurations.get("broker")
+    if not isinstance(engine, dict) or not isinstance(broker, dict):
+        return "unknown", evidence, ("manifest configuration identity",), owner
+    expected_configuration = {
+        "installation_root": os.fspath(bundle.installation_root),
+        "cubrid_tmp": os.fspath(bundle.cubrid_tmp),
+        "database_registry": os.fspath(bundle.database_registry),
+        "active_preset": document.get("active_preset"),
+        "engine_configuration": engine.get("path"),
+        "engine_configuration_sha256": engine.get("sha256"),
+        "broker_configuration": broker.get("path"),
+        "broker_configuration_sha256": broker.get("sha256"),
+    }
+    missing_configuration = tuple(
+        f"effective configuration {field}"
+        for field in expected_configuration
+        if field not in configuration
+    )
+    if missing_configuration:
+        return "unknown", evidence, missing_configuration, owner
+    if any(configuration[field] != value for field, value in expected_configuration.items()):
+        return "unknown", evidence + ("effective process configuration",), ("configuration agreement",), owner
+    return "same-runtime", evidence + ("effective process configuration",), (), f"worktree runtime {document.get('worktree_id')} ({owner})"
+
+
+def classify_live_ownership(
+    adapter: ObservationAdapter,
+    snapshot: RuntimeObservationSnapshot,
+    bundle: ResourceBundle,
+    document: dict[str, object],
+) -> OwnershipAssessment:
+    claims = bundle.claims()
+    scope_namespaces = snapshot.scope.get("namespaces")
+    expected_network = scope_namespaces.get("network") if isinstance(scope_namespaces, dict) else None
+    expected_ipc = scope_namespaces.get("ipc") if isinstance(scope_namespaces, dict) else None
+    linked_pids: set[int] = set()
+    saw_same_runtime = False
+    same_runtime_observation: OwnershipAssessment | None = None
+
+    for listener in snapshot.listeners:
+        if listener.get("protocol") != "tcp" or listener.get("port") not in claims.tcp_ports:
+            continue
+        port = listener.get("port")
+        address = listener.get("address")
+        value = f"tcp://{address}:{port}"
+        inode = listener.get("inode")
+        required = tuple(
+            field
+            for field in ("address", "inode", "namespace", "owner_pid", "owner_start_time")
+            if listener.get(field) is None
+        )
+        if required:
+            return ownership_assessment(
+                "unknown", "TCP listener", value, missing_evidence=required,
+                evidence=("claimed TCP port",),
+                message="The claimed listener lacks complete endpoint ownership evidence.",
+            )
+        if listener.get("namespace") != expected_network:
+            return ownership_assessment(
+                "unknown", "TCP listener", value,
+                evidence=("listener namespace",), missing_evidence=("matching network namespace",),
+                message="The listener is observed through a different network namespace view.",
+            )
+        assert type(inode) is int
+        owners = [process for process in snapshot.processes if process_owns_socket_inode(process, inode)]
+        if len(owners) != 1:
+            return ownership_assessment(
+                "unknown", "TCP listener", value,
+                evidence=("listener socket inode",), missing_evidence=("unique process file-descriptor owner",),
+                message="The listener inode does not resolve to exactly one visible process owner.",
+            )
+        owner = owners[0]
+        if (
+            owner.get("pid") != listener.get("owner_pid")
+            or owner.get("start_time") != listener.get("owner_start_time")
+        ):
+            return ownership_assessment(
+                "unknown", "TCP listener", value,
+                observed_owner=f"pid={listener.get('owner_pid')}",
+                evidence=("listener inode", "process file descriptor"),
+                missing_evidence=("matching process start identity",),
+                message="The listener owner PID was reused or its start identity disagrees.",
+            )
+        classification, evidence, missing, observed_owner = classify_process_identity(
+            owner, snapshot, bundle, document
+        )
+        if type(owner.get("pid")) is int:
+            linked_pids.add(owner["pid"])
+        if classification != "same-runtime":
+            return ownership_assessment(
+                classification, "TCP listener", value, observed_owner=observed_owner,
+                evidence=("listener address", "socket inode to file descriptor", *evidence),
+                missing_evidence=missing,
+                message=(
+                    "The claimed listener is positively owned by another runtime."
+                    if classification == "conflict"
+                    else "The claimed listener owner cannot be identified safely."
+                ),
+            )
+        if address != "0.0.0.0":
+            return ownership_assessment(
+                "unknown", "TCP listener", value, observed_owner=observed_owner,
+                evidence=("listener address", "same-runtime process identity"),
+                missing_evidence=("expected wildcard listener address 0.0.0.0",),
+                message="The same-runtime process owns a listener at an unexpected address.",
+            )
+        saw_same_runtime = True
+        same_runtime_observation = same_runtime_observation or ownership_assessment(
+            "same-runtime", "TCP listener", value,
+            observed_owner=observed_owner,
+            evidence=("listener address", "socket inode to file descriptor", *evidence),
+            message="The claimed listener is positively owned by this worktree runtime.",
+        )
+
+    for path in bundle.socket_paths:
+        path_value = os.fspath(path)
+        records = [record for record in snapshot.sockets if record.get("path") == path_value]
+        filesystem = adapter.inspect_file(path)
+        if not filesystem.accessible:
+            return ownership_assessment(
+                "unknown", "Unix socket", path_value,
+                missing_evidence=("readable socket filesystem identity",),
+                message="Permission denial prevents inspection of the claimed socket pathname.",
+            )
+        if not records and not filesystem.exists:
+            continue
+        if not records:
+            return ownership_assessment(
+                "unknown", "Unix socket", path_value,
+                evidence=("filesystem pathname",), missing_evidence=("live Unix socket endpoint",),
+                message="A claimed socket pathname exists without a correlated live endpoint.",
+            )
+        if len(records) != 1 or not filesystem.exists or filesystem.kind != "socket":
+            return ownership_assessment(
+                "unknown", "Unix socket", path_value,
+                evidence=("Unix socket table",), missing_evidence=("matching socket filesystem identity",),
+                message="The live Unix endpoint and its filesystem pathname disagree.",
+            )
+        record = records[0]
+        inode = record.get("inode")
+        required = tuple(
+            field for field in (
+                "inode", "namespace", "owner_pid", "owner_start_time",
+                "device", "path_inode", "filesystem_identity_correlated",
+            )
+            if record.get(field) is None
+        )
+        if required:
+            return ownership_assessment(
+                "unknown", "Unix socket", path_value,
+                evidence=("Unix socket pathname",), missing_evidence=required,
+                message="The claimed Unix socket lacks complete ownership evidence.",
+            )
+        if (
+            record.get("namespace") != expected_network
+            or record.get("device") != filesystem.device
+            or record.get("path_inode") != filesystem.inode
+            or record.get("filesystem_identity_correlated") is not True
+        ):
+            return ownership_assessment(
+                "unknown", "Unix socket", path_value,
+                evidence=("Unix socket endpoint", "filesystem identity"),
+                missing_evidence=("matching namespace and filesystem identity",),
+                message="The Unix socket endpoint, namespace, or filesystem identity disagrees.",
+            )
+        assert type(inode) is int
+        owners = [process for process in snapshot.processes if process_owns_socket_inode(process, inode)]
+        if len(owners) != 1:
+            return ownership_assessment(
+                "unknown", "Unix socket", path_value,
+                evidence=("Unix socket inode",), missing_evidence=("unique process file-descriptor owner",),
+                message="The Unix socket inode does not resolve to one visible owner.",
+            )
+        owner = owners[0]
+        if owner.get("pid") != record.get("owner_pid") or owner.get("start_time") != record.get("owner_start_time"):
+            return ownership_assessment(
+                "unknown", "Unix socket", path_value,
+                evidence=("Unix socket inode", "process file descriptor"),
+                missing_evidence=("matching process start identity",),
+                message="The Unix socket owner PID or start identity disagrees.",
+            )
+        classification, evidence, missing, observed_owner = classify_process_identity(owner, snapshot, bundle, document)
+        if type(owner.get("pid")) is int:
+            linked_pids.add(owner["pid"])
+        if classification != "same-runtime":
+            return ownership_assessment(
+                classification, "Unix socket", path_value, observed_owner=observed_owner,
+                evidence=("socket inode to file descriptor", "filesystem identity", *evidence),
+                missing_evidence=missing,
+                message=("The claimed Unix socket is owned by another runtime." if classification == "conflict" else "The claimed Unix socket owner is unknown."),
+            )
+        saw_same_runtime = True
+        same_runtime_observation = same_runtime_observation or ownership_assessment(
+            "same-runtime", "Unix socket", path_value,
+            observed_owner=observed_owner,
+            evidence=("socket inode to file descriptor", "filesystem identity", *evidence),
+            message="The claimed Unix socket is positively owned by this worktree runtime.",
+        )
+
+    for segment in snapshot.system_v_ipc:
+        if segment.get("key") not in claims.system_v_keys:
+            continue
+        key = segment.get("key")
+        value = hexadecimal_key(key) if type(key) is int else str(key)
+        required = tuple(
+            field for field in ("shmid", "uid", "cpid", "ctime", "nattch", "namespace")
+            if segment.get(field) is None
+        )
+        if required:
+            return ownership_assessment(
+                "unknown", "System V shared-memory key", value,
+                evidence=("configured System V key",), missing_evidence=required,
+                message="The claimed System V segment metadata is incomplete.",
+            )
+        if segment.get("namespace") != expected_ipc:
+            return ownership_assessment(
+                "unknown", "System V shared-memory key", value,
+                evidence=("System V segment namespace",), missing_evidence=("matching IPC namespace",),
+                message="The System V segment is observed in a different IPC namespace.",
+            )
+        creator_processes = [
+            process for process in snapshot.processes
+            if process.get("pid") == segment.get("cpid")
+        ]
+        if len(creator_processes) == 1:
+            creator_start_wall_ns = creator_processes[0].get("start_wall_ns")
+            if type(creator_start_wall_ns) is not int:
+                return ownership_assessment(
+                    "unknown", "System V shared-memory key", value,
+                    evidence=("System V creator PID",),
+                    missing_evidence=("creator process wall-clock start",),
+                    message="The System V creator process generation cannot be established.",
+                )
+            creator_start_second = creator_start_wall_ns // 1_000_000_000
+            if creator_start_second > segment["ctime"]:
+                return ownership_assessment(
+                    "unknown", "System V shared-memory key", value,
+                    evidence=("System V creator PID", "process wall-clock start"),
+                    missing_evidence=("matching creator process generation",),
+                    message="The System V creator PID belongs to a newer process generation.",
+                )
+            if creator_start_second == segment["ctime"]:
+                return ownership_assessment(
+                    "unknown", "System V shared-memory key", value,
+                    evidence=("System V creator PID", "second-resolution creation time"),
+                    missing_evidence=("precise creator process generation",),
+                    message="The System V creation timestamp cannot distinguish same-second PID reuse.",
+                )
+        if segment.get("creator_pid_reused") is True:
+            return ownership_assessment(
+                "unknown", "System V shared-memory key", value,
+                evidence=("System V creator PID", "process wall-clock start"),
+                missing_evidence=("matching creator process generation",),
+                message="The System V creator PID belongs to a newer process generation.",
+            )
+        if segment.get("owner_classification") == "unmanaged":
+            return ownership_assessment(
+                "conflict", "System V shared-memory key", value,
+                observed_owner=f"unmanaged segment shmid={segment.get('shmid')} uid={segment.get('uid')}",
+                evidence=("System V key", "shmid", "owner UID", "creation time", "attachment count", "IPC namespace", "unmanaged owner classification"),
+                message="An unmanaged live System V segment occupies the claimed key.",
+            )
+        owners = [
+            process
+            for process in snapshot.processes
+            if isinstance(process.get("system_v_keys"), list)
+            and key in process["system_v_keys"]
+        ]
+        if not owners:
+            return ownership_assessment(
+                "unknown", "System V shared-memory key", value,
+                evidence=("System V segment metadata",), missing_evidence=("visible process attachment to the System V key",),
+                message="The System V segment cannot be correlated to a visible attached process.",
+            )
+        creator_start_time = segment.get("process_start_time")
+        if creator_start_time is not None and (
+            len(creator_processes) != 1
+            or creator_processes[0].get("start_time") != creator_start_time
+        ):
+            return ownership_assessment(
+                "unknown", "System V shared-memory key", value,
+                evidence=("System V creator PID",), missing_evidence=("matching process start identity",),
+                message="The System V creator PID was reused or its start identity disagrees.",
+            )
+        owner_descriptions: list[str] = []
+        segment_evidence: tuple[str, ...] = ()
+        for owner in owners:
+            classification, evidence, missing, observed_owner = classify_process_identity(
+                owner, snapshot, bundle, document
+            )
+            if type(owner.get("pid")) is int:
+                linked_pids.add(owner["pid"])
+            if classification != "same-runtime":
+                return ownership_assessment(
+                    classification, "System V shared-memory key", value, observed_owner=observed_owner,
+                    evidence=("System V key metadata", "live process attachment", *evidence), missing_evidence=missing,
+                    message=("The claimed System V segment is owned by another runtime." if classification == "conflict" else "The claimed System V segment owner is unknown."),
+                )
+            owner_descriptions.append(observed_owner)
+            segment_evidence = evidence
+        saw_same_runtime = True
+        same_runtime_observation = same_runtime_observation or ownership_assessment(
+            "same-runtime", "System V shared-memory key", value,
+            observed_owner=", ".join(owner_descriptions),
+            evidence=("System V key metadata", "live process attachment", *segment_evidence),
+            message="The claimed System V segment is positively owned by this worktree runtime.",
+        )
+
+    expected_executables = {
+        os.fspath(bundle.executable_directory / name)
+        for name in REQUIRED_EXECUTABLE_NAMES
+    }
+    expected_configuration_values = {
+        os.fspath(bundle.installation_root),
+        os.fspath(bundle.cubrid_tmp),
+        os.fspath(bundle.database_registry),
+    }
+    for process in snapshot.processes:
+        pid = process.get("pid")
+        executable = process.get("executable")
+        configuration = process.get("configuration")
+        relevant = executable in expected_executables or (
+            isinstance(configuration, dict)
+            and any(value in expected_configuration_values for value in configuration.values())
+        )
+        if relevant and pid not in linked_pids:
+            return ownership_assessment(
+                "unknown", "CUBRID process", f"pid={pid}",
+                observed_owner=f"pid={pid}", evidence=("process identity",),
+                missing_evidence=("claimed endpoint or System V correlation",),
+                message="A CUBRID process is visible without a correlated claimed resource.",
+            )
+    if saw_same_runtime:
+        assert same_runtime_observation is not None
+        return same_runtime_observation
+    return OwnershipAssessment("free")
+
+
+def ownership_failure_result(
+    selection: RuntimeSelection,
+    snapshot: RuntimeObservationSnapshot,
+    runtime_id_value: str,
+    assessment: OwnershipAssessment,
+) -> ValidationResult:
+    conflict = assessment.classification == "conflict"
+    return invalid_result(
+        selection,
+        assessment.value,
+        "live_ownership_conflict" if conflict else "live_ownership_unknown",
+        assessment.message,
+        "definitive" if conflict else "unknown",
+        affected_kind=assessment.kind,
+        source=snapshot.source,
+        next_action=(
+            "Stop the foreign owner through its normal lifecycle command or select another resource."
+            if conflict
+            else "Restore complete read access and reconcile the contradictory evidence before retrying."
+        ),
+        normalized_value=assessment.normalized_value,
+        expected_owner=f"worktree runtime {runtime_id_value}",
+        observed_owner=assessment.observed_owner,
+        evidence=assessment.evidence,
+        missing_evidence=assessment.missing_evidence,
+        observation_scope=snapshot.scope,
+    )
+
+
+def positive_ownership_report(
+    snapshot: RuntimeObservationSnapshot,
+    runtime_id_value: str,
+    assessment: OwnershipAssessment,
+) -> dict[str, object]:
+    return {
+        "classification": assessment.classification,
+        "affected_object": {
+            "kind": assessment.kind,
+            "value": assessment.value,
+        },
+        "normalized_value": assessment.normalized_value,
+        "expected_owner": f"worktree runtime {runtime_id_value}",
+        "observed_owner": assessment.observed_owner,
+        "evidence": list(assessment.evidence),
+        "missing_evidence": list(assessment.missing_evidence),
+        "observation_scope": snapshot.scope,
+        "message": assessment.message,
+        "next_action": "No action is required; continue using read-only validation before runtime use.",
+    }
+
+
+def ownership_operation_error(
+    snapshot: RuntimeObservationSnapshot,
+    runtime_id_value: str,
+    assessment: OwnershipAssessment,
+) -> OperationError:
+    conflict = assessment.classification == "conflict"
+    live = assessment.classification == "same-runtime"
+    return OperationError(
+        (
+            "runtime_mutation_live"
+            if live
+            else "live_ownership_conflict"
+            if conflict
+            else "live_ownership_unknown"
+        ),
+        assessment.kind,
+        assessment.value or runtime_id_value,
+        snapshot.source,
+        (
+            "Mutation is unsafe while the selected worktree runtime owns a live resource."
+            if live
+            else assessment.message
+        ),
+        (
+            "Stop the selected runtime through normal CUBRID lifecycle commands and retry."
+            if live
+            else "Stop the foreign owner through its normal lifecycle command or select another resource."
+            if conflict
+            else "Restore complete read access and reconcile the contradictory evidence before retrying."
+        ),
+        "definitive" if live or conflict else "unknown",
+        normalized_value=assessment.normalized_value or runtime_id_value,
+        expected_owner=f"worktree runtime {runtime_id_value}",
+        observed_owner=assessment.observed_owner,
+        evidence=assessment.evidence,
+        missing_evidence=assessment.missing_evidence,
+        observation_scope=snapshot.scope,
+    )
+
+
+def require_mutation_safe_ownership(
+    adapter: ObservationAdapter,
+    observations: RuntimeObservationSnapshot,
+    selection: RuntimeSelection,
+    runtime_identifier: str,
+    bundle: ResourceBundle,
+    installation_document: dict[str, object],
+    broker_content: str,
+    layout: InstallationLayout,
+    engine_content: str,
+) -> list[dict[str, object]]:
+    spawn_environments = capture_broker_spawn_environments(
+        broker_content,
+        layout,
+        bundle.brokers,
+        bundle,
+    )
+    ownership_document: dict[str, object] = {
+        "worktree_id": runtime_identifier,
+        "active_preset": selection.preset,
+        "installation": installation_document,
+        "configurations": configuration_manifest(
+            bundle,
+            spawn_environments,
+            text_hash(engine_content),
+            text_hash(broker_content),
+        ),
+    }
+    ownership = classify_live_ownership(
+        adapter, observations, bundle, ownership_document
+    )
+    if ownership.classification != "free":
+        raise ownership_operation_error(
+            observations, runtime_identifier, ownership
+        )
+    return spawn_environments
 
 
 def validate(
@@ -3071,6 +4216,8 @@ def validate(
             affected_kind="runtime observation snapshot",
             source=runtime_observations.source,
             next_action="Retry validation when every runtime observation source is readable.",
+            missing_evidence=("complete process, socket, listener, filesystem, configuration, and System V IPC visibility",),
+            observation_scope=runtime_observations.scope,
         ), EXIT_INVALID
     database_name = document.get("database_name")
     claims = document.get("normalized_claims")
@@ -3693,23 +4840,30 @@ def validate(
                     sort_keys=True,
                 ),
             ), EXIT_INVALID
-    if any((runtime_observations.processes, runtime_observations.sockets, runtime_observations.listeners, runtime_observations.system_v_ipc)):
-        return invalid_result(
-            selection, os.fspath(worktree), "live_ownership_unavailable",
-            "This runtime slice cannot yet prove ownership of observed live resources.",
-            "unknown", affected_kind="runtime observation snapshot",
-            source=runtime_observations.source,
-            next_action="Stop the observed resources or use a later ownership-aware guard version.",
+    ownership = classify_live_ownership(
+        adapter, runtime_observations, bundle, document
+    )
+    if ownership.classification in ("conflict", "unknown"):
+        return ownership_failure_result(
+            selection, runtime_observations, selected_runtime_id, ownership
         ), EXIT_INVALID
-    return ready_result(
+    result = ready_result(
         "validate", selection, selected_runtime_id, manifest_path, expected_environment_path
-    ), 0
+    )
+    if ownership.classification == "same-runtime":
+        result = replace(
+            result,
+            live_ownership=positive_ownership_report(
+                runtime_observations, selected_runtime_id, ownership
+            ),
+        )
+    return result, 0
 
 
 def render_human(result: ValidationResult) -> str:
     diagnostic = result.diagnostic
     if diagnostic is None:
-        return (
+        output = (
             f"Outcome: ready\n"
             f"Worktree runtime: {result.worktree_id}\n"
             f"Worktree: {result.selection.worktree}\n"
@@ -3718,6 +4872,24 @@ def render_human(result: ValidationResult) -> str:
             f"Environment: {result.environment_path}\n"
             "Kernel reservation: none; later kernel acquisition can still race.\n"
         )
+        if result.live_ownership is not None:
+            ownership = result.live_ownership
+            affected = ownership["affected_object"]
+            assert isinstance(affected, dict)
+            output += (
+                f"Live ownership: {ownership['classification']}\n"
+                f"Affected {affected['kind']}: {affected['value']}\n"
+                f"Normalized value: {ownership['normalized_value']}\n"
+                f"Expected owner: {ownership['expected_owner']}\n"
+                f"Observed owner: {ownership['observed_owner']}\n"
+                f"Evidence: {', '.join(ownership['evidence'])}\n"
+                "Observation scope: "
+                + json.dumps(ownership["observation_scope"], sort_keys=True)
+                + "\n"
+                f"Details: {ownership['message']}\n"
+                f"Next action: {ownership['next_action']}\n"
+            )
+        return output
     affected = diagnostic.affected_object
     lines = [
         f"Outcome: {result.outcome}",
@@ -3727,10 +4899,21 @@ def render_human(result: ValidationResult) -> str:
     ]
     if diagnostic.expected_owner is not None:
         lines.append(f"Expected owner: {diagnostic.expected_owner}")
+    if diagnostic.observed_owner is not None:
+        lines.append(f"Observed owner: {diagnostic.observed_owner}")
     if diagnostic.observed_value is not None:
         lines.append(f"Observed value: {diagnostic.observed_value}")
     if diagnostic.expected_value is not None:
         lines.append(f"Expected value: {diagnostic.expected_value}")
+    if diagnostic.evidence:
+        lines.append(f"Evidence: {', '.join(diagnostic.evidence)}")
+    if diagnostic.missing_evidence:
+        lines.append(f"Missing evidence: {', '.join(diagnostic.missing_evidence)}")
+    if diagnostic.observation_scope is not None:
+        lines.append(
+            "Observation scope: "
+            + json.dumps(diagnostic.observation_scope, sort_keys=True)
+        )
     lines.extend((
         f"Evidence quality: {diagnostic.evidence_quality}",
         f"Details: {diagnostic.message}",

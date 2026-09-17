@@ -188,6 +188,78 @@ class RuntimeGuardCliTest(unittest.TestCase):
         }))
         return manifest_path
 
+    def observation_scope(self):
+        return {
+            "observer": "fake-linux",
+            "uid": os.geteuid(),
+            "boot_id": "synthetic-boot",
+            "namespaces": {
+                "pid": "pid:[100]",
+                "network": "net:[200]",
+                "ipc": "ipc:[300]",
+                "mount": "mnt:[400]",
+            },
+            "sources": {
+                "processes": "complete",
+                "sockets": "complete",
+                "listeners": "complete",
+                "system_v_ipc": "complete",
+                "filesystem": "complete",
+                "configuration": "complete",
+            },
+            "inaccessible_processes": [],
+        }
+
+    def runtime_process(self, manifest, *, pid=4242, start_time=100, **changes):
+        bundle = manifest["resource_bundle"]
+        process = {
+            "pid": pid,
+            "name": "cub_master",
+            "start_time": start_time,
+            "start_wall_ns": 123455 * 1_000_000_000,
+            "executable": str(Path(bundle["executable_directory"]) / "cub_master"),
+            "libraries": [
+                record.get("resolved_path", record["path"])
+                for record in manifest["installation"]["libraries"]
+            ],
+            "loaded_files": [
+                record.get("resolved_path", record["path"])
+                for record in manifest["installation"]["libraries"]
+            ],
+            "deleted_libraries": [],
+            "system_v_keys": [bundle["master_shm_key"]],
+            "namespaces": dict(self.observation_scope()["namespaces"]),
+            "configuration": {
+                "installation_root": bundle["installation_root"],
+                "cubrid_tmp": bundle["cubrid_tmp"],
+                "database_registry": bundle["database_registry"],
+                "active_preset": manifest["active_preset"],
+                "evidence": "launch-correlated",
+                "engine_configuration": manifest["configurations"]["engine"]["path"],
+                "engine_configuration_sha256": manifest["configurations"]["engine"]["sha256"],
+                "broker_configuration": manifest["configurations"]["broker"]["path"],
+                "broker_configuration_sha256": manifest["configurations"]["broker"]["sha256"],
+            },
+            "fds": [{"socket_inode": 7001}],
+            "accessible": True,
+        }
+        process.update(changes)
+        return process
+
+    def replace_observations(self, observations, filesystem=None):
+        self.fixture.write_text(json.dumps({
+            "filesystem": filesystem or {},
+            "observations": {
+                "complete": True,
+                "scope": self.observation_scope(),
+                "processes": [],
+                "sockets": [],
+                "listeners": [],
+                "system_v_ipc": [],
+                **observations,
+            },
+        }))
+
     def test_init_creates_one_complete_runtime_and_validate_reports_ready(self):
         (self.worktree / ".env").write_text(
             "# human setting\nPRESET_MODE=debug\n\nOTHER=value\n"
@@ -228,6 +300,7 @@ class RuntimeGuardCliTest(unittest.TestCase):
         effective = manifest["configurations"]["effective"]
         self.assertEqual(effective["engine"]["service"], "server,broker")
         self.assertEqual(effective["engine"]["cubrid_port_id"], "15000")
+
         self.assertEqual(effective["engine"]["stored_procedure_uds"], "yes")
         self.assertEqual(effective["broker"]["MASTER_SHM_ID"], "0x60000000")
         self.assertRegex(manifest["database_name"], r"^[A-Za-z][A-Za-z0-9_]{0,16}$")
@@ -283,6 +356,712 @@ class RuntimeGuardCliTest(unittest.TestCase):
         self.assertEqual(validation_report["outcome"], "ready")
         self.assertTrue(validation_report["ready"])
         self.assertEqual(self.snapshot(), before_validation)
+        self.assertFalse(self.calls.exists())
+
+    def test_validate_accepts_a_listener_positively_owned_by_this_runtime(self):
+        initialized = self.run_runtime("init", "--preset", "debug", "--json")
+        self.assertEqual(initialized.returncode, 0, initialized.stderr + initialized.stdout)
+        manifest = self.manifest_for(initialized)
+        process = self.runtime_process(manifest)
+        self.replace_observations({
+            "processes": [process],
+            "listeners": [{
+                "protocol": "tcp",
+                "address": "0.0.0.0",
+                "port": manifest["resource_bundle"]["master_port"],
+                "inode": 7001,
+                "namespace": self.observation_scope()["namespaces"]["network"],
+                "owner_pid": process["pid"],
+                "owner_start_time": process["start_time"],
+            }],
+        })
+
+        validated = self.run_runtime("validate", "--preset", "debug", "--json")
+        human = self.run_runtime("validate", "--preset", "debug")
+
+        self.assertEqual(validated.returncode, 0, validated.stderr + validated.stdout)
+        report = json.loads(validated.stdout)
+        self.assertEqual(report["outcome"], "ready")
+        ownership = report["live_ownership"]
+        self.assertEqual(ownership["classification"], "same-runtime")
+        self.assertEqual(ownership["normalized_value"], "tcp://0.0.0.0:15000")
+        self.assertIn("socket inode to file descriptor", ownership["evidence"])
+        self.assertEqual(ownership["missing_evidence"], [])
+        self.assertEqual(ownership["observation_scope"], self.observation_scope())
+        self.assertIn("Live ownership: same-runtime", human.stdout)
+        self.assertIn(f"Expected owner: {ownership['expected_owner']}", human.stdout)
+        self.assertIn(f"Observed owner: {ownership['observed_owner']}", human.stdout)
+        self.assertIn("Next action: " + ownership["next_action"], human.stdout)
+        self.assertFalse(self.calls.exists())
+
+    def test_managed_foreign_listener_is_a_conflict_with_equivalent_diagnostics(self):
+        initialized = self.run_runtime("init", "--preset", "debug", "--json")
+        self.assertEqual(initialized.returncode, 0, initialized.stderr + initialized.stdout)
+        manifest = self.manifest_for(initialized)
+        process = self.runtime_process(manifest, managed_runtime_id="runtime-foreign")
+        self.replace_observations({
+            "processes": [process],
+            "listeners": [{
+                "protocol": "tcp",
+                "address": "0.0.0.0",
+                "port": manifest["resource_bundle"]["master_port"],
+                "inode": 7001,
+                "namespace": self.observation_scope()["namespaces"]["network"],
+                "owner_pid": process["pid"],
+                "owner_start_time": process["start_time"],
+            }],
+        })
+
+        structured = self.run_runtime("validate", "--preset", "debug", "--json")
+        human = self.run_runtime("validate", "--preset", "debug")
+
+        self.assertEqual(structured.returncode, 4, structured.stderr + structured.stdout)
+        report = json.loads(structured.stdout)
+        diagnostic = report["diagnostic"]
+        self.assertEqual(diagnostic["code"], "live_ownership_conflict")
+        self.assertEqual(diagnostic["normalized_value"], "tcp://0.0.0.0:15000")
+        self.assertEqual(
+            diagnostic["expected_owner"],
+            f"worktree runtime {manifest['worktree_id']}",
+        )
+        self.assertIn("runtime-foreign", diagnostic["observed_owner"])
+        self.assertIn("socket inode to file descriptor", diagnostic["evidence"])
+        self.assertEqual(diagnostic["missing_evidence"], [])
+        self.assertEqual(diagnostic["observation_scope"], self.observation_scope())
+        self.assertEqual(human.returncode, structured.returncode)
+        self.assertIn(f"Normalized value: {diagnostic['normalized_value']}", human.stdout)
+        self.assertIn(f"Expected owner: {diagnostic['expected_owner']}", human.stdout)
+        self.assertIn(f"Observed owner: {diagnostic['observed_owner']}", human.stdout)
+        self.assertIn("Evidence: " + ", ".join(diagnostic["evidence"]), human.stdout)
+        self.assertIn("Observation scope: ", human.stdout)
+        self.assertFalse(self.calls.exists())
+
+    def test_unmanaged_listener_and_wrong_library_are_conflicts(self):
+        initialized = self.run_runtime("init", "--preset", "debug", "--json")
+        self.assertEqual(initialized.returncode, 0, initialized.stderr + initialized.stdout)
+        manifest = self.manifest_for(initialized)
+        for process in (
+            self.runtime_process(
+                manifest,
+                executable=str(self.root / "unmanaged" / "cub_master"),
+            ),
+            self.runtime_process(
+                manifest,
+                libraries=[str(self.root / "foreign" / "libcubrid.so")],
+            ),
+        ):
+            with self.subTest(process=process["executable"], libraries=process["libraries"]):
+                self.replace_observations({
+                    "processes": [process],
+                    "listeners": [{
+                        "protocol": "tcp",
+                        "address": "127.0.0.1",
+                        "port": manifest["resource_bundle"]["master_port"],
+                        "inode": 7001,
+                        "namespace": self.observation_scope()["namespaces"]["network"],
+                        "owner_pid": process["pid"],
+                        "owner_start_time": process["start_time"],
+                    }],
+                })
+                result = self.run_runtime("validate", "--preset", "debug", "--json")
+                self.assertEqual(result.returncode, 4, result.stderr + result.stdout)
+                diagnostic = json.loads(result.stdout)["diagnostic"]
+                self.assertEqual(diagnostic["code"], "live_ownership_conflict")
+                self.assertEqual(diagnostic["evidence_quality"], "definitive")
+        self.assertFalse(self.calls.exists())
+
+    def test_incomplete_or_contradictory_listener_evidence_is_unknown(self):
+        initialized = self.run_runtime("init", "--preset", "debug", "--json")
+        self.assertEqual(initialized.returncode, 0, initialized.stderr + initialized.stdout)
+        manifest = self.manifest_for(initialized)
+        base_process = self.runtime_process(manifest)
+        base_listener = {
+            "protocol": "tcp",
+            "address": "0.0.0.0",
+            "port": manifest["resource_bundle"]["master_port"],
+            "inode": 7001,
+            "namespace": self.observation_scope()["namespaces"]["network"],
+            "owner_pid": base_process["pid"],
+            "owner_start_time": base_process["start_time"],
+        }
+        cases = []
+        reused = dict(base_listener, owner_start_time=99)
+        cases.append(("reused-pid", base_process, reused))
+        hidden = dict(base_process, accessible=False)
+        cases.append(("hidden-process", hidden, base_listener))
+        wrong_namespace = dict(base_listener, namespace="net:[999]")
+        cases.append(("wrong-namespace", base_process, wrong_namespace))
+        wrong_address = dict(base_listener, address="127.0.0.1")
+        cases.append(("wrong-listener-address", base_process, wrong_address))
+        wrong_owner = dict(base_listener, inode=9999)
+        cases.append(("wrong-socket-owner", base_process, wrong_owner))
+        contradictory = dict(base_process)
+        contradictory["configuration"] = dict(
+            base_process["configuration"], cubrid_tmp=str(self.root / "other-tmp")
+        )
+        cases.append(("contradictory-configuration", contradictory, base_listener))
+
+        for name, process, listener in cases:
+            with self.subTest(name=name):
+                self.replace_observations({
+                    "processes": [process],
+                    "listeners": [listener],
+                })
+                result = self.run_runtime("validate", "--preset", "debug", "--json")
+                self.assertEqual(result.returncode, 4, result.stderr + result.stdout)
+                diagnostic = json.loads(result.stdout)["diagnostic"]
+                self.assertEqual(diagnostic["code"], "live_ownership_unknown")
+                self.assertEqual(diagnostic["evidence_quality"], "unknown")
+                self.assertTrue(diagnostic["missing_evidence"])
+                self.assertEqual(diagnostic["observation_scope"], self.observation_scope())
+        self.assertFalse(self.calls.exists())
+
+    def test_validate_correlates_same_runtime_socket_and_system_v_segment(self):
+        initialized = self.run_runtime("init", "--preset", "debug", "--json")
+        self.assertEqual(initialized.returncode, 0, initialized.stderr + initialized.stdout)
+        manifest = self.manifest_for(initialized)
+        bundle = manifest["resource_bundle"]
+        process = self.runtime_process(
+            manifest,
+            fds=[{"socket_inode": 8001}],
+        )
+        socket_path = bundle["socket_paths"][0]
+        self.replace_observations({
+            "processes": [process],
+            "sockets": [{
+                "path": socket_path,
+                "inode": 8001,
+                "namespace": self.observation_scope()["namespaces"]["network"],
+                "owner_pid": process["pid"],
+                "owner_start_time": process["start_time"],
+                "device": 55,
+                "path_inode": 66,
+                "filesystem_identity_correlated": True,
+            }],
+            "system_v_ipc": [{
+                "key": bundle["master_shm_key"],
+                "shmid": 71,
+                "uid": os.geteuid(),
+                "cpid": process["pid"],
+                "ctime": 123456,
+                "nattch": 1,
+                "namespace": self.observation_scope()["namespaces"]["ipc"],
+                "process_start_time": process["start_time"],
+            }],
+        }, filesystem={
+            socket_path: {
+                "type": "socket",
+                "owner": os.geteuid(),
+                "mode": "0700",
+                "device": 55,
+                "inode": 66,
+            },
+        })
+
+        validated = self.run_runtime("validate", "--preset", "debug", "--json")
+
+        self.assertEqual(validated.returncode, 0, validated.stderr + validated.stdout)
+        self.assertEqual(json.loads(validated.stdout)["outcome"], "ready")
+        self.assertFalse(self.calls.exists())
+
+    def test_stale_path_and_incomplete_ipc_metadata_are_unknown(self):
+        initialized = self.run_runtime("init", "--preset", "debug", "--json")
+        self.assertEqual(initialized.returncode, 0, initialized.stderr + initialized.stdout)
+        manifest = self.manifest_for(initialized)
+        bundle = manifest["resource_bundle"]
+        socket_path = bundle["socket_paths"][0]
+        self.replace_observations({}, filesystem={
+            socket_path: {
+                "type": "socket",
+                "owner": os.geteuid(),
+                "mode": "0700",
+                "device": 55,
+                "inode": 66,
+            },
+        })
+        stale = self.run_runtime("validate", "--preset", "debug", "--json")
+        self.assertEqual(stale.returncode, 4, stale.stderr + stale.stdout)
+        self.assertEqual(
+            json.loads(stale.stdout)["diagnostic"]["code"], "live_ownership_unknown"
+        )
+
+        process = self.runtime_process(manifest, fds=[{"socket_inode": 8001}])
+        self.replace_observations({
+            "processes": [process],
+            "sockets": [{
+                "path": socket_path,
+                "inode": 8001,
+                "namespace": self.observation_scope()["namespaces"]["network"],
+                "owner_pid": process["pid"],
+                "owner_start_time": process["start_time"],
+                "device": 55,
+                "path_inode": 66,
+                "filesystem_identity_correlated": False,
+            }],
+        }, filesystem={
+            socket_path: {
+                "type": "socket", "owner": os.geteuid(), "mode": "0700",
+                "device": 55, "inode": 66,
+            },
+        })
+        replaced_path = self.run_runtime("validate", "--preset", "debug", "--json")
+        self.assertEqual(
+            replaced_path.returncode, 4, replaced_path.stderr + replaced_path.stdout
+        )
+        self.assertEqual(
+            json.loads(replaced_path.stdout)["diagnostic"]["code"],
+            "live_ownership_unknown",
+        )
+
+        self.replace_observations({
+            "system_v_ipc": [{
+                "key": bundle["master_shm_key"],
+                "shmid": 71,
+                "uid": os.geteuid(),
+            }],
+        })
+        incomplete_ipc = self.run_runtime("validate", "--preset", "debug", "--json")
+        self.assertEqual(
+            incomplete_ipc.returncode, 4, incomplete_ipc.stderr + incomplete_ipc.stdout
+        )
+        diagnostic = json.loads(incomplete_ipc.stdout)["diagnostic"]
+        self.assertEqual(diagnostic["code"], "live_ownership_unknown")
+        self.assertIn("ctime", diagnostic["missing_evidence"])
+        self.assertFalse(self.calls.exists())
+
+    def test_socket_permission_denial_is_unknown(self):
+        initialized = self.run_runtime("init", "--preset", "debug", "--json")
+        self.assertEqual(initialized.returncode, 0, initialized.stderr + initialized.stdout)
+        manifest = self.manifest_for(initialized)
+        socket_path = manifest["resource_bundle"]["socket_paths"][0]
+        self.replace_observations({}, filesystem={
+            socket_path: {
+                "type": "socket",
+                "accessible": False,
+                "owner": None,
+                "mode": "0000",
+            },
+        })
+
+        result = self.run_runtime("validate", "--preset", "debug", "--json")
+
+        self.assertEqual(result.returncode, 4, result.stderr + result.stdout)
+        diagnostic = json.loads(result.stdout)["diagnostic"]
+        self.assertEqual(diagnostic["code"], "live_ownership_unknown")
+        self.assertEqual(diagnostic["evidence_quality"], "unknown")
+        self.assertIn("readable socket filesystem identity", diagnostic["missing_evidence"])
+        self.assertFalse(self.calls.exists())
+
+    def test_init_refuses_same_runtime_live_and_unknown_claims_without_mutation(self):
+        initialized = self.run_runtime("init", "--preset", "debug", "--json")
+        self.assertEqual(initialized.returncode, 0, initialized.stderr + initialized.stdout)
+        manifest = self.manifest_for(initialized)
+        process = self.runtime_process(manifest)
+        listener = {
+            "protocol": "tcp",
+            "address": "0.0.0.0",
+            "port": manifest["resource_bundle"]["master_port"],
+            "inode": 7001,
+            "namespace": self.observation_scope()["namespaces"]["network"],
+            "owner_pid": process["pid"],
+            "owner_start_time": process["start_time"],
+        }
+        self.replace_observations({"processes": [process], "listeners": [listener]})
+        before_live = self.snapshot()
+
+        live = self.run_runtime("init", "--preset", "debug", "--json")
+
+        self.assertEqual(live.returncode, 4, live.stderr + live.stdout)
+        self.assertEqual(
+            json.loads(live.stdout)["diagnostic"]["code"], "runtime_mutation_live"
+        )
+        self.assertEqual(self.snapshot(), before_live)
+
+        listener["owner_start_time"] = 99
+        self.replace_observations({"processes": [process], "listeners": [listener]})
+        before_unknown = self.snapshot()
+        unknown = self.run_runtime("init", "--preset", "debug", "--json")
+        self.assertEqual(unknown.returncode, 4, unknown.stderr + unknown.stdout)
+        self.assertEqual(
+            json.loads(unknown.stdout)["diagnostic"]["code"], "live_ownership_unknown"
+        )
+        self.assertEqual(self.snapshot(), before_unknown)
+        self.assertFalse(self.calls.exists())
+
+    def test_first_init_ownership_refusal_preserves_exact_state(self):
+        runtime_id = "runtime01"
+        (self.worktree / ".env").write_text(f"CUBRID_WORKTREE_ID={runtime_id}\n")
+        socket_path = str(
+            self.home / ".cub" / "runtime" / runtime_id[:8] / "tmp" / "CUBRID15000"
+        )
+        self.replace_observations({}, filesystem={
+            socket_path: {
+                "type": "socket",
+                "owner": os.geteuid(),
+                "mode": "0700",
+                "device": 55,
+                "inode": 66,
+            },
+        })
+        before = self.snapshot()
+
+        refused = self.run_runtime("init", "--preset", "debug", "--json")
+
+        self.assertEqual(refused.returncode, 4, refused.stderr + refused.stdout)
+        self.assertEqual(
+            json.loads(refused.stdout)["diagnostic"]["code"],
+            "live_ownership_unknown",
+        )
+        self.assertEqual(self.snapshot(), before)
+        self.assertFalse((self.state_home / "cubrid-worktree-guard").exists())
+        self.assertFalse(self.calls.exists())
+
+    def test_first_init_refusal_does_not_create_missing_lock_or_chmod_guard_root(self):
+        runtime_id = "runtime01"
+        (self.worktree / ".env").write_text(f"CUBRID_WORKTREE_ID={runtime_id}\n")
+        guard_root = self.state_home / "cubrid-worktree-guard"
+        guard_root.mkdir(parents=True, mode=0o750)
+        guard_root.chmod(0o750)
+        socket_path = str(
+            self.home / ".cub" / "runtime" / runtime_id[:8] / "tmp" / "CUBRID15000"
+        )
+        self.replace_observations({}, filesystem={
+            socket_path: {
+                "type": "socket", "owner": os.geteuid(), "mode": "0700",
+                "device": 55, "inode": 66,
+            },
+        })
+        before = self.snapshot()
+
+        refused = self.run_runtime("init", "--preset", "debug", "--json")
+
+        self.assertEqual(refused.returncode, 4, refused.stderr + refused.stdout)
+        self.assertEqual(self.snapshot(), before)
+        self.assertEqual(guard_root.stat().st_mode & 0o777, 0o750)
+        self.assertFalse((guard_root / "registry.lock").exists())
+        self.assertFalse(self.calls.exists())
+
+    def test_preset_takeover_refuses_live_previous_preset_but_allows_proven_idle(self):
+        initialized = self.run_runtime("init", "--preset", "debug", "--json")
+        self.assertEqual(initialized.returncode, 0, initialized.stderr + initialized.stdout)
+        manifest = self.manifest_for(initialized)
+        process = self.runtime_process(manifest)
+        self.replace_observations({
+            "processes": [process],
+            "listeners": [{
+                "protocol": "tcp",
+                "address": "0.0.0.0",
+                "port": manifest["resource_bundle"]["master_port"],
+                "inode": 7001,
+                "namespace": self.observation_scope()["namespaces"]["network"],
+                "owner_pid": process["pid"],
+                "owner_start_time": process["start_time"],
+            }],
+        })
+        release_installation = self.root / "install-release-live"
+        shutil.copytree(self.installation, release_installation)
+        self.environment["CUBRID"] = str(release_installation)
+        self.environment["CUBRID_BUILD_DIR"] = str(
+            self.worktree / "build_preset_release_gcc"
+        )
+        before_live = self.snapshot()
+
+        blocked = self.run_runtime("init", "--preset", "release_gcc", "--json")
+
+        self.assertEqual(blocked.returncode, 4, blocked.stderr + blocked.stdout)
+        self.assertIn(
+            json.loads(blocked.stdout)["diagnostic"]["code"],
+            {"live_ownership_conflict", "live_ownership_unknown"},
+        )
+        self.assertEqual(self.snapshot(), before_live)
+
+        self.replace_observations({})
+        takeover = self.run_runtime("init", "--preset", "release_gcc", "--json")
+        self.assertEqual(takeover.returncode, 0, takeover.stderr + takeover.stdout)
+        self.assertEqual(
+            self.manifest_for(takeover)["active_preset"], "release_gcc"
+        )
+        self.assertFalse(self.calls.exists())
+
+    def test_unmanaged_system_v_segment_is_a_conflict(self):
+        initialized = self.run_runtime("init", "--preset", "debug", "--json")
+        self.assertEqual(initialized.returncode, 0, initialized.stderr + initialized.stdout)
+        manifest = self.manifest_for(initialized)
+        self.replace_observations({
+            "system_v_ipc": [{
+                "key": manifest["resource_bundle"]["master_shm_key"],
+                "shmid": 88,
+                "uid": os.geteuid(),
+                "cpid": 9999,
+                "ctime": 123456,
+                "nattch": 1,
+                "namespace": self.observation_scope()["namespaces"]["ipc"],
+                "owner_classification": "unmanaged",
+            }],
+        })
+
+        result = self.run_runtime("validate", "--preset", "debug", "--json")
+
+        self.assertEqual(result.returncode, 4, result.stderr + result.stdout)
+        diagnostic = json.loads(result.stdout)["diagnostic"]
+        self.assertEqual(diagnostic["code"], "live_ownership_conflict")
+        self.assertEqual(
+            diagnostic["normalized_value"],
+            f"0x{manifest['resource_bundle']['master_shm_key']:08x}",
+        )
+        self.assertIn("unmanaged segment", diagnostic["observed_owner"])
+        self.assertFalse(self.calls.exists())
+
+    def test_orphaned_or_reused_pid_system_v_evidence_is_unknown(self):
+        initialized = self.run_runtime("init", "--preset", "debug", "--json")
+        self.assertEqual(initialized.returncode, 0, initialized.stderr + initialized.stdout)
+        manifest = self.manifest_for(initialized)
+        process = self.runtime_process(manifest)
+        segment = {
+            "key": manifest["resource_bundle"]["master_shm_key"],
+            "shmid": 88,
+            "uid": os.geteuid(),
+            "cpid": process["pid"],
+            "ctime": 123456,
+            "nattch": 1,
+            "namespace": self.observation_scope()["namespaces"]["ipc"],
+            "process_start_time": 99,
+        }
+        self.replace_observations({
+            "processes": [process],
+            "system_v_ipc": [segment],
+        })
+        reused = self.run_runtime("validate", "--preset", "debug", "--json")
+        self.assertEqual(reused.returncode, 4, reused.stderr + reused.stdout)
+        self.assertEqual(
+            json.loads(reused.stdout)["diagnostic"]["code"], "live_ownership_unknown"
+        )
+
+        segment.pop("process_start_time")
+        self.replace_observations({"system_v_ipc": [segment]})
+        orphaned = self.run_runtime("validate", "--preset", "debug", "--json")
+        self.assertEqual(orphaned.returncode, 4, orphaned.stderr + orphaned.stdout)
+        diagnostic = json.loads(orphaned.stdout)["diagnostic"]
+        self.assertEqual(diagnostic["code"], "live_ownership_unknown")
+        self.assertTrue(any(
+            "visible process attachment" in item
+            for item in diagnostic["missing_evidence"]
+        ))
+        self.assertFalse(self.calls.exists())
+
+    def test_system_v_creator_wall_start_detects_reused_unmanaged_pid(self):
+        initialized = self.run_runtime("init", "--preset", "debug", "--json")
+        self.assertEqual(initialized.returncode, 0, initialized.stderr + initialized.stdout)
+        manifest = self.manifest_for(initialized)
+        attached = self.runtime_process(manifest)
+        reused_creator = {
+            "pid": 4343,
+            "name": "sh",
+            "start_time": 200,
+            "start_wall_ns": 123457 * 1_000_000_000,
+            "executable": "/usr/bin/sh",
+            "libraries": [],
+            "loaded_files": [],
+            "deleted_libraries": [],
+            "system_v_keys": [],
+            "namespaces": dict(self.observation_scope()["namespaces"]),
+            "configuration": {},
+            "fds": [],
+            "accessible": True,
+        }
+        self.replace_observations({
+            "processes": [attached, reused_creator],
+            "system_v_ipc": [{
+                "key": manifest["resource_bundle"]["master_shm_key"],
+                "shmid": 88,
+                "uid": os.geteuid(),
+                "cpid": reused_creator["pid"],
+                "ctime": 123456,
+                "nattch": 1,
+                "namespace": self.observation_scope()["namespaces"]["ipc"],
+            }],
+        })
+
+        result = self.run_runtime("validate", "--preset", "debug", "--json")
+
+        self.assertEqual(result.returncode, 4, result.stderr + result.stdout)
+        diagnostic = json.loads(result.stdout)["diagnostic"]
+        self.assertEqual(diagnostic["code"], "live_ownership_unknown")
+        self.assertIn("matching creator process generation", diagnostic["missing_evidence"])
+        self.assertFalse(self.calls.exists())
+
+    def test_system_v_same_second_creator_generation_is_unknown(self):
+        initialized = self.run_runtime("init", "--preset", "debug", "--json")
+        self.assertEqual(initialized.returncode, 0, initialized.stderr + initialized.stdout)
+        manifest = self.manifest_for(initialized)
+        process = self.runtime_process(
+            manifest,
+            start_wall_ns=123456 * 1_000_000_000 + 500_000_000,
+        )
+        self.replace_observations({
+            "processes": [process],
+            "system_v_ipc": [{
+                "key": manifest["resource_bundle"]["master_shm_key"],
+                "shmid": 88,
+                "uid": os.geteuid(),
+                "cpid": process["pid"],
+                "ctime": 123456,
+                "nattch": 1,
+                "namespace": self.observation_scope()["namespaces"]["ipc"],
+            }],
+        })
+
+        result = self.run_runtime("validate", "--preset", "debug", "--json")
+
+        self.assertEqual(result.returncode, 4, result.stderr + result.stdout)
+        diagnostic = json.loads(result.stdout)["diagnostic"]
+        self.assertEqual(diagnostic["code"], "live_ownership_unknown")
+        self.assertIn(
+            "precise creator process generation",
+            diagnostic["missing_evidence"],
+        )
+        self.assertFalse(self.calls.exists())
+
+    def test_current_only_configuration_and_deleted_library_evidence_are_unknown(self):
+        initialized = self.run_runtime("init", "--preset", "debug", "--json")
+        self.assertEqual(initialized.returncode, 0, initialized.stderr + initialized.stdout)
+        manifest = self.manifest_for(initialized)
+        process = self.runtime_process(manifest)
+        listener = {
+            "protocol": "tcp",
+            "address": "0.0.0.0",
+            "port": manifest["resource_bundle"]["master_port"],
+            "inode": 7001,
+            "namespace": self.observation_scope()["namespaces"]["network"],
+            "owner_pid": process["pid"],
+            "owner_start_time": process["start_time"],
+        }
+        current_only = dict(process)
+        current_only["configuration"] = dict(
+            process["configuration"], evidence="current-files-only"
+        )
+        deleted = dict(process, deleted_libraries=list(process["libraries"]))
+        for name, observed_process in (
+            ("current-config", current_only),
+            ("deleted-library", deleted),
+        ):
+            with self.subTest(name=name):
+                self.replace_observations({
+                    "processes": [observed_process],
+                    "listeners": [listener],
+                })
+                result = self.run_runtime("validate", "--preset", "debug", "--json")
+                self.assertEqual(result.returncode, 4, result.stderr + result.stdout)
+                self.assertEqual(
+                    json.loads(result.stdout)["diagnostic"]["code"],
+                    "live_ownership_unknown",
+                )
+        self.assertFalse(self.calls.exists())
+
+    def test_foreign_loaded_file_with_cubrid_library_name_is_a_conflict(self):
+        initialized = self.run_runtime("init", "--preset", "debug", "--json")
+        self.assertEqual(initialized.returncode, 0, initialized.stderr + initialized.stdout)
+        manifest = self.manifest_for(initialized)
+        process = self.runtime_process(manifest)
+        process["loaded_files"] = [
+            *process["loaded_files"],
+            str(self.root / "foreign" / "libcubrid.so"),
+        ]
+        self.replace_observations({
+            "processes": [process],
+            "listeners": [{
+                "protocol": "tcp", "address": "0.0.0.0",
+                "port": manifest["resource_bundle"]["master_port"],
+                "inode": 7001,
+                "namespace": self.observation_scope()["namespaces"]["network"],
+                "owner_pid": process["pid"],
+                "owner_start_time": process["start_time"],
+            }],
+        })
+
+        result = self.run_runtime("validate", "--preset", "debug", "--json")
+
+        self.assertEqual(result.returncode, 4, result.stderr + result.stdout)
+        self.assertEqual(
+            json.loads(result.stdout)["diagnostic"]["code"],
+            "live_ownership_conflict",
+        )
+        self.assertFalse(self.calls.exists())
+
+    def test_single_identifiers_and_mixed_evidence_never_establish_ownership(self):
+        initialized = self.run_runtime("init", "--preset", "debug", "--json")
+        self.assertEqual(initialized.returncode, 0, initialized.stderr + initialized.stdout)
+        manifest = self.manifest_for(initialized)
+        process = self.runtime_process(manifest)
+        port = manifest["resource_bundle"]["master_port"]
+        cases = (
+            ("numeric-port", {"listeners": [{"protocol": "tcp", "port": port}]}),
+            ("mixed", {
+                "processes": [process],
+                "listeners": [{
+                    "protocol": "tcp",
+                    "address": "0.0.0.0",
+                    "port": port,
+                    "inode": 7001,
+                    "namespace": self.observation_scope()["namespaces"]["network"],
+                    "owner_pid": process["pid"],
+                    "owner_start_time": 99,
+                }],
+            }),
+        )
+        for name, observations in cases:
+            with self.subTest(name=name):
+                self.replace_observations(observations)
+                result = self.run_runtime("validate", "--preset", "debug", "--json")
+                self.assertEqual(result.returncode, 4, result.stderr + result.stdout)
+                diagnostic = json.loads(result.stdout)["diagnostic"]
+                self.assertEqual(diagnostic["code"], "live_ownership_unknown")
+                self.assertTrue(diagnostic["missing_evidence"])
+        self.replace_observations({"processes": [{"name": "cub_master"}]})
+        process_name_only = self.run_runtime(
+            "validate", "--preset", "debug", "--json"
+        )
+        self.assertEqual(
+            process_name_only.returncode,
+            0,
+            process_name_only.stderr + process_name_only.stdout,
+        )
+        self.assertFalse(self.calls.exists())
+
+    def test_init_allocates_around_a_complete_foreign_runtime_observation(self):
+        self.replace_observations({
+            "processes": [{
+                "pid": 9001,
+                "name": "cub_master",
+                "start_time": 10,
+                "executable": str(self.root / "foreign" / "bin" / "cub_master"),
+                "libraries": [str(self.root / "foreign" / "lib" / "libcubrid.so")],
+                "namespaces": dict(self.observation_scope()["namespaces"]),
+                "configuration": {
+                    "installation_root": str(self.root / "foreign"),
+                    "cubrid_tmp": str(self.root / "foreign-tmp"),
+                    "database_registry": str(self.root / "foreign-db"),
+                },
+                "fds": [{"socket_inode": 90001}],
+                "accessible": True,
+            }],
+            "listeners": [{
+                "protocol": "tcp",
+                "address": "0.0.0.0",
+                "port": 15500,
+                "inode": 90001,
+                "namespace": self.observation_scope()["namespaces"]["network"],
+                "owner_pid": 9001,
+                "owner_start_time": 10,
+            }],
+        })
+
+        initialized = self.run_runtime("init", "--preset", "debug", "--json")
+
+        self.assertEqual(initialized.returncode, 0, initialized.stderr + initialized.stdout)
+        self.assertEqual(
+            self.manifest_for(initialized)["resource_bundle"]["master_port"], 15000
+        )
         self.assertFalse(self.calls.exists())
 
     def test_init_is_idempotent_and_database_override_is_stable(self):

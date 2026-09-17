@@ -4,7 +4,7 @@
 from __future__ import annotations
 
 import argparse
-from collections.abc import Callable
+from collections.abc import Callable, Mapping
 from dataclasses import dataclass, replace
 import fcntl
 import hashlib
@@ -20,7 +20,7 @@ import subprocess
 import sys
 import tempfile
 import time
-from typing import Literal, Protocol
+from typing import Any, Literal, Protocol, TypedDict, cast
 import uuid
 
 
@@ -372,7 +372,7 @@ class ValidationResult:
     outcome: Literal["uninitialized", "invalid", "ready"]
     selection: RuntimeSelection
     diagnostic: Diagnostic | None = None
-    command: Literal["init", "validate"] = "validate"
+    command: Literal["init", "validate", "adopt", "deinit"] = "validate"
     worktree_id: str | None = None
     manifest_path: str | None = None
     environment_path: str | None = None
@@ -410,9 +410,15 @@ class ObservationAdapter(Protocol):
     def inspect_runtime(self) -> RuntimeObservationSnapshot:
         pass
 
+    def publication_boundary(self, name: str) -> None:
+        pass
+
 
 class LinuxObservationAdapter:
     """Read the filesystem without changing it."""
+
+    def publication_boundary(self, name: str) -> None:
+        pass
 
     def inspect_file(self, path: Path) -> FileObservation:
         try:
@@ -973,6 +979,18 @@ class FakeObservationAdapter:
             ),
         )
 
+    def publication_boundary(self, name: str) -> None:
+        fixture = json.loads(self.fixture_path.read_text())
+        if fixture.get("publication_failure") == name:
+            os._exit(86)
+        if fixture.get("publication_pause") == name:
+            self.fixture_path.with_suffix(".reached").write_text(name)
+            deadline = time.monotonic() + 10
+            while not self.fixture_path.with_suffix(".resume").exists():
+                if time.monotonic() >= deadline:
+                    raise OSError("synthetic publication pause timed out")
+                time.sleep(0.01)
+
     def inspect_file(self, path: Path) -> FileObservation:
         record = self.filesystem.get(os.fspath(path))
         if record is None:
@@ -1359,6 +1377,8 @@ def open_private_lock(path: Path) -> int:
             os.O_RDWR | os.O_CREAT | os.O_EXCL | no_follow | close_on_exec,
             0o600,
         )
+        os.fsync(descriptor)
+        fsync_directory(path.parent)
     except FileExistsError:
         try:
             metadata = path.lstat()
@@ -1400,7 +1420,7 @@ def open_private_lock(path: Path) -> int:
 
 def atomic_write(path: Path, content: str, mode: int) -> None:
     if not path.parent.exists():
-        path.parent.mkdir(mode=0o700, parents=True)
+        make_private_directory(path.parent)
     descriptor, temporary_name = tempfile.mkstemp(prefix=f".{path.name}.", dir=path.parent)
     temporary_path = Path(temporary_name)
     try:
@@ -1419,8 +1439,269 @@ def atomic_write(path: Path, content: str, mode: int) -> None:
         raise
 
 
-def atomic_json(path: Path, document: dict[str, object]) -> None:
+def atomic_json(path: Path, document: Mapping[str, object]) -> None:
     atomic_write(path, json.dumps(document, indent=2, sort_keys=True) + "\n", 0o600)
+
+
+class TransactionPredecessor(TypedDict):
+    manifest: dict[str, Any] | None
+    allocation: dict[str, Any] | None
+
+
+class GuardTransaction(TypedDict):
+    schema_version: int
+    generation: int
+    operation: str
+    state: str
+    manifest: dict[str, Any]
+    predecessor: TransactionPredecessor
+    configuration_inputs: dict[str, list[str]]
+
+
+class TransactionPublisher:
+    """Fence every publication against the state observed under the registry lock."""
+
+    def __init__(self, adapter: ObservationAdapter, paths: tuple[Path, ...]):
+        self.adapter = adapter
+        self.expected = {path: self.identity(path) for path in paths}
+
+    @staticmethod
+    def identity(path: Path) -> tuple[object, ...] | None:
+        try:
+            metadata = path.lstat()
+        except FileNotFoundError:
+            return None
+        return (
+            metadata.st_mode, metadata.st_uid, metadata.st_ino,
+            file_hash(path) if stat.S_ISREG(metadata.st_mode) else None,
+        )
+
+    def check(self) -> None:
+        for path, expected in self.expected.items():
+            if self.identity(path) != expected:
+                raise OperationError(
+                    "transaction_generation_conflict", "transaction publication", path,
+                    "generation fence", "State changed after this writer acquired its generation.",
+                    "Retry only after inspecting the newer state; this writer cannot overwrite it.",
+                )
+
+    def boundary(self, name: str) -> None:
+        self.adapter.publication_boundary(name)
+        self.check()
+
+    def text(self, name: str, path: Path, content: str, mode: int) -> None:
+        self.boundary(f"before_{name}")
+        atomic_write(path, content, mode)
+        self.expected[path] = self.identity(path)
+        self.boundary(f"after_{name}")
+
+    def json(self, name: str, path: Path, document: Mapping[str, object]) -> None:
+        self.text(name, path, json.dumps(document, indent=2, sort_keys=True) + "\n", 0o600)
+
+
+def read_transaction(path: Path) -> GuardTransaction:
+    if not is_owner_only_canonical_regular_file(path, path.lstat()):
+        raise OperationError(
+            "transaction_unsafe", "guard transaction", path, "guard state",
+            "The transaction must be a canonical owner-only regular file.",
+            "Restore the transaction's owner, canonical location, and mode 0600.",
+        )
+    transaction = read_json_file(path, "transaction")
+    manifest = transaction.get("manifest")
+    generation = transaction.get("generation")
+    if (
+        transaction.get("schema_version") != STATE_SCHEMA_VERSION
+        or type(generation) is not int
+        or generation < 1
+        or transaction.get("state") not in (
+            "initializing", "ready", "deinitializing", "recovery_required"
+        )
+        or transaction.get("operation") not in ("init", "adopt", "deinit")
+        or not isinstance(manifest, dict)
+        or manifest.get("generation") != transaction["generation"]
+        or manifest.get("worktree_id") != path.parent.name
+        or not isinstance(transaction.get("predecessor"), dict)
+        or not isinstance(transaction.get("configuration_inputs"), dict)
+    ):
+        raise OperationError(
+            "transaction_malformed", "guard transaction", path, "guard state",
+            "The retained transaction has inconsistent versioned state.",
+            "Restore the complete transaction; retained claims cannot be released.",
+        )
+    record = cast(GuardTransaction, transaction)
+    try:
+        if set(record["predecessor"]) != {"manifest", "allocation"}:
+            raise ValueError("predecessor fields are incomplete")
+        if manifest["schema_version"] != STATE_SCHEMA_VERSION:
+            raise ValueError("unsupported manifest schema")
+        for name in ("worktree_path", "git_common_dir", "active_preset", "database_name", "build_directory"):
+            require_string(manifest, name)
+        bundle = ResourceBundle.from_dict(manifest["resource_bundle"])
+        validate_resource_bundle(
+            bundle, path.parent.name, Path.home(), os.fspath(path), defer_managed_path_checks=True,
+        )
+        if manifest["normalized_claims"] != bundle.claims().to_dict():
+            raise ValueError("claims disagree with the complete bundle")
+        for kind in ("engine", "broker"):
+            hashes = record["configuration_inputs"][kind]
+            if not isinstance(hashes, list) or len(hashes) != 2 or any(
+                not isinstance(value, str) or not re.fullmatch(r"[0-9a-f]{64}", value)
+                for value in hashes
+            ):
+                raise ValueError("configuration publication hashes are incomplete")
+        for name in ("manifest", "allocation"):
+            previous = record["predecessor"].get(name)
+            if previous is not None and (
+                not isinstance(previous, dict)
+                or type(previous.get("generation")) is not int
+                or not 0 < previous["generation"] < generation
+            ):
+                raise ValueError("predecessor generation is invalid")
+    except (KeyError, TypeError, ValueError) as error:
+        raise OperationError(
+            "transaction_malformed", "guard transaction", path, "guard state",
+            f"The retained transaction is incomplete: {error}.",
+            "Restore the original transaction; do not discard its claims.",
+        ) from error
+    return record
+
+
+def retained_transactions(guard_root: Path) -> dict[str, GuardTransaction]:
+    return {
+        path.parent.name: read_transaction(path)
+        for path in (guard_root / "worktrees").glob("*/transaction.json")
+    }
+
+
+def require_transaction_operation(
+    transaction: GuardTransaction, command: str, selection: RuntimeSelection,
+    database_override: str | None = None, layout: InstallationLayout | None = None,
+) -> None:
+    manifest = transaction["manifest"]
+    if (
+        transaction["operation"] != command
+        or manifest["active_preset"] != selection.preset
+        or manifest["worktree_path"] != os.fspath(selection.worktree)
+        or manifest["git_common_dir"] != os.fspath(selection.git_common_dir)
+        or database_override not in (None, manifest["database_name"])
+        or (layout is not None and (
+            manifest["resource_bundle"]["installation_root"] != os.fspath(layout.root)
+            or manifest["resource_bundle"]["engine_configuration"] != os.fspath(layout.engine_configuration)
+            or manifest["resource_bundle"]["broker_configuration"] != os.fspath(layout.broker_configuration)
+            or manifest["build_directory"] != os.environ.get(
+                "CUBRID_BUILD_DIR", os.fspath(selection.worktree / f"build_preset_{selection.preset}")
+            )
+        ))
+    ):
+        raise OperationError(
+            "transaction_operation_mismatch", "guard transaction", str(transaction["generation"]),
+            "retained transaction", "A different operation or selection cannot overwrite an unfinished generation.",
+            f"Retry {transaction['operation']} --preset {manifest['active_preset']} "
+            "with the original worktree, installation, and database selection.",
+        )
+
+
+def allocation_record(manifest: dict[str, object], state: str) -> dict[str, object]:
+    return {
+        "generation": manifest["generation"],
+        "state": state,
+        "worktree_path": manifest["worktree_path"],
+        "claims": manifest["normalized_claims"],
+    }
+
+
+def require_transaction_generation(
+    transaction: GuardTransaction | None, manifest_path: Path,
+    registry: dict[str, object], runtime_identifier: str,
+) -> dict[str, object] | None:
+    published = None
+    if manifest_path.exists():
+        if not is_owner_only_canonical_regular_file(manifest_path, manifest_path.lstat()):
+            raise OperationError(
+                "path_unsafe", "worktree manifest", manifest_path, "guard state",
+                "The retained manifest is not a canonical owner-only regular file.",
+                "Restore the original owner-only manifest before retrying.",
+            )
+        published = read_json_file(manifest_path, "worktree_manifest")
+    allocations = registry["allocations"]
+    assert isinstance(allocations, dict)
+    allocation = allocations.get(runtime_identifier)
+    if transaction is None:
+        consistent = (published is None and allocation is None) or (
+            published is not None and published.get("state") == "ready"
+            and allocation == allocation_record(published, "ready")
+        )
+    else:
+        manifest = transaction["manifest"]
+        states = ("ready",) if transaction["state"] == "ready" else (
+            "initializing", "ready", "deinitializing", "recovery_required"
+        )
+        allowed_manifests: list[dict[str, object] | None] = [
+            {**manifest, "state": state} for state in states
+        ]
+        allowed_allocations: list[dict[str, object] | None] = [
+            allocation_record(manifest, state) for state in states
+        ]
+        if transaction["state"] != "ready":
+            predecessor = transaction["predecessor"]
+            allowed_manifests.append(predecessor["manifest"])
+            allowed_allocations.append(predecessor["allocation"])
+        consistent = published in allowed_manifests and allocation in allowed_allocations
+    if allocation is not None:
+        consistent = consistent and (
+            type(allocation.get("generation")) is int
+            and registry["generation"] >= allocation["generation"]
+        )
+    if not consistent:
+        raise OperationError(
+            "transaction_generation_conflict", "worktree manifest", manifest_path,
+            "registry and retained transaction",
+            "Published state does not belong to this generation or its recorded predecessor.",
+            "Restore consistent retained state; do not overwrite or release a newer generation.",
+        )
+    return published
+
+
+def patched_configurations(
+    bundle: ResourceBundle, engine_content: str, broker_content: str
+) -> tuple[str, str]:
+    engine_managed = {
+        "service": {"service": "server,broker"},
+        "common": {"cubrid_port_id": str(bundle.master_port), "stored_procedure_uds": "yes"},
+    }
+    database_section = f"@{bundle.database_name}"
+    if database_section in parse_ini(engine_content):
+        engine_managed[database_section] = dict(engine_managed["common"])
+    broker_managed = {
+        "broker": {"MASTER_SHM_ID": hexadecimal_key(bundle.master_shm_key)}
+    }
+    for broker in bundle.brokers:
+        broker_managed[broker.section] = {
+            "BROKER_PORT": str(broker.port),
+            "APPL_SERVER_SHM_ID": hexadecimal_key(broker.appl_server_shm_key),
+        }
+    return patch_ini(engine_content, engine_managed), patch_ini(broker_content, broker_managed)
+
+
+def refuse_unimplemented_mutation(command: str, selection: RuntimeSelection) -> None:
+    """Keep future mutation commands behind the same unfinished-operation fence."""
+    guard_root = state_root()
+    lock_path = guard_root / "registry.lock"
+    if lock_path.exists():
+        descriptor = open_private_lock(lock_path)
+        try:
+            fcntl.flock(descriptor, fcntl.LOCK_EX)
+            for transaction in retained_transactions(guard_root).values():
+                if (transaction["state"] != "ready"
+                    and transaction["manifest"]["worktree_path"] == os.fspath(selection.worktree)):
+                    require_transaction_operation(transaction, command, selection)
+        finally:
+            os.close(descriptor)
+    raise OperationError(
+        "operation_not_implemented", "guard command", command, "runtime guard",
+        f"{command} is not implemented yet; no state was changed.",
+        "Complete any unfinished init with its original selection.",
+    )
 
 
 def file_hash(path: Path) -> str:
@@ -2676,6 +2957,18 @@ def all_claimed_values(
     paths: set[Path] = set()
     allocations = registry["allocations"]
     assert isinstance(allocations, dict)
+    for runtime_identifier, transaction in retained_transactions(guard_root).items():
+        if runtime_identifier != selected_id:
+            add_normalized_claims(
+                transaction["manifest"].get("normalized_claims"),
+                ports, keys, paths, f"retained transaction {runtime_identifier}",
+            )
+            previous = transaction["predecessor"]["manifest"]
+            if transaction["state"] != "ready" and previous is not None:
+                add_normalized_claims(
+                    previous.get("normalized_claims"), ports, keys, paths,
+                    f"unfinished transaction predecessor {runtime_identifier}",
+                )
     for runtime_identifier, allocation in allocations.items():
         if runtime_identifier == selected_id:
             continue
@@ -3099,18 +3392,20 @@ def existing_bundle(
     manifest_path: Path,
     runtime_identifier: str,
     selection: RuntimeSelection,
+    manifest: dict[str, object] | None = None,
 ) -> tuple[ResourceBundle, str] | None:
-    try:
-        metadata = manifest_path.lstat()
-    except FileNotFoundError:
-        return None
-    if not is_owner_only_canonical_regular_file(manifest_path, metadata):
-        raise OperationError(
-            "path_unsafe", "worktree manifest", manifest_path, "guard state",
-            "The retained worktree manifest must be a canonical owner-only regular file.",
-            "Restore the manifest owner, mode 0600, and canonical location before retrying.",
-        )
-    manifest = read_json_file(manifest_path, "worktree_manifest")
+    if manifest is None:
+        try:
+            metadata = manifest_path.lstat()
+        except FileNotFoundError:
+            return None
+        if not is_owner_only_canonical_regular_file(manifest_path, metadata):
+            raise OperationError(
+                "path_unsafe", "worktree manifest", manifest_path, "guard state",
+                "The retained worktree manifest must be a canonical owner-only regular file.",
+                "Restore the manifest owner, mode 0600, and canonical location before retrying.",
+            )
+        manifest = read_json_file(manifest_path, "worktree_manifest")
     if manifest.get("schema_version") != STATE_SCHEMA_VERSION or manifest.get("worktree_id") != runtime_identifier:
         raise OperationError(
             "manifest_inconsistent", "worktree manifest", manifest_path, "guard state",
@@ -3263,16 +3558,12 @@ def initialize(
     ensure_safe_root(Path.home(), "HOME")
     preflight_resource_paths(runtime_identifier, preview_database_name, brokers)
     observations = adapter.inspect_runtime()
-    if not observations.complete:
-        raise OperationError(
-            "observation_incomplete", "runtime observation snapshot", selection.worktree,
-            observations.source,
-            "Initialization cannot prove that the selected runtime is idle.",
-            "Retry when process, socket, listener, and System V IPC observations are complete.",
-            "unknown",
-            missing_evidence=("complete process, socket, listener, filesystem, configuration, and System V IPC visibility",),
-            observation_scope=observations.scope,
-        )
+    if not observations.complete and not any(
+        item["state"] != "ready"
+        and item["manifest"]["worktree_path"] == os.fspath(selection.worktree)
+        for item in retained_transactions(guard_root).values()
+    ):
+        require_complete_mutation_observation(observations, selection)
     guard_setup_would_mutate = False
     try:
         guard_metadata = guard_root.lstat()
@@ -3311,11 +3602,66 @@ def initialize(
             engine_content,
         )
     make_private_directory(guard_root)
+    requested_transactions = retained_transactions(guard_root)
+    requested_transaction = next((
+        item for item in requested_transactions.values()
+        if item["manifest"]["worktree_path"] == os.fspath(selection.worktree)
+    ), None)
     lock_descriptor = open_private_lock(lock_path)
+    recovering = False
+    transaction = None
     try:
+        adapter.publication_boundary("before_lock")
         fcntl.flock(lock_descriptor, fcntl.LOCK_EX)
         registry = load_registry(registry_path)
-        retained = existing_bundle(manifest_path, runtime_identifier, selection)
+        transactions = retained_transactions(guard_root)
+        selected_id = runtime_id(adapter, selection.worktree)
+        matches = [
+            identifier for identifier, transaction in transactions.items()
+            if transaction["manifest"].get("worktree_path") == os.fspath(selection.worktree)
+        ]
+        if len(matches) > 1 or (matches and selected_id is not None and selected_id != matches[0]):
+            raise OperationError(
+                "transaction_operation_mismatch", "worktree identity", selected_id or "missing",
+                "retained transaction", "This worktree already has a retained transaction under another identity.",
+                "Restore the original CUBRID_WORKTREE_ID and retry its original init command.",
+            )
+        runtime_identifier = selected_id or (matches[0] if len(matches) == 1 else runtime_identifier)
+        runtime_directory = guard_root / "worktrees" / runtime_identifier
+        manifest_path = runtime_directory / "manifest.json"
+        environment_path = runtime_directory / "env.sh"
+        transaction_path = runtime_directory / "transaction.json"
+        transaction = transactions.get(runtime_identifier)
+        recovering = transaction is not None and transaction["state"] != "ready"
+        if recovering:
+            assert transaction is not None
+            require_transaction_operation(transaction, "init", selection, database_override, layout)
+        retained = existing_bundle(
+            manifest_path, runtime_identifier, selection,
+            transaction["manifest"] if recovering and transaction is not None else None,
+        )
+        published = require_transaction_generation(transaction, manifest_path, registry, runtime_identifier)
+        # Configuration and binary observations are refreshed after taking the lock.
+        engine_content = engine_path.read_text()
+        broker_content = broker_path.read_text()
+        installation_document = capture_installation_identity(layout)
+        if recovering:
+            assert transaction is not None
+            for kind, content in (("engine", engine_content), ("broker", broker_content)):
+                if text_hash(content) not in transaction["configuration_inputs"][kind]:
+                    raise OperationError(
+                        "transaction_input_changed", f"{kind} configuration",
+                        engine_path if kind == "engine" else broker_path, "retained transaction",
+                        "The configuration is neither the original nor the transaction's intended publication.",
+                        "Restore the original or intended configuration, then retry init; claims remain retained.",
+                    )
+            if installation_document != transaction["manifest"]["installation"]:
+                raise OperationError(
+                    "transaction_input_changed", "installation", installation, "retained transaction",
+                    "The installation changed during an unfinished generation.",
+                    "Restore the transaction's installation identity before retrying init.",
+                )
+        observations = adapter.inspect_runtime()
         if retained is None:
             database_name = database_override or default_database_name(selection.worktree, runtime_identifier)
             validate_database_name(database_name)
@@ -3352,11 +3698,21 @@ def initialize(
             layout,
             engine_content,
         )
+        if transaction is not None and transaction["state"] == "ready" and transaction != requested_transaction:
+            result, status = validate(adapter, selection)
+            return replace(result, command="init"), status
         claims = bundle.claims().to_dict()
-        generation = int(registry["generation"]) + 1
+        generation = (
+            transaction["generation"] if recovering and transaction is not None else
+            max(require_integer(registry, "generation"), *(item["generation"] for item in transactions.values()), 0) + 1
+        )
         build_directory = os.environ.get(
             "CUBRID_BUILD_DIR",
             os.fspath(selection.worktree / f"build_preset_{selection.preset}"),
+        )
+        patched_engine, patched_broker = patched_configurations(bundle, engine_content, broker_content)
+        environment_content = generated_environment_content(
+            selection, runtime_identifier, build_directory, bundle,
         )
         initializing_manifest: dict[str, object] = {
             "schema_version": STATE_SCHEMA_VERSION,
@@ -3372,23 +3728,41 @@ def initialize(
             "normalized_claims": claims,
             "installation": installation_document,
             "configurations": configuration_manifest(
-                bundle, spawn_environments, None, None
+                bundle, spawn_environments, text_hash(patched_engine), text_hash(patched_broker)
             ),
-            "generated_environment": {"path": os.fspath(environment_path), "sha256": None},
+            "generated_environment": {"path": os.fspath(environment_path), "sha256": text_hash(environment_content)},
         }
         allocations = registry["allocations"]
         assert isinstance(allocations, dict)
         make_private_directory(guard_root / "worktrees")
         make_private_directory(runtime_directory)
-        allocations[runtime_identifier] = {
-            "generation": generation,
-            "state": "initializing",
-            "worktree_path": os.fspath(selection.worktree),
-            "claims": claims,
-        }
-        registry["generation"] = generation
-        atomic_json(registry_path, registry)
-        atomic_json(manifest_path, initializing_manifest)
+        if not recovering:
+            transaction = {
+                "schema_version": STATE_SCHEMA_VERSION,
+                "generation": generation,
+                "operation": "init",
+                "state": "initializing",
+                "manifest": initializing_manifest,
+                "predecessor": {"manifest": published, "allocation": allocations.get(runtime_identifier)},
+                "configuration_inputs": {
+                    "engine": [text_hash(engine_content), text_hash(patched_engine)],
+                    "broker": [text_hash(broker_content), text_hash(patched_broker)],
+                },
+            }
+        else:
+            assert transaction is not None
+            transaction["state"] = "initializing"
+            transaction["manifest"] = initializing_manifest
+        assert transaction is not None
+        atomic_json(transaction_path, transaction)
+        publisher = TransactionPublisher(adapter, (
+            registry_path, manifest_path, transaction_path,
+            engine_path, broker_path, environment_path,
+        ))
+        allocations[runtime_identifier] = allocation_record(initializing_manifest, "initializing")
+        registry["generation"] = max(require_integer(registry, "generation"), generation)
+        publisher.json("registry", registry_path, registry)
+        publisher.json("manifest", manifest_path, initializing_manifest)
 
         for directory in (
             bundle.cubrid_tmp,
@@ -3399,34 +3773,12 @@ def initialize(
             installation / "var" / "pl",
         ):
             make_private_directory(directory)
-        engine_managed = {
-            "service": {"service": "server,broker"},
-            "common": {"cubrid_port_id": str(bundle.master_port), "stored_procedure_uds": "yes"},
-        }
-        database_section = f"@{database_name}"
-        if database_section in parse_ini(engine_content):
-            engine_managed[database_section] = {
-                "cubrid_port_id": str(bundle.master_port),
-                "stored_procedure_uds": "yes",
-            }
-        broker_managed: dict[str, dict[str, str]] = {
-            "broker": {"MASTER_SHM_ID": hexadecimal_key(bundle.master_shm_key)}
-        }
-        for broker in bundle.brokers:
-            broker_managed[broker.section] = {
-                "BROKER_PORT": str(broker.port),
-                "APPL_SERVER_SHM_ID": hexadecimal_key(broker.appl_server_shm_key),
-            }
-        atomic_write(engine_path, patch_ini(engine_content, engine_managed), stat.S_IMODE(engine_path.stat().st_mode))
-        atomic_write(broker_path, patch_ini(broker_content, broker_managed), stat.S_IMODE(broker_path.stat().st_mode))
+        publisher.text("engine_configuration", engine_path, patched_engine, stat.S_IMODE(engine_path.stat().st_mode))
+        publisher.text("broker_configuration", broker_path, patched_broker, stat.S_IMODE(broker_path.stat().st_mode))
+        publisher.boundary("before_identity")
         write_worktree_identity(selection.worktree, runtime_identifier)
-        environment_content = generated_environment_content(
-            selection,
-            runtime_identifier,
-            build_directory,
-            bundle,
-        )
-        atomic_write(environment_path, environment_content, 0o600)
+        publisher.boundary("after_identity")
+        publisher.text("environment", environment_path, environment_content, 0o600)
         initializing_manifest["configurations"] = configuration_manifest(
             bundle,
             spawn_environments,
@@ -3438,14 +3790,29 @@ def initialize(
             "sha256": text_hash(environment_path.read_text()),
         }
         initializing_manifest["state"] = "ready"
-        allocations[runtime_identifier] = {
-            "generation": generation,
-            "state": "ready",
-            "worktree_path": os.fspath(selection.worktree),
-            "claims": claims,
-        }
-        atomic_json(manifest_path, initializing_manifest)
-        atomic_json(registry_path, registry)
+        allocations[runtime_identifier] = allocation_record(initializing_manifest, "ready")
+        publisher.json("ready_manifest", manifest_path, initializing_manifest)
+        publisher.json("ready_registry", registry_path, registry)
+        transaction["state"] = "ready"
+        publisher.json("ready_transaction", transaction_path, transaction)
+    except OperationError as error:
+        if recovering and transaction is not None and error.diagnostic.code not in (
+            "transaction_operation_mismatch", "transaction_generation_conflict", "path_unsafe"
+        ):
+            transaction["state"] = "recovery_required"
+            transaction["manifest"]["state"] = "recovery_required"
+            atomic_json(transaction_path, transaction)
+            atomic_json(manifest_path, transaction["manifest"])
+            allocations = registry["allocations"]
+            assert isinstance(allocations, dict)
+            allocations[runtime_identifier] = allocation_record(transaction["manifest"], "recovery_required")
+            registry["generation"] = max(require_integer(registry, "generation"), transaction["generation"])
+            atomic_json(registry_path, registry)
+            error.diagnostic = replace(
+                error.diagnostic,
+                next_action=error.diagnostic.next_action + " Then retry init with the original selection; claims remain retained.",
+            )
+        raise
     finally:
         os.close(lock_descriptor)
     return ready_result("init", selection, runtime_identifier, manifest_path, environment_path), 0
@@ -3998,6 +4365,20 @@ def ownership_operation_error(
     )
 
 
+def require_complete_mutation_observation(
+    observations: RuntimeObservationSnapshot, selection: RuntimeSelection
+) -> None:
+    if not observations.complete:
+        raise OperationError(
+            "observation_incomplete", "runtime observation snapshot", selection.worktree,
+            observations.source, "Initialization cannot prove that the selected runtime is idle.",
+            "Retry when process, socket, listener, and System V IPC observations are complete.",
+            "unknown",
+            missing_evidence=("complete process, socket, listener, filesystem, configuration, and System V IPC visibility",),
+            observation_scope=observations.scope,
+        )
+
+
 def require_mutation_safe_ownership(
     adapter: ObservationAdapter,
     observations: RuntimeObservationSnapshot,
@@ -4009,6 +4390,7 @@ def require_mutation_safe_ownership(
     layout: InstallationLayout,
     engine_content: str,
 ) -> list[dict[str, object]]:
+    require_complete_mutation_observation(observations, selection)
     spawn_environments = capture_broker_spawn_environments(
         broker_content,
         layout,
@@ -4200,6 +4582,27 @@ def validate(
         ), EXIT_INVALID
     if document["state"] != "ready":
         return reject_manifest("manifest_not_ready", "Manifest transaction state is not ready.")
+    transaction_observation = adapter.inspect_file(manifest_path.parent / "transaction.json")
+    if transaction_observation.exists:
+        try:
+            transaction = json.loads(transaction_observation.content or "")
+            transaction_matches = (
+                transaction_observation.kind == "file"
+                and transaction_observation.owner == os.geteuid()
+                and transaction_observation.mode == 0o600
+                and transaction_observation.canonical is True
+                and transaction["schema_version"] == STATE_SCHEMA_VERSION
+                and transaction["state"] == "ready"
+                and transaction["generation"] == document["generation"]
+            )
+        except (ValueError, KeyError, TypeError):
+            transaction_matches = False
+        if not transaction_matches:
+            return reject_manifest(
+                "transaction_not_ready",
+                "The retained transaction is unfinished or disagrees with the manifest; "
+                "retry the original explicit command with its original selection.",
+            )
     if not document["resource_bundle"]:
         return reject_manifest(
             "manifest_incomplete",
@@ -4840,6 +5243,15 @@ def validate(
                     sort_keys=True,
                 ),
             ), EXIT_INVALID
+    if transaction_observation.exists and (
+        transaction.get("manifest") != document
+        or adapter.inspect_file(manifest_path.parent / "transaction.json") != transaction_observation
+        or adapter.inspect_file(manifest_path) != manifest
+    ):
+        return reject_manifest(
+            "transaction_not_ready",
+            "The transaction changed or disagrees with the validated manifest; retry validation.",
+        )
     ownership = classify_live_ownership(
         adapter, runtime_observations, bundle, document
     )
@@ -4927,7 +5339,9 @@ def parse_arguments() -> argparse.Namespace:
     subparsers = parser.add_subparsers(dest="command", required=True)
     initialize_parser = subparsers.add_parser("init", help="initialize a worktree runtime")
     validate_parser = subparsers.add_parser("validate", help="validate runtime guard state")
-    for command_parser in (initialize_parser, validate_parser):
+    adopt_parser = subparsers.add_parser("adopt", help="reserved; refuses unfinished operations")
+    deinit_parser = subparsers.add_parser("deinit", help="reserved; refuses unfinished operations")
+    for command_parser in (initialize_parser, validate_parser, adopt_parser, deinit_parser):
         command_parser.add_argument("--worktree", help="CUBRID Git worktree (default: current worktree)")
         command_parser.add_argument("--preset", help="active build preset (default: PRESET_MODE)")
         command_parser.add_argument("--json", action="store_true", help="emit structured diagnostics")
@@ -4956,8 +5370,10 @@ def main() -> int:
         adapter = observation_adapter()
         if arguments.command == "init":
             result, exit_status = initialize(adapter, selection, arguments.db_name)
-        else:
+        elif arguments.command == "validate":
             result, exit_status = validate(adapter, selection)
+        else:
+            refuse_unimplemented_mutation(arguments.command, selection)
     except OperationError as error:
         result = ValidationResult(
             outcome="invalid",

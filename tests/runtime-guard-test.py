@@ -7,10 +7,19 @@ from pathlib import Path
 import shutil
 import subprocess
 import tempfile
+import time
 import unittest
 
 
 CLI = Path(__file__).resolve().parents[1] / "bin" / "my-cubrid-runtime"
+PUBLICATION_BOUNDARIES = tuple(
+    f"{when}_{publication}"
+    for publication in (
+        "registry", "manifest", "engine_configuration", "broker_configuration",
+        "identity", "environment", "ready_manifest", "ready_registry",
+    )
+    for when in ("before", "after")
+)
 
 
 class RuntimeGuardCliTest(unittest.TestCase):
@@ -259,6 +268,330 @@ class RuntimeGuardCliTest(unittest.TestCase):
                 **observations,
             },
         }))
+
+    def test_interrupted_registry_publication_retains_claims_and_recovers(self):
+        fixture = json.loads(self.fixture.read_text())
+        fixture["publication_failure"] = "before_registry"
+        self.fixture.write_text(json.dumps(fixture))
+        interrupted = self.run_runtime("init", "--preset", "debug", "--json")
+        self.assertNotEqual(interrupted.returncode, 0)
+        guard = self.state_home / "cubrid-worktree-guard"
+        transactions = list(guard.glob("worktrees/*/transaction.json"))
+        self.assertEqual(len(transactions), 1)
+        transaction = self.read_manifest(transactions[0])
+        claims = transaction["manifest"]["normalized_claims"]
+        self.assertEqual(transaction["state"], "initializing")
+        self.assertNotEqual(self.run_cli("--preset", "debug").returncode, 0)
+
+        fixture.pop("publication_failure")
+        self.fixture.write_text(json.dumps(fixture))
+        other_worktree, _, other_environment = self.create_additional_runtime("other")
+        other = self.run_runtime_for(
+            other_worktree, other_environment, "init", "--preset", "debug", "--json"
+        )
+        self.assertEqual(other.returncode, 0, other.stderr + other.stdout)
+        for kind in ("tcp_ports", "system_v_keys", "paths"):
+            self.assertTrue(set(claims[kind]).isdisjoint(
+                self.manifest_for(other)["normalized_claims"][kind]
+            ), kind)
+        recovered = self.run_runtime("init", "--preset", "debug", "--json")
+        self.assertEqual(recovered.returncode, 0, recovered.stderr + recovered.stdout)
+        manifest = self.manifest_for(recovered)
+        self.assertEqual(manifest["generation"], transaction["generation"])
+        self.assertEqual(manifest["normalized_claims"], claims)
+        self.assertEqual(self.run_cli("--preset", "debug").returncode, 0)
+        self.assertFalse(self.calls.exists())
+
+    def interrupt_initialization(self, boundary):
+        fixture = json.loads(self.fixture.read_text())
+        fixture["publication_failure"] = boundary
+        self.fixture.write_text(json.dumps(fixture))
+        result = self.run_runtime("init", "--preset", "debug", "--json")
+        self.assertEqual(result.returncode, 86, result.stderr + result.stdout)
+        fixture.pop("publication_failure")
+        self.fixture.write_text(json.dumps(fixture))
+        guard = self.state_home / "cubrid-worktree-guard"
+        paths = list(guard.glob("worktrees/*/transaction.json"))
+        self.assertEqual(len(paths), 1)
+        return paths[0], self.read_manifest(paths[0])
+
+    def test_every_publication_boundary_is_non_ready_and_recoverable(self):
+        for boundary in PUBLICATION_BOUNDARIES:
+            with self.subTest(boundary=boundary):
+                self.setUp()
+                transaction_path, transaction = self.interrupt_initialization(boundary)
+                retained = transaction["manifest"]
+                self.assertNotEqual(self.run_cli("--preset", "debug").returncode, 0)
+                guard = transaction_path.parents[2]
+                for path in (guard, *guard.rglob("*")):
+                    self.assertEqual(path.stat().st_mode & 0o777,
+                                     0o700 if path.is_dir() else 0o600, str(path))
+                recovered = self.run_runtime("init", "--preset", "debug", "--json")
+                self.assertEqual(recovered.returncode, 0, recovered.stderr + recovered.stdout)
+                manifest = self.manifest_for(recovered)
+                self.assertEqual(manifest["generation"], transaction["generation"])
+                self.assertEqual(manifest["normalized_claims"], retained["normalized_claims"])
+                self.assertEqual(self.read_manifest(transaction_path)["state"], "ready")
+                self.assertEqual(self.run_cli("--preset", "debug").returncode, 0)
+                self.assertFalse(self.calls.exists())
+
+    def test_ready_runtime_reinitialization_recovers_each_publication_boundary(self):
+        for boundary in PUBLICATION_BOUNDARIES:
+            with self.subTest(boundary=boundary):
+                self.setUp()
+                initial = self.run_runtime("init", "--preset", "debug", "--json")
+                self.assertEqual(initial.returncode, 0, initial.stderr + initial.stdout)
+                previous = self.manifest_for(initial)
+                path, transaction = self.interrupt_initialization(boundary)
+                self.assertNotEqual(self.run_cli("--preset", "debug").returncode, 0)
+                recovered = self.run_runtime("init", "--preset", "debug", "--json")
+                self.assertEqual(recovered.returncode, 0, recovered.stderr + recovered.stdout)
+                manifest = self.manifest_for(recovered)
+                self.assertEqual(manifest["generation"], transaction["generation"])
+                self.assertEqual(manifest["normalized_claims"], previous["normalized_claims"])
+                self.assertEqual(self.run_cli("--preset", "debug").returncode, 0)
+
+    def test_final_transaction_publication_is_the_readiness_commit_marker(self):
+        for when in ("before", "after"):
+            with self.subTest(when=when):
+                self.setUp()
+                path, transaction = self.interrupt_initialization(f"{when}_ready_transaction")
+                validated = self.run_cli("--preset", "debug", "--json")
+                self.assertEqual(validated.returncode == 0, when == "after")
+                recovered = self.run_runtime("init", "--preset", "debug", "--json")
+                self.assertEqual(recovered.returncode, 0, recovered.stderr + recovered.stdout)
+                self.assertEqual(self.manifest_for(recovered)["normalized_claims"],
+                                 transaction["manifest"]["normalized_claims"])
+                self.assertEqual(self.read_manifest(path)["state"], "ready")
+
+    def test_recovery_refuses_other_commands_and_changed_selection(self):
+        transaction_path, transaction = self.interrupt_initialization("after_environment")
+        before = self.snapshot()
+        for command, options in (
+            ("adopt", ()), ("deinit", ()),
+            ("init", ("--db-name", "different")),
+            ("init", ("--preset", "release_gcc")),
+        ):
+            with self.subTest(command=command, options=options):
+                result = self.run_runtime(command, "--preset", "debug", *options, "--json")
+                self.assertEqual(result.returncode, 4, result.stderr + result.stdout)
+                diagnostic = json.loads(result.stdout)["diagnostic"]
+                self.assertEqual(diagnostic["code"], "transaction_operation_mismatch")
+                self.assertIn("init", diagnostic["next_action"])
+                self.assertEqual(self.snapshot(), before)
+
+    def test_recovery_retains_claims_when_live_evidence_is_contradictory(self):
+        transaction_path, transaction = self.interrupt_initialization("after_environment")
+        manifest = transaction["manifest"]
+        self.replace_observations({"listeners": [{
+            "port": manifest["resource_bundle"]["master_port"],
+            "inode": 7001, "owner_pid": 404, "owner_start_time": 100,
+            "protocol": "tcp", "address": "0.0.0.0",
+            "namespace": self.observation_scope()["namespaces"]["network"],
+        }]})
+        environment = (transaction_path.parent / "env.sh").read_bytes()
+        engine = (self.installation / "conf" / "cubrid.conf").read_bytes()
+        result = self.run_runtime("init", "--preset", "debug", "--json")
+        self.assertEqual(result.returncode, 4, result.stderr + result.stdout)
+        self.assertEqual(self.read_manifest(transaction_path)["state"], "recovery_required")
+        self.assertEqual(self.read_manifest(transaction_path.parent / "manifest.json")["state"],
+                         "recovery_required")
+        registry = self.read_manifest(transaction_path.parents[2] / "allocations.json")
+        self.assertEqual(registry["allocations"][manifest["worktree_id"]]["claims"],
+                         manifest["normalized_claims"])
+        self.assertEqual((transaction_path.parent / "env.sh").read_bytes(), environment)
+        self.assertEqual((self.installation / "conf" / "cubrid.conf").read_bytes(), engine)
+        self.assertIn("init", json.loads(result.stdout)["diagnostic"]["next_action"])
+        self.replace_observations({})
+        recovered = self.run_runtime("init", "--preset", "debug", "--json")
+        self.assertEqual(recovered.returncode, 0, recovered.stderr + recovered.stdout)
+        self.assertEqual(self.manifest_for(recovered)["generation"], transaction["generation"])
+        self.assertFalse(self.calls.exists())
+
+    def test_newer_published_generation_fences_a_stale_recovery(self):
+        for target in ("manifest", "registry"):
+            with self.subTest(target=target):
+                self.setUp()
+                path, transaction = self.interrupt_initialization("after_environment")
+                if target == "manifest":
+                    changed_path = path.parent / "manifest.json"
+                    changed = self.read_manifest(changed_path)
+                    changed["generation"] += 1
+                else:
+                    changed_path = path.parents[2] / "allocations.json"
+                    changed = self.read_manifest(changed_path)
+                    changed["generation"] += 1
+                    changed["allocations"][transaction["manifest"]["worktree_id"]]["generation"] += 1
+                changed_path.write_text(json.dumps(changed))
+                before = self.snapshot()
+                result = self.run_runtime("init", "--preset", "debug", "--json")
+                self.assertEqual(result.returncode, 4, result.stderr + result.stdout)
+                self.assertEqual(json.loads(result.stdout)["diagnostic"]["code"],
+                                 "transaction_generation_conflict")
+                self.assertEqual(self.snapshot(), before)
+
+    def test_recovery_does_not_overwrite_configuration_outside_its_partial_plan(self):
+        path, transaction = self.interrupt_initialization("after_engine_configuration")
+        engine = self.installation / "conf" / "cubrid.conf"
+        edited = engine.read_text() + "\n# edit after interruption\n"
+        engine.write_text(edited)
+        result = self.run_runtime("init", "--preset", "debug", "--json")
+        self.assertEqual(result.returncode, 4, result.stderr + result.stdout)
+        self.assertEqual(json.loads(result.stdout)["diagnostic"]["code"],
+                         "transaction_input_changed")
+        self.assertEqual(engine.read_text(), edited)
+        self.assertEqual(self.read_manifest(path)["state"], "recovery_required")
+
+    def wait_for_publication(self, process):
+        reached = self.fixture.with_suffix(".reached")
+        deadline = time.monotonic() + 5
+        while not reached.exists() and time.monotonic() < deadline and process.poll() is None:
+            time.sleep(0.01)
+        self.assertTrue(reached.exists(), "guard did not reach the publication boundary")
+        return reached
+
+    def launch_runtime(self, worktree=None, environment=None):
+        process = subprocess.Popen(
+            [str(CLI), "init", "--preset", "debug", "--json"],
+            cwd=worktree or self.worktree, env=environment or self.environment,
+            text=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+        )
+        self.addCleanup(lambda: process.communicate(timeout=15))
+        return process
+
+    def test_stale_writer_cannot_publish_after_newer_state_appears(self):
+        path, transaction = self.interrupt_initialization("after_environment")
+        fixture = json.loads(self.fixture.read_text())
+        fixture["publication_pause"] = "before_ready_manifest"
+        self.fixture.write_text(json.dumps(fixture))
+        process = self.launch_runtime()
+        self.wait_for_publication(process)
+        manifest_path = path.parent / "manifest.json"
+        newer = self.read_manifest(manifest_path)
+        newer["generation"] += 1
+        manifest_path.write_text(json.dumps(newer))
+        self.fixture.with_suffix(".resume").touch()
+        stdout, stderr = process.communicate(timeout=10)
+        self.assertEqual(process.returncode, 4, stderr + stdout)
+        self.assertEqual(json.loads(stdout)["diagnostic"]["code"], "transaction_generation_conflict")
+        self.assertEqual(self.read_manifest(manifest_path), newer)
+        self.assertEqual(self.read_manifest(path)["generation"], transaction["generation"])
+
+    def test_concurrent_retries_accept_exactly_one_generation(self):
+        path, interrupted = self.interrupt_initialization("after_environment")
+        fixture = json.loads(self.fixture.read_text())
+        fixture["publication_pause"] = "before_ready_manifest"
+        self.fixture.write_text(json.dumps(fixture))
+        first = self.launch_runtime()
+        self.wait_for_publication(first)
+        second_fixture = self.root / "second-observations.json"
+        fixture["publication_pause"] = "before_lock"
+        second_fixture.write_text(json.dumps(fixture))
+        second = self.launch_runtime(environment={
+            **self.environment, "MY_CUBRID_RUNTIME_TEST_OBSERVATIONS": str(second_fixture),
+        })
+        original_fixture = self.fixture
+        self.fixture = second_fixture
+        self.wait_for_publication(second)
+        self.fixture = original_fixture
+        second_fixture.with_suffix(".resume").touch()
+        self.fixture.with_suffix(".resume").touch()
+        results = [process.communicate(timeout=10) for process in (first, second)]
+        for process, (stdout, stderr) in zip((first, second), results):
+            self.assertEqual(process.returncode, 0, stderr + stdout)
+        self.assertEqual(self.read_manifest(path)["generation"], interrupted["generation"])
+        registry = self.read_manifest(path.parents[2] / "allocations.json")
+        self.assertEqual(len(registry["allocations"]), 1)
+        self.assertEqual(registry["generation"], interrupted["generation"])
+        self.assertEqual(self.run_cli("--preset", "debug").returncode, 0)
+
+    def test_missing_worktree_and_old_transaction_never_release_claims(self):
+        path, transaction = self.interrupt_initialization("before_registry")
+        transaction["created_at"] = "1970-01-01T00:00:00Z"
+        transaction["lease_expires_at"] = "1970-01-01T00:00:01Z"
+        path.write_text(json.dumps(transaction))
+        os.utime(path, (1, 1))
+        missing_worktree = self.worktree.with_name("temporarily-missing")
+        self.worktree.rename(missing_worktree)
+        before = path.read_bytes()
+        other_worktree, _, environment = self.create_additional_runtime("other")
+        result = self.run_runtime_for(other_worktree, environment, "init", "--preset", "debug", "--json")
+        self.assertEqual(result.returncode, 0, result.stderr + result.stdout)
+        self.assertEqual(path.read_bytes(), before)
+        self.assertEqual(path.stat().st_mtime, 1)
+        for kind in ("tcp_ports", "system_v_keys", "paths"):
+            self.assertTrue(set(transaction["manifest"]["normalized_claims"][kind]).isdisjoint(
+                self.manifest_for(result)["normalized_claims"][kind]
+            ))
+        missing_worktree.rename(self.worktree)
+        recovered = self.run_runtime("init", "--preset", "debug", "--json")
+        self.assertEqual(recovered.returncode, 0, recovered.stderr + recovered.stdout)
+        self.assertEqual(self.manifest_for(recovered)["generation"], transaction["generation"])
+
+    def test_deinitializing_generation_cannot_be_overwritten_by_init(self):
+        path, transaction = self.interrupt_initialization("after_environment")
+        transaction["operation"] = "deinit"
+        transaction["state"] = "deinitializing"
+        transaction["manifest"]["state"] = "deinitializing"
+        path.write_text(json.dumps(transaction))
+        (path.parent / "manifest.json").write_text(json.dumps(transaction["manifest"]))
+        registry_path = path.parents[2] / "allocations.json"
+        registry = self.read_manifest(registry_path)
+        registry["allocations"][transaction["manifest"]["worktree_id"]]["state"] = "deinitializing"
+        registry_path.write_text(json.dumps(registry))
+        before = self.snapshot()
+        result = self.run_runtime("init", "--preset", "debug", "--json")
+        self.assertEqual(result.returncode, 4, result.stderr + result.stdout)
+        self.assertEqual(json.loads(result.stdout)["diagnostic"]["code"], "transaction_operation_mismatch")
+        self.assertIn("deinit", json.loads(result.stdout)["diagnostic"]["next_action"])
+        self.assertEqual(self.snapshot(), before)
+        self.assertNotEqual(self.run_cli("--preset", "debug").returncode, 0)
+
+    def test_replacing_worktree_id_cannot_bypass_unfinished_generation(self):
+        path, _ = self.interrupt_initialization("after_environment")
+        (self.worktree / ".env").write_text("CUBRID_WORKTREE_ID=replacement01\n")
+        before = self.snapshot()
+        result = self.run_runtime("init", "--preset", "debug", "--json")
+        self.assertEqual(result.returncode, 4, result.stderr + result.stdout)
+        self.assertEqual(json.loads(result.stdout)["diagnostic"]["code"], "transaction_operation_mismatch")
+        self.assertEqual(self.snapshot(), before)
+
+    def test_recovery_requires_complete_fresh_observation(self):
+        path, transaction = self.interrupt_initialization("after_environment")
+        self.replace_observations({"complete": False})
+        result = self.run_runtime("init", "--preset", "debug", "--json")
+        self.assertEqual(result.returncode, 4, result.stderr + result.stdout)
+        self.assertEqual(self.read_manifest(path)["state"], "recovery_required")
+        self.assertEqual(self.read_manifest(path)["manifest"]["normalized_claims"],
+                         transaction["manifest"]["normalized_claims"])
+
+    def test_failed_recovery_before_registry_does_not_relabel_predecessor_generation(self):
+        initial = self.run_runtime("init", "--preset", "debug", "--json")
+        self.assertEqual(initial.returncode, 0, initial.stderr + initial.stdout)
+        path, transaction = self.interrupt_initialization("before_registry")
+        self.replace_observations({"complete": False})
+        refused = self.run_runtime("init", "--preset", "debug", "--json")
+        self.assertEqual(refused.returncode, 4, refused.stderr + refused.stdout)
+        self.replace_observations({})
+        recovered = self.run_runtime("init", "--preset", "debug", "--json")
+        self.assertEqual(recovered.returncode, 0, recovered.stderr + recovered.stdout)
+        self.assertEqual(self.manifest_for(recovered)["generation"], transaction["generation"])
+
+    def test_recovery_preserves_runtime_data_and_stale_sockets(self):
+        path, transaction = self.interrupt_initialization("after_environment")
+        bundle = transaction["manifest"]["resource_bundle"]
+        canaries = [Path(bundle[kind]) / "keep" for kind in ("data_root", "log_root", "lob_root")]
+        for canary in canaries:
+            canary.write_bytes(b"existing database data\x00")
+        socket_path = Path(bundle["socket_paths"][0])
+        socket_path.write_bytes(b"stale socket stand-in")
+        result = self.run_runtime("init", "--preset", "debug", "--json")
+        self.assertEqual(result.returncode, 4, result.stderr + result.stdout)
+        for canary in canaries:
+            self.assertEqual(canary.read_bytes(), b"existing database data\x00")
+        self.assertEqual(socket_path.read_bytes(), b"stale socket stand-in")
+        self.assertEqual(self.read_manifest(path)["state"], "recovery_required")
+        self.assertFalse(self.calls.exists())
 
     def test_init_creates_one_complete_runtime_and_validate_reports_ready(self):
         (self.worktree / ".env").write_text(

@@ -19,8 +19,6 @@ def --env nc [] {
 alias ncub = nc
 alias ncube = nvim ~/my-cubrid/cubrid-justfiles/justfile
 
-alias my-cubrid-init = stow --dir=$"($env.MY_CUBRID)/stow" --target=. cubrid
-
 alias tcsql = cd ~/gh/tc/cubrid-testcases/
 alias tcshell = cd ~/cubrid-testcases-private-ex/
 

@@ -22,9 +22,9 @@ if [ ! -f "$fm_conf/cubrid.conf" ]; then
 fi
 
 source_conf="$HOME/CTP/conf/shell_ci.conf"
-test_conf="$(mktemp /tmp/shell_single.XXXXXX.conf)"
-transcript="$(mktemp /tmp/shell_single.XXXXXX.log)"
-clean_log="$(mktemp /tmp/shell_single.XXXXXX.clean.log)"
+test_conf="$(mktemp "${TMPDIR:-/tmp}/shell_single.XXXXXX.conf")"
+transcript="$(mktemp "${TMPDIR:-/tmp}/shell_single.XXXXXX.log")"
+clean_log="$(mktemp "${TMPDIR:-/tmp}/shell_single.XXXXXX.clean.log")"
 trap 'rm -f "$test_conf" "$clean_log"' EXIT
 
 cp "$source_conf" "$test_conf"

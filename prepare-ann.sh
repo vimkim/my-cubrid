@@ -11,6 +11,9 @@ export ANN_BENCHMARKS_CUB_SERVER_PORT=5560
 export ANN_BENCHMARKS_CUB_NUM_CAS=1
 export OPENBLAS_NUM_THREADS=1
 
+broker_conf_tmp="$(mktemp "${TMPDIR:-/tmp}/cubrid_broker.conf.XXXXXX")"
+trap 'rm -f "$broker_conf_tmp"' EXIT
+
 echo "data_buffer_size=16G" >> $CUBRID/conf/cubrid.conf
 
 sed -i "s/^cubrid_port_id *= *.*/cubrid_port_id = ${ANN_BENCHMARKS_CUB_SERVER_PORT}/" $CUBRID/conf/cubrid.conf && \
@@ -24,8 +27,8 @@ sed -i "s/^cubrid_port_id *= *.*/cubrid_port_id = ${ANN_BENCHMARKS_CUB_SERVER_PO
       /^\[%query_editor\]/ { skip=1; next } \
       /^\[/ && skip { skip=0 } \
       !skip \
-      ' $CUBRID/conf/cubrid_broker.conf > /tmp/cubrid_broker.conf && \
-      mv /tmp/cubrid_broker.conf $CUBRID/conf/cubrid_broker.conf && \
+      ' $CUBRID/conf/cubrid_broker.conf > "$broker_conf_tmp" && \
+      mv "$broker_conf_tmp" $CUBRID/conf/cubrid_broker.conf && \
       sed -i "s/^MIN_NUM_APPL_SERVER[ \t]*=.*/MIN_NUM_APPL_SERVER = ${ANN_BENCHMARKS_CUB_NUM_CAS}/" $CUBRID/conf/cubrid_broker.conf && \
       sed -i "s/^MAX_NUM_APPL_SERVER[ \t]*=.*/MAX_NUM_APPL_SERVER = ${ANN_BENCHMARKS_CUB_NUM_CAS}/" $CUBRID/conf/cubrid_broker.conf && \
       sed -i "s/^BROKER_PORT[ \t]*=.*/BROKER_PORT = ${ANN_BENCHMARKS_CUB_PORT}/" $CUBRID/conf/cubrid_broker.conf && \

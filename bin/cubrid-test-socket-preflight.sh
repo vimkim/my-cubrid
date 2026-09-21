@@ -26,6 +26,6 @@ if [[ -n "$reason" ]]; then
   printf 'Effective PL socket: %s (%s bytes)\n' "$socket_path" "${#socket_path}" >&2
   printf 'An overlong path can leave a truncated socket and hang PL server startup.\n' >&2
   printf 'Set CUBRID_TMP to a short, absolute directory unique to this worktree, then retry.\n' >&2
-  printf '%s\n' 'Example: export CUBRID_TMP="$(mktemp -d /tmp/cubrid-test.XXXXXX)"' '         just test' >&2
+  printf '%s\n' 'Example: export CUBRID_TMP="$(mktemp -d "${TMPDIR:-/tmp}/cubrid-test.XXXXXX")"' '         just test' >&2
   exit 1
 fi

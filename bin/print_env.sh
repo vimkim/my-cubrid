@@ -110,7 +110,8 @@ if command -v iostat >/dev/null; then
   iostat -xz 1 3
 else
   echo "iostat not installed; showing /proc/diskstats deltas over 1s"
-  snap1=$(mktemp) snap2=$(mktemp)
+  snap1=$(mktemp "${TMPDIR:-/tmp}/print-env.XXXXXX")
+  snap2=$(mktemp "${TMPDIR:-/tmp}/print-env.XXXXXX")
   cat /proc/diskstats > "$snap1"
   sleep 1
   cat /proc/diskstats > "$snap2"

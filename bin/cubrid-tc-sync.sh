@@ -3,12 +3,10 @@
 set -euo pipefail
 
 readonly -a DEFAULT_PUBLIC_TC_DIRS=(
-  "/home/vimkim/gh/cub-tc/cubrid-testcases"
-  "/home/vimkim/gh/tc/cubrid-testcases"
+  "/home/vimkim/gh/cubrid-testcases/develop"
 )
 readonly -a DEFAULT_PRIVATE_TC_DIRS=(
-  "/home/vimkim/gh/cub-tc-private-ex/cubrid-testcases-private-ex"
-  "/home/vimkim/cubrid-testcases-private-ex"
+  "/home/vimkim/gh/cubrid-testcases-private-ex/develop"
 )
 
 usage ()

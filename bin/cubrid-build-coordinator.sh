@@ -167,6 +167,35 @@ acquire_runtime_lock()
   fi
 }
 
+runtime_guard_command()
+{
+  printf '%s/bin/my-cubrid-runtime' "${MY_CUBRID:-$HOME/my-cubrid}"
+}
+
+validate_runtime_ready()
+{
+  local report
+  local status
+  local guard
+
+  guard="$(runtime_guard_command)"
+  if report="$("$guard" validate --worktree "$PWD" --preset "$PRESET_MODE" --json)"; then
+    return 0
+  else
+    status=$?
+  fi
+  printf '%s\n' "$report" >&2
+  return "$status"
+}
+
+initialize_guarded_runtime()
+{
+  local guard
+
+  guard="$(runtime_guard_command)"
+  "$guard" init --worktree "$PWD" --preset "$PRESET_MODE"
+}
+
 compile_unlocked()
 {
   cmake --build --preset "$PRESET_MODE"
@@ -247,6 +276,7 @@ case "$action" in
     compile_unlocked
     acquire_idle_runtime_lock "$runtime_timeout"
     install_unlocked
+    initialize_guarded_runtime
     ;;
   install)
     [[ $# -le 1 ]] || die_usage "install accepts at most one timeout"
@@ -254,6 +284,7 @@ case "$action" in
     acquire_build_lock
     acquire_idle_runtime_lock "$runtime_timeout"
     install_unlocked
+    initialize_guarded_runtime
     ;;
   install-target)
     [[ $# -ge 1 && $# -le 2 ]] || die_usage "install-target requires a target and optional timeout"
@@ -273,10 +304,12 @@ case "$action" in
     [[ "${1:-}" == "--" ]] && shift
     [[ $# -gt 0 ]] || die_usage "runtime requires a command"
     if [[ "${CUBRID_RUNTIME_LOCK_HELD:-0}" == "1" ]]; then
+      validate_runtime_ready
       exec "$@"
     fi
     acquire_runtime_lock "$runtime_timeout"
     export CUBRID_RUNTIME_LOCK_HELD=1
+    validate_runtime_ready
     # Keep the lock in this supervisor, not in the command or its daemon children.
     (
       exec {RUNTIME_LOCK_FD}>&-
@@ -291,6 +324,7 @@ case "$action" in
     stop_current_runtime
     wait_for_runtime_to_stop
     install_unlocked
+    initialize_guarded_runtime
     ;;
   *)
     die_usage "unknown action: $action"

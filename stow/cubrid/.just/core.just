@@ -128,7 +128,33 @@ preset-set $preset:
         exit 2
     fi
 
-    printf 'PRESET_MODE=%s\n' "$preset" >.env
+    umask 077
+    environment_file=.env
+    temporary_file="$(mktemp .env.XXXXXX)"
+    trap 'rm -f -- "$temporary_file"' EXIT
+    if [[ -e "$environment_file" ]]; then
+        awk -v preset="$preset" '
+            BEGIN { replaced = 0 }
+            /^[[:space:]]*(export[[:space:]]+)?PRESET_MODE[[:space:]]*=/ {
+                if (!replaced) {
+                    print "PRESET_MODE=" preset
+                    replaced = 1
+                }
+                next
+            }
+            { print }
+            END {
+                if (!replaced) {
+                    print "PRESET_MODE=" preset
+                }
+            }
+        ' "$environment_file" >"$temporary_file"
+        chmod --reference="$environment_file" "$temporary_file"
+    else
+        printf 'PRESET_MODE=%s\n' "$preset" >"$temporary_file"
+    fi
+    mv -f -- "$temporary_file" "$environment_file"
+    trap - EXIT
     printf 'Selected preset: %s\n' "$preset"
 
 # Compile without installing.

@@ -12,6 +12,8 @@ import unittest
 
 REPOSITORY = Path(__file__).resolve().parents[1]
 ENVIRONMENT_LOADER = REPOSITORY / "stow" / "cubrid" / ".envrc"
+SHARED_JUSTFILE = REPOSITORY / "stow" / "cubrid" / "justfile"
+SHARED_JUST_MODULES = REPOSITORY / "stow" / "cubrid" / ".just"
 
 
 class RuntimeEnvironmentTest(unittest.TestCase):
@@ -190,6 +192,50 @@ exit "$status"
         runtime_lib = str(Path(loaded["CUBRID"]) / "lib")
         self.assertEqual(loaded["PATH"].split(":").count(runtime_bin), 1)
         self.assertEqual(loaded["LD_LIBRARY_PATH"].split(":").count(runtime_lib), 1)
+
+    def test_preset_recipe_preserves_runtime_identity_and_unrelated_settings(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            (root / "justfile").symlink_to(SHARED_JUSTFILE)
+            (root / ".just").symlink_to(SHARED_JUST_MODULES, target_is_directory=True)
+            environment_file = root / ".env"
+            environment_file.write_text(
+                "# local settings\n"
+                "PRESET_MODE=debug_gcc\n"
+                "\n"
+                "CUBRID_WORKTREE_ID=runtime01\n"
+                "EXTRA_SETTING=keep-me\n"
+            )
+            environment_file.chmod(0o640)
+            command_bin = root / "commands"
+            command_bin.mkdir()
+            cmake = command_bin / "cmake"
+            cmake.write_text(
+                "#!/usr/bin/env bash\n"
+                "printf '%s\\n' 'Available configure presets:' '  \"debug_gcc\"' '  \"release_gcc\"'\n"
+            )
+            cmake.chmod(0o755)
+            environment = dict(os.environ, PATH=f"{command_bin}:{os.environ['PATH']}")
+
+            result = subprocess.run(
+                ["just", "--justfile", str(root / "justfile"), "core::preset-set", "release_gcc"],
+                cwd=root,
+                env=environment,
+                capture_output=True,
+                text=True,
+                timeout=10,
+            )
+
+            self.assertEqual(result.returncode, 0, result.stderr)
+            self.assertEqual(
+                environment_file.read_text(),
+                "# local settings\n"
+                "PRESET_MODE=release_gcc\n"
+                "\n"
+                "CUBRID_WORKTREE_ID=runtime01\n"
+                "EXTRA_SETTING=keep-me\n",
+            )
+            self.assertEqual(environment_file.stat().st_mode & 0o777, 0o640)
 
 
 if __name__ == "__main__":

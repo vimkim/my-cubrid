@@ -7,6 +7,7 @@ import argparse
 from collections.abc import Callable, Mapping
 from dataclasses import dataclass, replace
 import fcntl
+from functools import partial
 import hashlib
 import json
 import os
@@ -1171,6 +1172,10 @@ def invalid_result(
     )
 
 
+def is_worktree_identity_line(line: str) -> bool:
+    return re.match(r"\s*(?:export\s+)?CUBRID_WORKTREE_ID\b", line) is not None
+
+
 def runtime_id(adapter: ObservationAdapter, worktree: Path) -> str | None:
     environment_path = worktree / ".env"
     environment_file = adapter.inspect_file(environment_path)
@@ -1186,7 +1191,7 @@ def runtime_id(adapter: ObservationAdapter, worktree: Path) -> str | None:
         )
     values = []
     for line in environment_file.content.splitlines():
-        if not re.match(r"\s*(?:export\s+)?CUBRID_WORKTREE_ID\b", line):
+        if not is_worktree_identity_line(line):
             continue
         match = re.fullmatch(r"\s*(?:export\s+)?CUBRID_WORKTREE_ID\s*=\s*([^\s#]+)\s*", line)
         if not match:
@@ -3600,7 +3605,7 @@ def write_worktree_identity(worktree: Path, runtime_identifier: str) -> None:
     lines = content.splitlines(keepends=True)
     matches = [
         index for index, line in enumerate(lines)
-        if re.match(r"\s*(?:export\s+)?CUBRID_WORKTREE_ID\b", line)
+        if is_worktree_identity_line(line)
     ]
     if len(matches) > 1:
         raise OperationError(
@@ -4589,11 +4594,36 @@ def require_mutation_safe_ownership(
     return spawn_environments
 
 
-def validate(
-    adapter: ObservationAdapter,
-    selection: RuntimeSelection,
-    deinitializing: GuardTransaction | None = None,
+@dataclass(frozen=True)
+class RuntimeValidationMetadata:
+    worktree_id: str
+    manifest_path: Path
+    manifest_source: Path
+    manifest_observation: FileObservation
+    transaction_observation: FileObservation
+    transaction: dict[str, Any]
+    runtime_observations: RuntimeObservationSnapshot
+    document: dict[str, Any]
+    bundle: ResourceBundle
+    registry: dict[str, Any]
+    environment_path: Path
+
+
+def manifest_validation_error(
+    selection: RuntimeSelection, manifest_path: Path, code: str, message: str,
+    evidence_quality: Literal["definitive", "unknown"] = "definitive",
 ) -> tuple[ValidationResult, int]:
+    return invalid_result(
+        selection, manifest_path, code, message, evidence_quality,
+        expected_owner=os.geteuid(),
+    ), EXIT_INVALID
+
+
+def load_validation_metadata(
+    adapter: ObservationAdapter, selection: RuntimeSelection,
+    deinitializing: GuardTransaction | None,
+) -> RuntimeValidationMetadata | tuple[ValidationResult, int]:
+    """Resolve persisted validation metadata and capture one runtime snapshot."""
     worktree = selection.worktree
     try:
         selected_runtime_id = runtime_id(adapter, worktree)
@@ -4628,19 +4658,7 @@ def validate(
     if not manifest.exists:
         return uninitialized_result(selection), EXIT_UNINITIALIZED
 
-    def reject_manifest(
-        code: str,
-        message: str,
-        evidence_quality: Literal["definitive", "unknown"] = "definitive",
-    ) -> tuple[ValidationResult, int]:
-        return invalid_result(
-            selection,
-            manifest_path,
-            code,
-            message,
-            evidence_quality,
-            expected_owner=os.geteuid(),
-        ), EXIT_INVALID
+    reject_manifest = partial(manifest_validation_error, selection, manifest_path)
 
     if manifest.kind != "file":
         return reject_manifest(
@@ -4763,6 +4781,7 @@ def validate(
         ), EXIT_INVALID
     if document["state"] != "ready" and deinitializing is None:
         return reject_manifest("manifest_not_ready", "Manifest transaction state is not ready.")
+    transaction: dict[str, Any] = {}
     transaction_observation = adapter.inspect_file(manifest_path.parent / "transaction.json")
     if transaction_observation.exists:
         try:
@@ -4818,45 +4837,6 @@ def validate(
         return reject_manifest(
             "manifest_incomplete", "Manifest does not contain a complete resource bundle."
         )
-    for kind, environment_name in (
-        ("engine", "CUBRID_CONF_FILE"),
-        ("broker", "CUBRID_BROKER_CONF_FILE"),
-    ):
-        record = configurations.get(kind)
-        if not isinstance(record, dict) or not isinstance(record.get("path"), str):
-            return reject_manifest(
-                "manifest_incomplete",
-                f"Manifest {kind} configuration identity is incomplete.",
-            )
-        expected_path = record["path"]
-        selected_path = os.environ.get(environment_name)
-        if selected_path and selected_path != expected_path:
-            return invalid_result(
-                selection,
-                selected_path,
-                "configuration_selection_drift",
-                f"{environment_name} selects a different {kind} configuration.",
-                affected_kind=f"{kind} configuration",
-                source=environment_name,
-                next_action=(
-                    "Select the manifest configuration or rerun initialization "
-                    "while the runtime is idle."
-                ),
-                expected_value=expected_path,
-                observed_value=selected_path,
-            ), EXIT_INVALID
-    if os.environ.get("CUBRID_HA_CONF_FILE"):
-        return invalid_result(
-            selection,
-            "CUBRID_HA_CONF_FILE",
-            "component_unsupported",
-            "HA configuration is outside the supported runtime-guard component scope.",
-            affected_kind="environment override",
-            source="process environment",
-            next_action="Unset CUBRID_HA_CONF_FILE and keep HA disabled.",
-            expected_value="unset",
-            observed_value="set",
-        ), EXIT_INVALID
     try:
         bundle = ResourceBundle.from_dict(document["resource_bundle"])
     except (KeyError, ValueError) as error:
@@ -4921,6 +4901,178 @@ def validate(
             affected_kind="allocation lock", source="guard state",
             next_action="Restore the allocation lock owner and mode 0600.",
             expected_owner=os.geteuid(),
+        ), EXIT_INVALID
+    registry_path = state_home / "cubrid-worktree-guard" / "allocations.json"
+    registry_observation = adapter.inspect_file(registry_path)
+    if (
+        not registry_observation.exists
+        or registry_observation.kind != "file"
+        or registry_observation.owner != os.geteuid()
+        or registry_observation.mode != 0o600
+        or registry_observation.content is None
+        or registry_observation.canonical is not True
+    ):
+        return invalid_result(
+            selection, registry_path, "allocation_registry_unsafe",
+            "The allocation registry must be a readable owner-only regular file.",
+            affected_kind="allocation registry", source="guard state",
+            next_action="Restore the allocation registry before using this runtime.",
+            expected_owner=os.geteuid(),
+        ), EXIT_INVALID
+    try:
+        registry_document = json.loads(registry_observation.content)
+        if not isinstance(registry_document["allocations"], dict):
+            raise TypeError("allocations must be an object")
+        allocation = registry_document["allocations"].get(selected_runtime_id)
+    except (json.JSONDecodeError, KeyError, TypeError):
+        return invalid_result(
+            selection, registry_path, "allocation_registry_inconsistent",
+            "The allocation registry does not retain this manifest's allocation.",
+            affected_kind="allocation registry", source="guard state",
+            next_action="Restore the matching retained allocation before using this runtime.",
+        ), EXIT_INVALID
+    if deinitializing is None and (
+        registry_document.get("schema_version") != STATE_SCHEMA_VERSION
+        or type(registry_document.get("generation")) is not int
+        or registry_document["generation"] < document["generation"]
+        or not isinstance(allocation, dict)
+        or allocation.get("generation") != document["generation"]
+        or allocation.get("state") != "ready"
+        or allocation.get("claims") != claims
+    ):
+        return invalid_result(
+            selection, registry_path, "allocation_registry_inconsistent",
+            "The allocation registry generation or claims do not match the manifest.",
+            affected_kind="allocation registry", source="guard state",
+            next_action="Restore matching registry and manifest state before using this runtime.",
+        ), EXIT_INVALID
+    environment_path = generated_environment.get("path")
+    environment_hash = generated_environment.get("sha256")
+    if not isinstance(environment_path, str) or not isinstance(environment_hash, str):
+        return reject_manifest("manifest_incomplete", "Generated environment identity is incomplete.")
+    expected_environment_path = manifest_path.parent / "env.sh"
+    if Path(environment_path) != expected_environment_path:
+        return invalid_result(
+            selection, environment_path, "environment_path_invalid",
+            "The generated environment is not beside its worktree manifest.",
+            affected_kind="generated environment", source="manifest generated_environment.path",
+            next_action="Rerun initialization while the selected runtime is idle.",
+            expected_value=os.fspath(expected_environment_path), observed_value=environment_path,
+        ), EXIT_INVALID
+    environment_observation = adapter.inspect_file(expected_environment_path)
+    if (
+        environment_observation.kind != "file"
+        or environment_observation.owner != os.geteuid()
+        or environment_observation.mode != 0o600
+        or environment_observation.content is None
+        or environment_observation.canonical is not True
+    ) and not (deinitializing is not None and not environment_observation.exists):
+        return invalid_result(
+            selection, expected_environment_path, "environment_unsafe",
+            "The generated environment must be a readable owner-only regular file.",
+            affected_kind="generated environment", source="guard state",
+            next_action="Rerun initialization while the selected runtime is idle.",
+            expected_owner=os.geteuid(),
+        ), EXIT_INVALID
+    observed_environment_hash = (
+        text_hash(environment_observation.content)
+        if environment_observation.content is not None else None
+    )
+    if isinstance(recorded_build_directory, str):
+        expected_environment_content = generated_environment_content(
+            selection,
+            selected_runtime_id,
+            recorded_build_directory,
+            bundle,
+        )
+        expected_content_hash = text_hash(expected_environment_content)
+        if environment_observation.exists and environment_observation.content != expected_environment_content:
+            return invalid_result(
+                selection,
+                expected_environment_path,
+                "environment_drift",
+                "The generated environment is not coherent with the manifest runtime identity.",
+                affected_kind="generated environment",
+                source="manifest runtime and installation identity",
+                next_action="Rerun initialization while the selected runtime is idle.",
+                expected_value=expected_content_hash,
+                observed_value=observed_environment_hash,
+            ), EXIT_INVALID
+    if environment_observation.exists and observed_environment_hash != environment_hash:
+        return invalid_result(
+            selection, expected_environment_path, "environment_drift",
+            "The generated environment has changed since initialization.",
+            affected_kind="generated environment", source="manifest generated_environment.sha256",
+            next_action="Rerun initialization while the selected runtime is idle.",
+            expected_value=environment_hash, observed_value=observed_environment_hash,
+        ), EXIT_INVALID
+    return RuntimeValidationMetadata(
+        selected_runtime_id, manifest_path, manifest_source, manifest,
+        transaction_observation, transaction, runtime_observations, document, bundle,
+        registry_document, expected_environment_path,
+    )
+
+
+def validate(
+    adapter: ObservationAdapter,
+    selection: RuntimeSelection,
+    deinitializing: GuardTransaction | None = None,
+) -> tuple[ValidationResult, int]:
+    metadata = load_validation_metadata(adapter, selection, deinitializing)
+    if isinstance(metadata, tuple):
+        return metadata
+    worktree = selection.worktree
+    selected_runtime_id = metadata.worktree_id
+    manifest_path = metadata.manifest_path
+    document = metadata.document
+    bundle = metadata.bundle
+    registry_document = metadata.registry
+    expected_environment_path = metadata.environment_path
+    guard_root = manifest_path.parents[2]
+    database_name = document["database_name"]
+    claims = document["normalized_claims"]
+    installation = document["installation"]
+    configurations = document["configurations"]
+    reject_manifest = partial(manifest_validation_error, selection, manifest_path)
+    runtime_observations = metadata.runtime_observations
+    for kind, environment_name in (
+        ("engine", "CUBRID_CONF_FILE"),
+        ("broker", "CUBRID_BROKER_CONF_FILE"),
+    ):
+        record = configurations.get(kind)
+        if not isinstance(record, dict) or not isinstance(record.get("path"), str):
+            return reject_manifest(
+                "manifest_incomplete",
+                f"Manifest {kind} configuration identity is incomplete.",
+            )
+        expected_path = record["path"]
+        selected_path = os.environ.get(environment_name)
+        if selected_path and selected_path != expected_path:
+            return invalid_result(
+                selection,
+                selected_path,
+                "configuration_selection_drift",
+                f"{environment_name} selects a different {kind} configuration.",
+                affected_kind=f"{kind} configuration",
+                source=environment_name,
+                next_action=(
+                    "Select the manifest configuration or rerun initialization "
+                    "while the runtime is idle."
+                ),
+                expected_value=expected_path,
+                observed_value=selected_path,
+            ), EXIT_INVALID
+    if os.environ.get("CUBRID_HA_CONF_FILE"):
+        return invalid_result(
+            selection,
+            "CUBRID_HA_CONF_FILE",
+            "component_unsupported",
+            "HA configuration is outside the supported runtime-guard component scope.",
+            affected_kind="environment override",
+            source="process environment",
+            next_action="Unset CUBRID_HA_CONF_FILE and keep HA disabled.",
+            expected_value="unset",
+            observed_value="set",
         ), EXIT_INVALID
     try:
         validate_database_name(database_name)
@@ -4990,50 +5142,6 @@ def validate(
         require_bundle_database(adapter, bundle)
     except OperationError as error:
         return ValidationResult(outcome="invalid", selection=selection, diagnostic=error.diagnostic), EXIT_INVALID
-    registry_path = state_home / "cubrid-worktree-guard" / "allocations.json"
-    registry_observation = adapter.inspect_file(registry_path)
-    if (
-        not registry_observation.exists
-        or registry_observation.kind != "file"
-        or registry_observation.owner != os.geteuid()
-        or registry_observation.mode != 0o600
-        or registry_observation.content is None
-        or registry_observation.canonical is not True
-    ):
-        return invalid_result(
-            selection, registry_path, "allocation_registry_unsafe",
-            "The allocation registry must be a readable owner-only regular file.",
-            affected_kind="allocation registry", source="guard state",
-            next_action="Restore the allocation registry before using this runtime.",
-            expected_owner=os.geteuid(),
-        ), EXIT_INVALID
-    try:
-        registry_document = json.loads(registry_observation.content)
-        if not isinstance(registry_document["allocations"], dict):
-            raise TypeError("allocations must be an object")
-        allocation = registry_document["allocations"].get(selected_runtime_id)
-    except (json.JSONDecodeError, KeyError, TypeError):
-        return invalid_result(
-            selection, registry_path, "allocation_registry_inconsistent",
-            "The allocation registry does not retain this manifest's allocation.",
-            affected_kind="allocation registry", source="guard state",
-            next_action="Restore the matching retained allocation before using this runtime.",
-        ), EXIT_INVALID
-    if deinitializing is None and (
-        registry_document.get("schema_version") != STATE_SCHEMA_VERSION
-        or type(registry_document.get("generation")) is not int
-        or registry_document["generation"] < document["generation"]
-        or not isinstance(allocation, dict)
-        or allocation.get("generation") != document["generation"]
-        or allocation.get("state") != "ready"
-        or allocation.get("claims") != claims
-    ):
-        return invalid_result(
-            selection, registry_path, "allocation_registry_inconsistent",
-            "The allocation registry generation or claims do not match the manifest.",
-            affected_kind="allocation registry", source="guard state",
-            next_action="Restore matching registry and manifest state before using this runtime.",
-        ), EXIT_INVALID
     try:
         reject_managed_claim_collisions(bundle, registry_document, selected_runtime_id, guard_root, adapter)
     except OperationError as error:
@@ -5200,66 +5308,6 @@ def validate(
                 next_action="Rerun initialization while the selected runtime is idle.",
                 expected_value=expected_hash, observed_value=digest,
             ), EXIT_INVALID
-    environment_path = generated_environment.get("path")
-    environment_hash = generated_environment.get("sha256")
-    if not isinstance(environment_path, str) or not isinstance(environment_hash, str):
-        return reject_manifest("manifest_incomplete", "Generated environment identity is incomplete.")
-    expected_environment_path = manifest_path.parent / "env.sh"
-    if Path(environment_path) != expected_environment_path:
-        return invalid_result(
-            selection, environment_path, "environment_path_invalid",
-            "The generated environment is not beside its worktree manifest.",
-            affected_kind="generated environment", source="manifest generated_environment.path",
-            next_action="Rerun initialization while the selected runtime is idle.",
-            expected_value=os.fspath(expected_environment_path), observed_value=environment_path,
-        ), EXIT_INVALID
-    environment_observation = adapter.inspect_file(expected_environment_path)
-    if (
-        environment_observation.kind != "file"
-        or environment_observation.owner != os.geteuid()
-        or environment_observation.mode != 0o600
-        or environment_observation.content is None
-        or environment_observation.canonical is not True
-    ) and not (deinitializing is not None and not environment_observation.exists):
-        return invalid_result(
-            selection, expected_environment_path, "environment_unsafe",
-            "The generated environment must be a readable owner-only regular file.",
-            affected_kind="generated environment", source="guard state",
-            next_action="Rerun initialization while the selected runtime is idle.",
-            expected_owner=os.geteuid(),
-        ), EXIT_INVALID
-    observed_environment_hash = (
-        text_hash(environment_observation.content)
-        if environment_observation.content is not None else None
-    )
-    if isinstance(recorded_build_directory, str):
-        expected_environment_content = generated_environment_content(
-            selection,
-            selected_runtime_id,
-            recorded_build_directory,
-            bundle,
-        )
-        expected_content_hash = text_hash(expected_environment_content)
-        if environment_observation.exists and environment_observation.content != expected_environment_content:
-            return invalid_result(
-                selection,
-                expected_environment_path,
-                "environment_drift",
-                "The generated environment is not coherent with the manifest runtime identity.",
-                affected_kind="generated environment",
-                source="manifest runtime and installation identity",
-                next_action="Rerun initialization while the selected runtime is idle.",
-                expected_value=expected_content_hash,
-                observed_value=observed_environment_hash,
-            ), EXIT_INVALID
-    if environment_observation.exists and observed_environment_hash != environment_hash:
-        return invalid_result(
-            selection, expected_environment_path, "environment_drift",
-            "The generated environment has changed since initialization.",
-            affected_kind="generated environment", source="manifest generated_environment.sha256",
-            next_action="Rerun initialization while the selected runtime is idle.",
-            expected_value=environment_hash, observed_value=observed_environment_hash,
-        ), EXIT_INVALID
     installation_root = installation.get("root")
     if (
         not isinstance(installation_root, str)
@@ -5438,10 +5486,10 @@ def validate(
                     sort_keys=True,
                 ),
             ), EXIT_INVALID
-    if transaction_observation.exists and (
-        transaction.get("manifest") != document
-        or adapter.inspect_file(manifest_path.parent / "transaction.json") != transaction_observation
-        or adapter.inspect_file(manifest_source) != manifest
+    if metadata.transaction_observation.exists and (
+        metadata.transaction.get("manifest") != document
+        or adapter.inspect_file(manifest_path.parent / "transaction.json") != metadata.transaction_observation
+        or adapter.inspect_file(metadata.manifest_source) != metadata.manifest_observation
     ):
         return reject_manifest(
             "transaction_not_ready",
@@ -5639,7 +5687,7 @@ def deinitialize(
             with identity_path.open(newline="") as stream:
                 content = stream.read()
             preserved = "".join(line for line in content.splitlines(keepends=True)
-                                if not re.match(r"\s*(?:export\s+)?CUBRID_WORKTREE_ID\b", line))
+                                if not is_worktree_identity_line(line))
             publisher.text("release_identity", identity_path, preserved, stat.S_IMODE(identity_path.stat().st_mode))
         publisher.remove("release_environment", environment_path)
         publisher.remove("release_manifest", manifest_path)

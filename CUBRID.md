@@ -14,6 +14,7 @@ Search `my-cubrid-docs` before web research for CUBRID-specific design or archit
 ## Local development
 
 - Use the personal `just` recipes for local development, especially `just build` and `just build-test`.
+  - `just build` finishes within 2 min for the first build, and within 20 secs for second build (thanks to ccache).
 - In CUBRID organization-facing documentation, pull-request text, reviewer instructions, and verification steps, express the workflow with project-provided scripts, CMake, or ctest rather than personal recipes.
 - Preserve existing indentation exactly and keep formatting changes semantically necessary. Report unexplained indentation-only changes as possible GNU indent issues.
 - Most CUBRID `.c` sources compile as C++, while legacy `.c` and `.h` files are formatted with GNU indent. Wrap C++-specific syntax added to those legacy files exactly as follows so GNU indent preserves it:
@@ -55,3 +56,9 @@ The private testcase repository is available locally and may be used when the ta
 
 - Pull requests targeting `develop` must pass CUBRID CI. The principal regression suites are `test_medium`, `test_sql`, and `test_shell`; inspect the live CI configuration for current jobs and timing.
 - The QA team's separate regression runs may also cover replication, isolation, and other suites. Their testcases can span the public and private testcase repositories.
+
+## Reproducing TC failure locally
+
+- test_sql and test_medium: use `CTP.sh`.
+- test_shell: `cubrid-shell-debug.sh` might help.
+

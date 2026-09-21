@@ -1905,6 +1905,7 @@ class RuntimeGuardCliTest(unittest.TestCase):
                     "installation_root": str(self.root / "foreign"),
                     "cubrid_tmp": str(self.root / "foreign-tmp"),
                     "database_registry": str(self.root / "foreign-db"),
+                    "command_line": ["/foreign/bin/cub_master", "--service"],
                 },
                 "fds": [{"socket_inode": 90001}],
                 "accessible": True,

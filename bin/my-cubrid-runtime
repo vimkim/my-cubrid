@@ -4419,7 +4419,10 @@ def classify_live_ownership(
         configuration = process.get("configuration")
         relevant = executable in expected_executables or (
             isinstance(configuration, dict)
-            and any(value in expected_configuration_values for value in configuration.values())
+            and any(
+                isinstance(value, str) and value in expected_configuration_values
+                for value in configuration.values()
+            )
         )
         descriptors = process.get("fds")
         if isinstance(descriptors, list):

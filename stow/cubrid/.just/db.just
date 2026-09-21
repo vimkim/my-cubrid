@@ -67,44 +67,56 @@ pwddb-recreate-demodb:
 pwddb-delete-demodb:
     ~/my-cubrid/bin/my-cubrid-pwddb delete
 
+# Refuse legacy fixed-name recipes unless their target is the ready manifest's database.
+[private]
+require-selected-database expected:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    selected="$($HOME/my-cubrid/bin/my-cubrid-pwddb-getname)"
+    if [[ "$selected" != "{{ expected }}" ]]; then
+        printf 'Refusing fixed database recipe for %s: manifest-selected database is %s.\n' \
+            "{{ expected }}" "$selected" >&2
+        exit 1
+    fi
+
 # Start testdb while holding the runtime lock.
 [working-directory(justfile_directory())]
-start-testdb:
+start-testdb: (require-selected-database "testdb")
     ~/my-cubrid/bin/cubrid-build-coordinator.sh runtime 300 -- cubrid server start testdb
 
 # Restart testdb while holding the runtime lock.
 [working-directory(justfile_directory())]
-restart-testdb:
+restart-testdb: (require-selected-database "testdb")
     ~/my-cubrid/bin/cubrid-build-coordinator.sh runtime 300 -- cubrid server restart testdb
 
 # Stop testdb while holding the runtime lock.
 [working-directory(justfile_directory())]
-stop-testdb:
+stop-testdb: (require-selected-database "testdb")
     ~/my-cubrid/bin/cubrid-build-coordinator.sh runtime 300 -- cubrid server stop testdb
 
 # Best-effort stop of testdb.
 [working-directory(justfile_directory())]
-stop-testdb-try:
+stop-testdb-try: (require-selected-database "testdb")
     ~/my-cubrid/bin/cubrid-build-coordinator.sh runtime 300 -- cubrid server stop testdb || true
 
 # Start demodb while holding the runtime lock.
 [working-directory(justfile_directory())]
-start-demodb:
+start-demodb: (require-selected-database "demodb")
     ~/my-cubrid/bin/cubrid-build-coordinator.sh runtime 300 -- cubrid server start demodb
 
 # Restart demodb while holding the runtime lock.
 [working-directory(justfile_directory())]
-restart-demodb:
+restart-demodb: (require-selected-database "demodb")
     ~/my-cubrid/bin/cubrid-build-coordinator.sh runtime 300 -- cubrid server restart demodb
 
 # Stop demodb while holding the runtime lock.
 [working-directory(justfile_directory())]
-stop-demodb:
+stop-demodb: (require-selected-database "demodb")
     ~/my-cubrid/bin/cubrid-build-coordinator.sh runtime 300 -- cubrid server stop demodb
 
 # Show selected effective testdb parameters.
 [working-directory(justfile_directory())]
-paramdump-testdb:
+paramdump-testdb: (require-selected-database "testdb")
     cub-auto paramdump testdb | rg 'buffer|string'
 
 # Open csql against testdb.
@@ -114,33 +126,33 @@ csql: paramdump-testdb
 
 # Open csql against testdb in standalone mode.
 [working-directory(justfile_directory())]
-csql-sa:
+csql-sa: (require-selected-database "testdb")
     csql.sh
 
 # Unload testdb in standalone mode.
 [working-directory(justfile_directory())]
-unloaddb-sa:
+unloaddb-sa: (require-selected-database "testdb")
     cubrid unloaddb testdb -S -t 0 -v
 
 # Unload testdb in client-server mode.
 [working-directory(justfile_directory())]
-unloaddb-cs:
+unloaddb-cs: (require-selected-database "testdb")
     cubrid unloaddb testdb -C -t 0 -v
 
 # Create testdb.
 [working-directory(justfile_directory())]
-create-testdb:
+create-testdb: (require-selected-database "testdb")
     mkdir -p "$CUBRID_DATABASES/testdb"
     cubrid createdb --db-volume-size=20M --log-volume-size=20M testdb en_US.utf8 -F "$CUBRID_DATABASES/testdb"
 
 # Delete testdb through the CUBRID utility.
 [working-directory(justfile_directory())]
-delete-testdb:
+delete-testdb: (require-selected-database "testdb")
     cubrid deletedb testdb
 
 # Delete all local databases after explicit confirmation.
 [working-directory(justfile_directory())]
-delete-all:
+delete-all: (require-selected-database "testdb")
     gum confirm "delete all db? This is dangerous"
     /bin/rm -rf "$CUBRID_DATABASES"
     /bin/rm -rf testdb*
@@ -156,14 +168,14 @@ stop-recreate-start-testdb: stop-testdb recreate-testdb start-testdb
 
 # Create and load demodb.
 [working-directory(justfile_directory())]
-create-demodb:
+create-demodb: (require-selected-database "demodb")
     mkdir -p "$CUBRID_DATABASES/demodb"
     cubrid createdb --db-page-size=16K --db-volume-size=20M --log-volume-size=20M demodb en_US.utf8 -F "$CUBRID_DATABASES/demodb"
     cubrid loaddb -u dba -s "$CUBRID/demo/demodb_schema" -d "$CUBRID/demo/demodb_objects" demodb
 
 # Delete demodb.
 [working-directory(justfile_directory())]
-delete-demodb:
+delete-demodb: (require-selected-database "demodb")
     cubrid deletedb demodb
 
 # Recreate demodb.
@@ -177,8 +189,8 @@ remove-databases: confirm-no
 
 # Interactively update a CUBRID system parameter in the active runtime.
 [working-directory(justfile_directory())]
-ini database='testdb' section='common':
-    cubrid-ini-fzf --database "{{database}}" --section "{{section}}"
+ini database='testdb' section='common': (require-selected-database database)
+    cubrid-ini-fzf --database "{{ database }}" --section "{{ section }}"
 
 # Show enable_string_compression from the installed config and effective testdb parameters.
 [working-directory(justfile_directory())]
@@ -202,7 +214,7 @@ disable-string-compression: get-string-compression
 
 # Show effective string-compression configuration for testdb.
 [working-directory(justfile_directory())]
-paramdump-string-compression:
+paramdump-string-compression: (require-selected-database "testdb")
     cub-auto paramdump testdb | rg enable_string_compression
 
 # Show enable_pgbuf_inspector from the installed config (default: no).
@@ -226,8 +238,8 @@ disable-pgbuf-inspector:
 
 # Show the effective hidden inspector parameter for a running database.
 [working-directory(justfile_directory())]
-paramdump-pgbuf-inspector database='testdb':
-    cubrid paramdump -C --dump-flag=0x8 "{{database}}" | rg enable_pgbuf_inspector
+paramdump-pgbuf-inspector database='testdb': (require-selected-database database)
+    cubrid paramdump -C --dump-flag=0x8 "{{ database }}" | rg enable_pgbuf_inspector
 
 # Show use_system_malloc.
 [working-directory(justfile_directory())]

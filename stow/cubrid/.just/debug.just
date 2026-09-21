@@ -4,12 +4,12 @@ set shell := ["sh", "-cu"]
 
 # Debug csql connected to testdb.
 [working-directory(justfile_directory())]
-csql-cs:
+csql-cs: require-selected-testdb
     cgdb --args csql -udba testdb
 
 # Debug standalone csql connected to testdb.
 [working-directory(justfile_directory())]
-csql-sa:
+csql-sa: require-selected-testdb
     cgdb --args csql -udba testdb -S
 
 # Attach to a selected cub_server process.
@@ -19,7 +19,7 @@ server-interactive: print-current-server
 
 # Attach to the current worktree's testdb server.
 [working-directory(justfile_directory())]
-server: print-current-server
+server: print-current-server require-selected-testdb
     #!/bin/sh
     set -eu
 
@@ -41,17 +41,17 @@ server: print-current-server
 
 # Debug client-server unloaddb.
 [working-directory(justfile_directory())]
-unloaddb-cs:
+unloaddb-cs: require-selected-testdb
     cgdb --args cubrid unloaddb testdb -C -t 0 -v
 
 # Debug standalone unloaddb.
 [working-directory(justfile_directory())]
-unloaddb-sa:
+unloaddb-sa: require-selected-testdb
     cgdb --args cubrid unloaddb testdb -S -t 0 -v
 
 # Debug client-server loaddb.
 [working-directory(justfile_directory())]
-loaddb-cs:
+loaddb-cs: require-selected-testdb
     cgdb --args cubrid loaddb -udba -C -v testdb -d ./testdb_objects
 
 # Open a csql core with cgdb.
@@ -96,3 +96,14 @@ print-current-server:
                 ;;
         esac
     done
+
+[private]
+require-selected-testdb:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    selected="$($HOME/my-cubrid/bin/my-cubrid-pwddb-getname)"
+    if [[ "$selected" != "testdb" ]]; then
+        printf 'Refusing fixed database recipe for testdb: manifest-selected database is %s.\n' \
+            "$selected" >&2
+        exit 1
+    fi

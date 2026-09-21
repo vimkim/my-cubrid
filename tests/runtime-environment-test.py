@@ -237,6 +237,75 @@ exit "$status"
             )
             self.assertEqual(environment_file.stat().st_mode & 0o777, 0o640)
 
+    def test_fixed_database_recipes_refuse_non_selected_database(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            home = root / "home"
+            helper_bin = home / "my-cubrid" / "bin"
+            helper_bin.mkdir(parents=True)
+            (root / "justfile").symlink_to(SHARED_JUSTFILE)
+            (root / ".just").symlink_to(SHARED_JUST_MODULES, target_is_directory=True)
+            selected_database = helper_bin / "my-cubrid-pwddb-getname"
+            selected_database.write_text("#!/usr/bin/env bash\nprintf '%s\\n' develop\n")
+            selected_database.chmod(0o755)
+            command_marker = root / "coordinator-ran"
+            coordinator = helper_bin / "cubrid-build-coordinator.sh"
+            coordinator.write_text(
+                "#!/usr/bin/env bash\n"
+                f"touch {shlex.quote(str(command_marker))}\n"
+            )
+            coordinator.chmod(0o755)
+            environment = dict(os.environ, HOME=str(home))
+
+            for recipe in ("start-testdb", "start-demodb"):
+                with self.subTest(recipe=recipe):
+                    result = subprocess.run(
+                        ["just", "--justfile", str(root / "justfile"), f"db::{recipe}"],
+                        cwd=root,
+                        env=environment,
+                        capture_output=True,
+                        text=True,
+                        timeout=10,
+                    )
+
+                    self.assertNotEqual(result.returncode, 0)
+                    self.assertFalse(command_marker.exists())
+                    self.assertIn("develop", result.stderr)
+
+            debug_result = subprocess.run(
+                ["just", "--justfile", str(root / "justfile"), "debug::csql-cs"],
+                cwd=root,
+                env=environment,
+                capture_output=True,
+                text=True,
+                timeout=10,
+            )
+            self.assertNotEqual(debug_result.returncode, 0)
+            self.assertIn("develop", debug_result.stderr)
+
+            for database in ("testdb", "demodb"):
+                with self.subTest(selected_database=database):
+                    selected_database.write_text(
+                        f"#!/usr/bin/env bash\nprintf '%s\\n' {shlex.quote(database)}\n"
+                    )
+                    command_marker.unlink(missing_ok=True)
+                    result = subprocess.run(
+                        [
+                            "just",
+                            "--justfile",
+                            str(root / "justfile"),
+                            f"db::start-{database}",
+                        ],
+                        cwd=root,
+                        env=environment,
+                        capture_output=True,
+                        text=True,
+                        timeout=10,
+                    )
+
+                    self.assertEqual(result.returncode, 0, result.stderr)
+                    self.assertTrue(command_marker.exists())
+
 
 if __name__ == "__main__":
     unittest.main()

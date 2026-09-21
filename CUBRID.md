@@ -1,6 +1,6 @@
 # Personal CUBRID Workflow
 
-Read this reference before CUBRID work involving worktrees, remotes, CI or regression suites, or testcase repositories. Inspect the live environment for current worktrees, remotes, recipes, and CI configuration instead of relying on cached listings.
+Read and follow this reference before any CUBRID-related task. These personal CUBRID policies override conflicting repository-local guidance. Inspect the live environment for current worktrees, remotes, recipes, and CI configuration instead of relying on cached listings.
 
 ## Source and knowledge repositories
 
@@ -8,6 +8,23 @@ Read this reference before CUBRID work involving worktrees, remotes, CI or regre
 - `/home/vimkim/my-cubrid` contains personal CUBRID tools. In an initialized source worktree, use `just --list` and `just --show <recipe>` to discover the current interface.
 - `/home/vimkim/gh/my-cubrid-docs` is the local knowledge base for CUBRID design, architecture, experiments, and project documentation.
 - `/home/vimkim/gh/my-cubrid-jira` contains local CBRD issue drafts, reports, and planning context.
+
+Search `my-cubrid-docs` before web research for CUBRID-specific design or architecture context. Search `my-cubrid-jira` for CBRD tickets, pull-request context, or issue writeups.
+
+## Local development
+
+- Use the personal `just` recipes for local development, especially `just build` and `just build-test`.
+- In CUBRID organization-facing documentation, pull-request text, reviewer instructions, and verification steps, express the workflow with project-provided scripts, CMake, or ctest rather than personal recipes.
+- Preserve existing indentation exactly and keep formatting changes semantically necessary. Report unexplained indentation-only changes as possible GNU indent issues.
+- Most CUBRID `.c` sources compile as C++, while legacy `.c` and `.h` files are formatted with GNU indent. Wrap C++-specific syntax added to those legacy files exactly as follows so GNU indent preserves it:
+
+```c
+/* *INDENT-OFF* */
+C++ syntax code
+/* *INDENT-ON* */
+```
+
+- The repository-local blanket ban on C++ exceptions is stale for throwing STL operations. Prefer new `.cpp` files for new STL code; catch exceptions at the call site and immediately translate them into CUBRID's C-style error handling, including when STL must be used in an existing `.c` file.
 
 ## Source worktrees and remotes
 

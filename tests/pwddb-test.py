@@ -32,8 +32,10 @@ elif args[0] == 'createdb':
         pause.with_suffix('.reached').touch()
         while not pause.exists(): time.sleep(0.01)
     name = args[args.index('en_US.utf8') - 1]
+    lob = args[args.index('-B') + 1]
+    if not lob.startswith('file:'): lob = 'file:' + lob
     rows.append(name + ' ' + args[args.index('-F') + 1] + ' localhost ' + args[args.index('-L') + 1]
-                + ' ' + args[args.index('-B') + 1])
+                + ' ' + lob)
     registry.write_text('\n'.join(rows) + '\n')
 elif args[0] == 'deletedb':
     registry.write_text('\n'.join(row for row in rows if row.split()[0] != args[1]) + '\n')
@@ -174,7 +176,7 @@ class PwddbTests(unittest.TestCase):
         self.assertIn('Chosen_DB', registry)
         for flag, role in (('-F', 'data_root'), ('-L', 'log_root')):
             self.assertEqual(self.calls()[0][self.calls()[0].index(flag) + 1], self.bundle[role])
-        self.assertEqual(self.calls()[0][-1], 'file:' + self.bundle['lob_root'])
+        self.assertEqual(self.calls()[0][-1], self.bundle['lob_root'])
 
     def test_ensure_creation_failure_is_reported(self):
         self.env['FAIL'] = 'createdb'

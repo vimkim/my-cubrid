@@ -16,6 +16,9 @@ The transition of a worktree runtime to another preset installation while retain
 A newly created private database selected for a worktree runtime without adopting preexisting database storage into it.
 _Avoid_: Migrated database, adopted database
 
+**Stale runtime socket**:
+An owner-controlled Unix socket pathname inside a private runtime directory with no live kernel endpoint. Complete observation treats it as idle retained filesystem state, not as live ownership.
+
 **pwddb**:
 The database selected by the current worktree runtime's ready manifest. Its name and private storage remain independent of the invocation directory and branch.
 

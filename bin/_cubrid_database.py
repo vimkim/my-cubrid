@@ -102,7 +102,7 @@ def lifecycle(guard, adapter, bundle, action: str, template: str | None) -> None
     if template:
         arguments.append("--db-page-size=16K")
     arguments += [name, "en_US.utf8", "-F", str(bundle.data_root),
-                  "-L", str(bundle.log_root), "-B", "file:" + str(bundle.lob_root)]
+                  "-L", str(bundle.log_root), "-B", str(bundle.lob_root)]
     run(*arguments)
     if template:
         try:

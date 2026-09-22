@@ -5,6 +5,7 @@ import json
 import os
 from pathlib import Path
 import shutil
+import socket
 import subprocess
 import tempfile
 import time
@@ -40,7 +41,9 @@ class RuntimeGuardCliTest(unittest.TestCase):
         self.installation = self.root / "install"
         for directory in ("bin", "lib", "conf", "var", "log", "tmp"):
             (self.installation / directory).mkdir(parents=True)
-        for executable_name in ("cubrid", "cub_master", "cub_server", "cub_broker", "cub_pl"):
+        for executable_name in (
+            "cubrid", "cub_master", "cub_server", "cub_broker", "cub_cas", "cub_pl"
+        ):
             executable = self.installation / "bin" / executable_name
             executable.write_text(f"synthetic {executable_name}\n")
             executable.chmod(0o755)
@@ -1167,8 +1170,7 @@ class RuntimeGuardCliTest(unittest.TestCase):
 
         self.assertEqual(effective["engine"]["stored_procedure_uds"], "yes")
         self.assertEqual(effective["broker"]["MASTER_SHM_ID"], "0x60000000")
-        self.assertRegex(manifest["database_name"], r"^[A-Za-z][A-Za-z0-9_]{0,16}$")
-        self.assertTrue(manifest["database_name"].startswith("source"))
+        self.assertEqual(manifest["database_name"], "source")
         self.assertIn(str(Path(bundle["cubrid_tmp"]) / "CUBRID15000"), bundle["socket_paths"])
         self.assertIn(str(Path(bundle["cubrid_tmp"]) / "query_editor.B"), bundle["socket_paths"])
         self.assertIn(str(Path(bundle["cubrid_tmp"]) / "query_editor.2"), bundle["socket_paths"])
@@ -1183,7 +1185,6 @@ class RuntimeGuardCliTest(unittest.TestCase):
         )
         self.assertFalse((Path(bundle["data_root"]) / manifest["database_name"]).exists())
         self.assertFalse((Path(bundle["database_registry"]) / "databases.txt").exists())
-        self.assertFalse(any(path.name == manifest["database_name"] for path in self.root.rglob("*")))
         self.assertIn("# human setting\nPRESET_MODE=debug\n\nOTHER=value\n", (self.worktree / ".env").read_text())
         self.assertEqual((self.worktree / ".env").read_text().count("CUBRID_WORKTREE_ID="), 1)
         engine = (self.installation / "conf" / "cubrid.conf").read_text()
@@ -1298,6 +1299,34 @@ class RuntimeGuardCliTest(unittest.TestCase):
         self.assertIn(f"Observed owner: {diagnostic['observed_owner']}", human.stdout)
         self.assertIn("Evidence: " + ", ".join(diagnostic["evidence"]), human.stdout)
         self.assertIn("Observation scope: ", human.stdout)
+        self.assertFalse(self.calls.exists())
+
+    def test_validate_accepts_selected_installation_broker_worker(self):
+        initialized = self.run_runtime("init", "--preset", "debug", "--json")
+        self.assertEqual(initialized.returncode, 0, initialized.stderr + initialized.stdout)
+        manifest = self.manifest_for(initialized)
+        process = self.runtime_process(
+            manifest,
+            executable=str(self.installation / "bin" / "cub_cas"),
+            name="cub_cas",
+        )
+        self.replace_observations({
+            "processes": [process],
+            "listeners": [{
+                "protocol": "tcp",
+                "address": "0.0.0.0",
+                "port": manifest["resource_bundle"]["master_port"],
+                "inode": 7001,
+                "namespace": self.observation_scope()["namespaces"]["network"],
+                "owner_pid": process["pid"],
+                "owner_start_time": process["start_time"],
+            }],
+        })
+
+        validated = self.run_runtime("validate", "--preset", "debug", "--json")
+
+        self.assertEqual(validated.returncode, 0, validated.stderr + validated.stdout)
+        self.assertEqual(json.loads(validated.stdout)["outcome"], "ready")
         self.assertFalse(self.calls.exists())
 
     def test_unmanaged_listener_and_wrong_library_are_conflicts(self):
@@ -1428,6 +1457,68 @@ class RuntimeGuardCliTest(unittest.TestCase):
         self.assertEqual(json.loads(validated.stdout)["outcome"], "ready")
         self.assertFalse(self.calls.exists())
 
+    def test_validate_accepts_multiple_correlated_endpoints_for_one_unix_path(self):
+        initialized = self.run_runtime("init", "--preset", "debug", "--json")
+        self.assertEqual(initialized.returncode, 0, initialized.stderr + initialized.stdout)
+        manifest = self.manifest_for(initialized)
+        socket_path = manifest["resource_bundle"]["pl_socket_path"]
+        inodes = (8001, 8002, 8003)
+        process = self.runtime_process(
+            manifest,
+            fds=[{"socket_inode": inode} for inode in inodes],
+        )
+        self.replace_observations({
+            "processes": [process],
+            "sockets": [{
+                "path": socket_path,
+                "inode": inode,
+                "namespace": self.observation_scope()["namespaces"]["network"],
+                "owner_pid": process["pid"],
+                "owner_start_time": process["start_time"],
+                "device": 55,
+                "path_inode": 66,
+                "filesystem_identity_correlated": True,
+            } for inode in inodes],
+        }, filesystem={
+            socket_path: {
+                "type": "socket",
+                "owner": os.geteuid(),
+                "mode": "0700",
+                "device": 55,
+                "inode": 66,
+            },
+        })
+
+        validated = self.run_runtime("validate", "--preset", "debug", "--json")
+
+        self.assertEqual(validated.returncode, 0, validated.stderr + validated.stdout)
+        self.assertEqual(json.loads(validated.stdout)["outcome"], "ready")
+        self.assertFalse(self.calls.exists())
+
+    def test_validate_accepts_same_runtime_process_holding_private_storage(self):
+        initialized = self.run_runtime("init", "--preset", "debug", "--json")
+        self.assertEqual(initialized.returncode, 0, initialized.stderr + initialized.stdout)
+        manifest = self.manifest_for(initialized)
+        data_root = Path(manifest["resource_bundle"]["data_root"])
+        process = self.runtime_process(
+            manifest,
+            executable=str(Path(manifest["resource_bundle"]["executable_directory"]) / "cub_server"),
+            fds=[{"path": str(data_root / manifest["database_name"])}],
+            system_v_keys=[],
+        )
+        self.replace_observations({"processes": [process]})
+
+        validated = self.run_runtime("validate", "--preset", "debug", "--json")
+
+        self.assertEqual(validated.returncode, 0, validated.stderr + validated.stdout)
+        report = json.loads(validated.stdout)
+        self.assertEqual(report["outcome"], "ready")
+        self.assertEqual(
+            report["live_ownership"]["affected_object"]["kind"],
+            "database storage file",
+        )
+        self.assertFalse(self.calls.exists())
+
     def test_stale_path_and_incomplete_ipc_metadata_are_unknown(self):
         initialized = self.run_runtime("init", "--preset", "debug", "--json")
         self.assertEqual(initialized.returncode, 0, initialized.stderr + initialized.stdout)
@@ -1444,10 +1535,8 @@ class RuntimeGuardCliTest(unittest.TestCase):
             },
         })
         stale = self.run_runtime("validate", "--preset", "debug", "--json")
-        self.assertEqual(stale.returncode, 4, stale.stderr + stale.stdout)
-        self.assertEqual(
-            json.loads(stale.stdout)["diagnostic"]["code"], "live_ownership_unknown"
-        )
+        self.assertEqual(stale.returncode, 0, stale.stderr + stale.stdout)
+        self.assertEqual(json.loads(stale.stdout)["outcome"], "ready")
 
         process = self.runtime_process(manifest, fds=[{"socket_inode": 8001}])
         self.replace_observations({
@@ -1491,6 +1580,20 @@ class RuntimeGuardCliTest(unittest.TestCase):
         diagnostic = json.loads(incomplete_ipc.stdout)["diagnostic"]
         self.assertEqual(diagnostic["code"], "live_ownership_unknown")
         self.assertIn("ctime", diagnostic["missing_evidence"])
+        self.assertFalse(self.calls.exists())
+
+    def test_reinit_accepts_owner_controlled_stale_socket_path(self):
+        initialized = self.run_runtime("init", "--preset", "debug", "--json")
+        self.assertEqual(initialized.returncode, 0, initialized.stderr + initialized.stdout)
+        socket_path = Path(self.manifest_for(initialized)["resource_bundle"]["socket_paths"][0])
+        with socket.socket(socket.AF_UNIX) as endpoint:
+            endpoint.bind(os.fspath(socket_path))
+        socket_path.chmod(0o777)
+
+        repeated = self.run_runtime("init", "--preset", "debug", "--json")
+
+        self.assertEqual(repeated.returncode, 0, repeated.stderr + repeated.stdout)
+        self.assertEqual(json.loads(repeated.stdout)["outcome"], "ready")
         self.assertFalse(self.calls.exists())
 
     def test_socket_permission_denial_is_unknown(self):
@@ -1550,6 +1653,35 @@ class RuntimeGuardCliTest(unittest.TestCase):
             json.loads(unknown.stdout)["diagnostic"]["code"], "live_ownership_unknown"
         )
         self.assertEqual(self.snapshot(), before_unknown)
+        self.assertFalse(self.calls.exists())
+
+    def test_unrelated_build_daemon_with_inherited_runtime_environment_is_idle(self):
+        initialized = self.run_runtime("init", "--preset", "debug", "--json")
+        self.assertEqual(initialized.returncode, 0, initialized.stderr + initialized.stdout)
+        manifest = self.manifest_for(initialized)
+        bundle = manifest["resource_bundle"]
+        process = self.runtime_process(
+            manifest,
+            name="java",
+            executable="/usr/bin/java",
+            libraries=[],
+            loaded_files=["/opt/gradle/lib/gradle-launcher.jar"],
+            system_v_keys=[],
+            configuration={
+                "installation_root": bundle["installation_root"],
+                "cubrid_tmp": bundle["cubrid_tmp"],
+                "database_registry": bundle["database_registry"],
+                "active_preset": manifest["active_preset"],
+                "evidence": "current-files-only",
+            },
+            fds=[],
+        )
+        self.replace_observations({"processes": [process]})
+
+        result = self.run_runtime("validate", "--preset", "debug", "--json")
+
+        self.assertEqual(result.returncode, 0, result.stderr + result.stdout)
+        self.assertEqual(json.loads(result.stdout)["outcome"], "ready")
         self.assertFalse(self.calls.exists())
 
     def test_first_init_ownership_refusal_preserves_exact_state(self):

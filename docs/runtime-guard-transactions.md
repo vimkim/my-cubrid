@@ -58,9 +58,12 @@ Human and JSON results list the released metadata and claims, and the retained
 database name, registry/storage roots, runtime and installation directories,
 socket pathnames, and System V keys. These retained entries describe the scopes
 left untouched, including potential socket/IPC objects; successful release
-requires claimed sockets and IPC objects to be absent. Database registries,
-volumes, logs, runtime directories, and installation/configuration files are
-never removed or rewritten. Existing adopted databases remain in place.
+requires claimed live sockets and IPC objects to be absent. A complete
+observation may prove that an owner-controlled socket pathname has no live
+kernel endpoint; that stale runtime socket is idle retained state and is not
+removed. Database registries, volumes, logs, runtime directories, and
+installation/configuration files are never removed or rewritten. Existing
+adopted databases remain in place.
 
 ## Database adoption and helpers
 

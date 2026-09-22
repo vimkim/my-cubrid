@@ -54,8 +54,11 @@ manifest-selected executable, registry, data, log, and LOB roots; template loadi
 uses the selected installation's `demo` directory. `my-cubrid-ticket-get` remains
 an independent ticket extractor; it no longer determines the database name.
 
-Names must fit the 17-character ASCII database-name limit and are selected by
-explicit runtime initialization or adoption. Helpers never add suffixes.
+Names must fit the 17-character ASCII database-name limit. Explicit
+initialization or adoption selects a supplied name; otherwise initialization
+uses the sanitized worktree directory name, truncated to 17 characters.
+Private runtime identity and storage provide isolation, so no runtime-ID suffix
+is added. Helpers never add suffixes.
 
 Lifecycle calls sharing a registry are serialized with `.pwddb.lock`, including
 registry reads during concurrent `ensure`. The allocation lock also holds the

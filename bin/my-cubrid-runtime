@@ -53,6 +53,7 @@ REQUIRED_EXECUTABLE_NAMES = (
     "cub_master",
     "cub_server",
     "cub_broker",
+    "cub_cas",
     "cub_pl",
 )
 NETLINK_SOCK_DIAG = 4
@@ -1261,6 +1262,34 @@ def ensure_safe_root(path: Path, source: str) -> Path:
     return lexical
 
 
+def ensure_safe_socket_path(path: Path, source: str) -> None:
+    ensure_safe_root(path.parent, source)
+    try:
+        metadata = path.lstat()
+    except FileNotFoundError:
+        return
+    owner_controlled = (
+        metadata.st_uid == os.geteuid()
+        and is_canonical_existing_path(path)
+    )
+    safe_kind_and_mode = (
+        stat.S_ISSOCK(metadata.st_mode)
+        or (
+            stat.S_ISREG(metadata.st_mode)
+            and not stat.S_IMODE(metadata.st_mode) & 0o022
+        )
+    )
+    if not owner_controlled or not safe_kind_and_mode:
+        raise OperationError(
+            "path_unsafe", "Unix socket path", path, source,
+            "An existing runtime socket path is not canonical owner-controlled state.",
+            "Remove or replace the unsafe socket path before retrying.",
+            expected_owner=os.geteuid(),
+            expected_value="canonical Unix socket or owner-controlled non-writable placeholder",
+            observed_value=f"owner={metadata.st_uid},mode={stat.S_IMODE(metadata.st_mode):04o}",
+        )
+
+
 def require_private_directory_chain(root: Path, target: Path, source: str) -> None:
     lexical_root = Path(os.path.abspath(root))
     lexical_target = Path(os.path.abspath(target))
@@ -2011,13 +2040,12 @@ def validate_database_name(name: str) -> None:
         )
 
 
-def default_database_name(worktree: Path, runtime_identifier: str) -> str:
+def default_database_name(worktree: Path, _runtime_identifier: str) -> str:
     readable = re.sub(r"[^A-Za-z0-9_]", "_", worktree.name)
     readable = re.sub(r"_+", "_", readable).strip("_") or "runtime"
     if not readable[0].isalpha():
         readable = "db_" + readable
-    suffix = runtime_identifier[:6]
-    return f"{readable[:10]}_{suffix}"[:17]
+    return readable[:17]
 
 
 def validate_socket_path(path: Path, source: str) -> None:
@@ -3517,12 +3545,13 @@ def validate_resource_bundle(
                 bundle.data_root,
                 bundle.log_root,
                 bundle.lob_root,
-                *bundle.socket_paths,
                 *all_paths,
             )
         for path in all_paths:
             ensure_safe_root(path, source)
         for socket_path in bundle.socket_paths:
+            if not defer_managed_path_checks:
+                ensure_safe_socket_path(socket_path, source)
             validate_socket_path(socket_path, source)
     except OperationError:
         raise
@@ -3861,6 +3890,7 @@ def initialize(
             broker_content,
             layout,
             engine_content,
+            allow_stale_sockets=retained is not None,
         )
         if transaction is not None and transaction["state"] == "ready" and transaction != requested_transaction:
             result, status = validate(adapter, selection)
@@ -4130,6 +4160,8 @@ def classify_live_ownership(
     snapshot: RuntimeObservationSnapshot,
     bundle: ResourceBundle,
     document: dict[str, object],
+    *,
+    allow_stale_sockets: bool = False,
 ) -> OwnershipAssessment:
     claims = bundle.claims()
     scope_namespaces = snapshot.scope.get("namespaces")
@@ -4227,60 +4259,81 @@ def classify_live_ownership(
         if not records and not filesystem.exists:
             continue
         if not records:
+            if (
+                allow_stale_sockets
+                and filesystem.exists
+                and filesystem.kind == "socket"
+                and filesystem.owner == os.geteuid()
+                and filesystem.canonical is True
+            ):
+                continue
             return ownership_assessment(
                 "unknown", "Unix socket", path_value,
                 evidence=("filesystem pathname",), missing_evidence=("live Unix socket endpoint",),
                 message="A claimed socket pathname exists without a correlated live endpoint.",
             )
-        if len(records) != 1 or not filesystem.exists or filesystem.kind != "socket":
+        if not filesystem.exists or filesystem.kind != "socket":
             return ownership_assessment(
                 "unknown", "Unix socket", path_value,
                 evidence=("Unix socket table",), missing_evidence=("matching socket filesystem identity",),
                 message="The live Unix endpoint and its filesystem pathname disagree.",
             )
-        record = records[0]
-        inode = record.get("inode")
-        required = tuple(
-            field for field in (
-                "inode", "namespace", "owner_pid", "owner_start_time",
-                "device", "path_inode", "filesystem_identity_correlated",
+        endpoint_owners: dict[tuple[object, object], dict[str, object]] = {}
+        for record in records:
+            inode = record.get("inode")
+            required = tuple(
+                field for field in (
+                    "inode", "namespace", "owner_pid", "owner_start_time",
+                    "device", "path_inode", "filesystem_identity_correlated",
+                )
+                if record.get(field) is None
             )
-            if record.get(field) is None
-        )
-        if required:
+            if required:
+                return ownership_assessment(
+                    "unknown", "Unix socket", path_value,
+                    evidence=("Unix socket pathname",), missing_evidence=required,
+                    message="The claimed Unix socket lacks complete ownership evidence.",
+                )
+            if (
+                record.get("namespace") != expected_network
+                or record.get("device") != filesystem.device
+                or record.get("path_inode") != filesystem.inode
+                or record.get("filesystem_identity_correlated") is not True
+            ):
+                return ownership_assessment(
+                    "unknown", "Unix socket", path_value,
+                    evidence=("Unix socket endpoint", "filesystem identity"),
+                    missing_evidence=("matching namespace and filesystem identity",),
+                    message="The Unix socket endpoint, namespace, or filesystem identity disagrees.",
+                )
+            assert type(inode) is int
+            owners = [
+                process for process in snapshot.processes
+                if process_owns_socket_inode(process, inode)
+            ]
+            if len(owners) != 1:
+                return ownership_assessment(
+                    "unknown", "Unix socket", path_value,
+                    evidence=("Unix socket inode",), missing_evidence=("unique process file-descriptor owner",),
+                    message="The Unix socket inode does not resolve to one visible owner.",
+                )
+            owner = owners[0]
+            if owner.get("pid") != record.get("owner_pid") or owner.get("start_time") != record.get("owner_start_time"):
+                return ownership_assessment(
+                    "unknown", "Unix socket", path_value,
+                    evidence=("Unix socket inode", "process file descriptor"),
+                    missing_evidence=("matching process start identity",),
+                    message="The Unix socket owner PID or start identity disagrees.",
+                )
+            endpoint_owners[(owner.get("pid"), owner.get("start_time"))] = owner
+        if len(endpoint_owners) != 1:
             return ownership_assessment(
                 "unknown", "Unix socket", path_value,
-                evidence=("Unix socket pathname",), missing_evidence=required,
-                message="The claimed Unix socket lacks complete ownership evidence.",
+                evidence=("Unix socket endpoints", "process file descriptors"),
+                missing_evidence=("one process identity for the shared pathname",),
+                message="The Unix socket pathname resolves to multiple process owners.",
             )
-        if (
-            record.get("namespace") != expected_network
-            or record.get("device") != filesystem.device
-            or record.get("path_inode") != filesystem.inode
-            or record.get("filesystem_identity_correlated") is not True
-        ):
-            return ownership_assessment(
-                "unknown", "Unix socket", path_value,
-                evidence=("Unix socket endpoint", "filesystem identity"),
-                missing_evidence=("matching namespace and filesystem identity",),
-                message="The Unix socket endpoint, namespace, or filesystem identity disagrees.",
-            )
-        assert type(inode) is int
-        owners = [process for process in snapshot.processes if process_owns_socket_inode(process, inode)]
-        if len(owners) != 1:
-            return ownership_assessment(
-                "unknown", "Unix socket", path_value,
-                evidence=("Unix socket inode",), missing_evidence=("unique process file-descriptor owner",),
-                message="The Unix socket inode does not resolve to one visible owner.",
-            )
-        owner = owners[0]
-        if owner.get("pid") != record.get("owner_pid") or owner.get("start_time") != record.get("owner_start_time"):
-            return ownership_assessment(
-                "unknown", "Unix socket", path_value,
-                evidence=("Unix socket inode", "process file descriptor"),
-                missing_evidence=("matching process start identity",),
-                message="The Unix socket owner PID or start identity disagrees.",
-            )
+        owner = next(iter(endpoint_owners.values()))
         classification, evidence, missing, observed_owner = classify_process_identity(owner, snapshot, bundle, document)
         if type(owner.get("pid")) is int:
             linked_pids.add(owner["pid"])
@@ -4416,27 +4469,64 @@ def classify_live_ownership(
         os.fspath(bundle.installation_root),
         os.fspath(bundle.cubrid_tmp),
         os.fspath(bundle.database_registry),
-        os.fspath(bundle.data_root), os.fspath(bundle.log_root), os.fspath(bundle.lob_root),
+        os.fspath(bundle.data_root),
+        os.fspath(bundle.log_root),
+        os.fspath(bundle.lob_root),
     }
     for process in snapshot.processes:
         pid = process.get("pid")
         executable = process.get("executable")
+        cubrid_named = (
+            isinstance(executable, str)
+            and Path(executable).name in REQUIRED_EXECUTABLE_NAMES
+        )
         configuration = process.get("configuration")
-        relevant = executable in expected_executables or (
-            isinstance(configuration, dict)
+        configuration_relevant = (
+            cubrid_named
+            and isinstance(configuration, dict)
             and any(
                 isinstance(value, str) and value in expected_configuration_values
                 for value in configuration.values()
             )
         )
+        relevant = executable in expected_executables or configuration_relevant
         descriptors = process.get("fds")
+        storage_paths: list[str] = []
         if isinstance(descriptors, list):
-            relevant = relevant or any(
-                isinstance(descriptor, dict) and isinstance(descriptor.get("path"), str)
+            storage_paths = [
+                descriptor["path"]
+                for descriptor in descriptors
+                if isinstance(descriptor, dict) and isinstance(descriptor.get("path"), str)
                 and any(root in Path(descriptor["path"]).parents or root == Path(descriptor["path"])
                         for root in (bundle.data_root, bundle.log_root, bundle.lob_root))
-                for descriptor in descriptors
+            ]
+            relevant = relevant or bool(storage_paths)
+        if storage_paths and pid not in linked_pids:
+            classification, evidence, missing, observed_owner = classify_process_identity(
+                process, snapshot, bundle, document
             )
+            if classification != "same-runtime":
+                return ownership_assessment(
+                    classification, "database storage file", storage_paths[0],
+                    observed_owner=observed_owner,
+                    evidence=("private storage file descriptor", *evidence),
+                    missing_evidence=missing,
+                    message=(
+                        "A private database storage file is owned by another runtime."
+                        if classification == "conflict"
+                        else "The private database storage owner cannot be identified safely."
+                    ),
+                )
+            if type(pid) is int:
+                linked_pids.add(pid)
+            saw_same_runtime = True
+            same_runtime_observation = same_runtime_observation or ownership_assessment(
+                "same-runtime", "database storage file", storage_paths[0],
+                observed_owner=observed_owner,
+                evidence=("private storage file descriptor", *evidence),
+                message="The private database storage is positively owned by this worktree runtime.",
+            )
+            continue
         if relevant and pid not in linked_pids:
             return ownership_assessment(
                 "unknown", "CUBRID process", f"pid={pid}",
@@ -4565,6 +4655,8 @@ def require_mutation_safe_ownership(
     broker_content: str,
     layout: InstallationLayout,
     engine_content: str,
+    *,
+    allow_stale_sockets: bool = False,
 ) -> list[dict[str, object]]:
     require_complete_mutation_observation(observations, selection)
     spawn_environments = capture_broker_spawn_environments(
@@ -4585,7 +4677,11 @@ def require_mutation_safe_ownership(
         ),
     }
     ownership = classify_live_ownership(
-        adapter, observations, bundle, ownership_document
+        adapter,
+        observations,
+        bundle,
+        ownership_document,
+        allow_stale_sockets=allow_stale_sockets,
     )
     if ownership.classification != "free":
         raise ownership_operation_error(
@@ -5496,7 +5592,11 @@ def validate(
             "The transaction changed or disagrees with the validated manifest; retry validation.",
         )
     ownership = classify_live_ownership(
-        adapter, runtime_observations, bundle, document
+        adapter,
+        runtime_observations,
+        bundle,
+        document,
+        allow_stale_sockets=True,
     )
     if ownership.classification in ("conflict", "unknown"):
         return ownership_failure_result(
@@ -5658,7 +5758,13 @@ def deinitialize(
             return replace(validated, command="deinit"), status
         observations = adapter.inspect_runtime()
         require_complete_mutation_observation(observations, selection)
-        ownership = classify_live_ownership(adapter, observations, bundle, source_manifest)
+        ownership = classify_live_ownership(
+            adapter,
+            observations,
+            bundle,
+            source_manifest,
+            allow_stale_sockets=True,
+        )
         if ownership.classification != "free":
             raise ownership_operation_error(observations, runtime_identifier, ownership)
         generation = (transaction["generation"] if recovering and transaction is not None else

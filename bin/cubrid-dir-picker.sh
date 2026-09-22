@@ -1,21 +1,31 @@
 #!/usr/bin/env bash
 
-readonly repos=(
-  "$HOME/my-cubrid"
-  "$HOME/gh/my-cubrid-docs"
-  "$HOME/gh/my-cubrid-jira"
-  "$HOME/gh/my-cubrid-skills"
-  "$HOME/gh/cubrid-oos-context"
-  "$HOME/gh/cb/develop"
+readonly repo_specs=(
+  "$HOME/my-cubrid"$'\t'"https://github.com/vimkim/my-cubrid"
+  "$HOME/gh/my-cubrid-docs"$'\t'"https://github.com/vimkim/my-cubrid-docs"
+  "$HOME/gh/my-cubrid-jira"$'\t'"https://github.com/vimkim/my-cubrid-jira"
+  "$HOME/gh/my-cubrid-skills"$'\t'"https://github.com/vimkim/my-cubrid-skills"
+  "$HOME/gh/cubrid-oos-context"$'\t'"https://github.com/vimkim/cubrid-oos-context"
+  "$HOME/gh/cb/develop"$'\t'"https://github.com/CUBRID/cubrid.git"
 )
+declare -a repos=()
+for repo_spec in "${repo_specs[@]}"; do
+  repos+=("${repo_spec%%$'\t'*}")
+done
+readonly -a repos
 
 if [[ "${1:-}" == "--list" ]]; then
   printf '%s\n' "${repos[@]}"
   exit 0
 fi
 
+if [[ "${1:-}" == "--list-with-clone-urls" ]]; then
+  printf '%s\n' "${repo_specs[@]}"
+  exit 0
+fi
+
 if [[ $# -ne 0 ]]; then
-  printf 'usage: cubrid-dir-picker.sh [--list]\n' >&2
+  printf 'usage: cubrid-dir-picker.sh [--list|--list-with-clone-urls]\n' >&2
   exit 2
 fi
 

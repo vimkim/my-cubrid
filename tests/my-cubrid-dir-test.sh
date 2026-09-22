@@ -62,6 +62,9 @@ if [[ "$3" == "rev-parse" ]]; then
   exit 0
 fi
 printf '%s\n' "$*" >>"$GIT_CALLS"
+if [[ "$1" == "clone" ]]; then
+  mkdir -p -- "$3"
+fi
 EOF
   chmod +x "$test_root/bin/git"
 
@@ -98,7 +101,46 @@ test_pull_continues_after_failure()
     fail 'pull did not continue after the missing directory'
 }
 
+test_pull_clones_missing_repositories_after_confirmation()
+{
+  local actual
+  local expected
+  local output
+  local prompt
+
+  rm -rf -- \
+    "$test_root/home/gh/my-cubrid-docs" \
+    "$test_root/home/gh/my-cubrid-jira"
+
+  if ! output=$(printf 'y\n' | GIT_CALLS="$test_root/git-calls-clone" \
+    HOME="$test_root/home" PATH="$test_root/bin:$PATH" "$cli" pull 2>&1); then
+    fail 'pull failed after confirming clones'
+  fi
+
+  prompt=$(printf 'Missing repositories:\n  %s\n  %s\n\nClone 2 missing repositories? [y/N] ' \
+    "$test_root/home/gh/my-cubrid-docs" \
+    "$test_root/home/gh/my-cubrid-jira")
+  [[ "$output" == *"$prompt"* ]] || \
+    fail 'missing repositories were not listed immediately before the clone prompt'
+
+  [[ -d "$test_root/home/gh/my-cubrid-docs" ]] || \
+    fail 'my-cubrid-docs was not cloned'
+  [[ -d "$test_root/home/gh/my-cubrid-jira" ]] || \
+    fail 'my-cubrid-jira was not cloned'
+
+  actual=$(<"$test_root/git-calls-clone")
+  expected=$(printf '%s\n' \
+    "-C $test_root/home/my-cubrid pull --ff-only" \
+    "-C $test_root/home/gh/my-cubrid-skills pull --ff-only" \
+    "-C $test_root/home/gh/cubrid-oos-context pull --ff-only" \
+    "-C $test_root/home/gh/cb/develop pull --ff-only" \
+    "clone https://github.com/vimkim/my-cubrid-docs $test_root/home/gh/my-cubrid-docs" \
+    "clone https://github.com/vimkim/my-cubrid-jira $test_root/home/gh/my-cubrid-jira")
+  assert_equal "$expected" "$actual"
+}
+
 test_list
 test_pull_all
 test_pull_continues_after_failure
+test_pull_clones_missing_repositories_after_confirmation
 printf 'PASS: my-cubrid-dir\n'

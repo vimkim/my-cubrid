@@ -5,6 +5,7 @@ readonly program_name="${0##*/}"
 readonly script_dir="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd -P)"
 readonly picker="$script_dir/cubrid-dir-picker.sh"
 declare -a repos=()
+declare -A clone_urls=()
 
 usage()
 {
@@ -16,7 +17,7 @@ Keep the repositories configured in cubrid-dir-picker.sh synchronized.
 Commands:
   list    List configured directories
   status  Check cleanliness and sync with each branch's upstream (fetches)
-  pull    Run git pull --ff-only in every configured repository
+  pull    Pull existing repositories, then offer to clone missing ones
   help    Show this help
 
 Status uses ANSI colors in terminals; set NO_COLOR to disable them.
@@ -26,14 +27,14 @@ EOF
 
 load_repos()
 {
-  local output
+  local output repo clone_url
 
   if [[ ! -x "$picker" ]]; then
     printf '%s: directory picker is not executable: %s\n' "$program_name" "$picker" >&2
     return 1
   fi
 
-  if ! output=$("$picker" --list); then
+  if ! output=$("$picker" --list-with-clone-urls); then
     printf '%s: failed to read directories from %s\n' "$program_name" "$picker" >&2
     return 1
   fi
@@ -42,7 +43,15 @@ load_repos()
     return 1
   fi
 
-  mapfile -t repos <<<"$output"
+  while IFS=$'\t' read -r repo clone_url; do
+    if [[ -z "$repo" || -z "$clone_url" ]]; then
+      printf '%s: invalid repository configuration from %s\n' \
+        "$program_name" "$picker" >&2
+      return 1
+    fi
+    repos+=("$repo")
+    clone_urls["$repo"]=$clone_url
+  done <<<"$output"
 }
 
 list_repos()
@@ -139,7 +148,8 @@ status_repos()
 
 pull_repos()
 {
-  local repo
+  local repo parent reply
+  local -a missing_repos=()
   local failures=0
 
   for repo in "${repos[@]}"; do
@@ -147,7 +157,7 @@ pull_repos()
 
     if [[ ! -d "$repo" ]]; then
       printf '%s: missing directory: %s\n' "$program_name" "$repo" >&2
-      failures=$((failures + 1))
+      missing_repos+=("$repo")
       continue
     fi
 
@@ -162,6 +172,35 @@ pull_repos()
       failures=$((failures + 1))
     fi
   done
+
+  if ((${#missing_repos[@]} > 0)); then
+    printf '\nMissing repositories:\n' >&2
+    printf '  %s\n' "${missing_repos[@]}" >&2
+    printf '\nClone %d missing repositories? [y/N] ' \
+      "${#missing_repos[@]}" >&2
+    reply=''
+    IFS= read -r reply || true
+
+    case "$reply" in
+      y|Y|yes|YES)
+        for repo in "${missing_repos[@]}"; do
+          parent=${repo%/*}
+          printf '\n==> Cloning %s\n' "$repo"
+          if ! mkdir -p -- "$parent"; then
+            printf '%s: failed to create parent directory: %s\n' \
+              "$program_name" "$parent" >&2
+            failures=$((failures + 1))
+          elif ! git clone "${clone_urls[$repo]}" "$repo"; then
+            printf '%s: clone failed: %s\n' "$program_name" "$repo" >&2
+            failures=$((failures + 1))
+          fi
+        done
+        ;;
+      *)
+        failures=$((failures + ${#missing_repos[@]}))
+        ;;
+    esac
+  fi
 
   printf '\n'
   if ((failures == 0)); then

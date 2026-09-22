@@ -8,6 +8,7 @@ import importlib.machinery
 import importlib.util
 import os
 from pathlib import Path
+import stat
 import subprocess
 import sys
 
@@ -22,8 +23,21 @@ def runtime_guard():
     return module
 
 
+def path_is_absent(path: Path) -> bool:
+    try:
+        path.lstat()
+    except FileNotFoundError:
+        return True
+    return False
+
+
 @contextmanager
-def ready_database(*, lifecycle_operation: bool):
+def ready_database(
+    *,
+    lifecycle_operation: bool,
+    database_delete: bool = False,
+    expected_name: str | None = None,
+):
     guard = runtime_guard()
     worktree = guard.resolve_worktree(None)
     preset = os.environ.get("PRESET_MODE")
@@ -56,18 +70,110 @@ def ready_database(*, lifecycle_operation: bool):
         guard.require_database_path(adapter, bundle.database_registry, "directory")
         database_lock = guard.open_private_lock(bundle.database_registry / ".pwddb.lock")
         fcntl.flock(database_lock, fcntl.LOCK_EX if lifecycle_operation else fcntl.LOCK_SH)
+        utility = bundle.executable_directory / "cubrid"
+        binary_independent = database_delete and path_is_absent(utility)
         # A preceding helper may have been running createdb. Observe only after it exits.
-        result, status = guard.validate(adapter, selection)
+        result, status = guard.validate(
+            adapter,
+            selection,
+            database_delete_utility_absent=binary_independent,
+        )
         if status:
             raise ValueError("A ready worktree manifest is required. " + guard.render_human(result).strip())
-        yield guard, adapter, bundle
+        if expected_name is not None and bundle.database_name != expected_name:
+            raise ValueError(
+                f"Refusing fixed database command for {expected_name}: "
+                f"manifest-selected database is {bundle.database_name}."
+            )
+        if binary_independent and not path_is_absent(utility):
+            raise ValueError(
+                "The selected CUBRID utility appeared during deletion validation; retry deletion."
+            )
+        yield guard, adapter, bundle, binary_independent
     finally:
         if database_lock is not None:
             os.close(database_lock)
         os.close(descriptor)
 
 
-def lifecycle(guard, adapter, bundle, action: str, template: str | None) -> None:
+def require_deletable_tree(root: Path) -> None:
+    root_metadata = root.lstat()
+    for directory, children, files in os.walk(root, followlinks=False):
+        directory_path = Path(directory)
+        directory_metadata = directory_path.lstat()
+        if (
+            not stat.S_ISDIR(directory_metadata.st_mode)
+            or directory_metadata.st_uid != os.geteuid()
+            or directory_metadata.st_mode & 0o022
+            or directory_metadata.st_dev != root_metadata.st_dev
+        ):
+            raise ValueError(f"Unsafe database storage directory: {directory_path}")
+        for child in (*children, *files):
+            path = directory_path / child
+            metadata = path.lstat()
+            if (
+                metadata.st_uid != os.geteuid()
+                or metadata.st_mode & 0o022
+                or metadata.st_dev != root_metadata.st_dev
+                or not (stat.S_ISDIR(metadata.st_mode) or stat.S_ISREG(metadata.st_mode))
+                or (stat.S_ISREG(metadata.st_mode) and metadata.st_nlink != 1)
+            ):
+                raise ValueError(f"Unsafe database storage entry: {path}")
+
+
+def clear_deletable_tree(root: Path) -> None:
+    for directory, children, files in os.walk(root, topdown=False, followlinks=False):
+        directory_path = Path(directory)
+        for name in files:
+            (directory_path / name).unlink()
+        for name in children:
+            (directory_path / name).rmdir()
+
+
+def binary_independent_delete(guard, adapter, bundle, storage) -> None:
+    roots = (storage.data, storage.log, storage.lob)
+    if roots != (bundle.data_root, bundle.log_root, bundle.lob_root):
+        raise ValueError("Database registry storage does not match the ready manifest.")
+    for root in roots:
+        require_deletable_tree(root)
+
+    registry_path = storage.registry / "databases.txt"
+    observed = guard.require_database_path(adapter, registry_path, "file")
+    if observed.content is None:
+        raise ValueError("The selected database registry cannot be read safely.")
+    current = registry_path.read_text()
+    if current != observed.content:
+        raise ValueError("The selected database registry changed during deletion validation.")
+    retained_lines = [
+        line for line in current.splitlines(keepends=True)
+        if not (
+            line.strip()
+            and not line.lstrip().startswith("#")
+            and line.split()[0] == bundle.database_name
+        )
+    ]
+    guard.atomic_write(registry_path, "".join(retained_lines), 0o600)
+    try:
+        for root in roots:
+            clear_deletable_tree(root)
+    except OSError as error:
+        orphaned = ", ".join(os.fspath(root) for root in roots)
+        raise ValueError(
+            "The registry row was removed, but storage cleanup was interrupted; "
+            f"inspect and remove orphaned files under: {orphaned}"
+        ) from error
+    print(f"Deleted database with binary-independent cleanup: {bundle.database_name}")
+
+
+def lifecycle(
+    guard,
+    adapter,
+    bundle,
+    action: str,
+    template: str | None,
+    *,
+    binary_independent: bool = False,
+) -> None:
     environment = dict(os.environ, **guard.runtime_environment_values(bundle))
     environment["PATH"] += os.pathsep + os.environ.get("PATH", "")
     executable = bundle.executable_directory / "cubrid"
@@ -90,13 +196,19 @@ def lifecycle(guard, adapter, bundle, action: str, template: str | None) -> None
     if action == "create" and exists:
         raise ValueError(f"Database already exists: {name}")
     if action in ("recreate", "delete") and exists:
-        status = run("server", "status", capture=True).stdout
-        if any(len(row) >= 2 and row[0] in ("Server", "HA-Server") and row[1] == name
-               for row in (line.split() for line in status.splitlines())):
-            run("server", "stop", name)
-        run("deletedb", name)
+        if binary_independent:
+            if action != "delete":
+                raise ValueError("Binary-independent cleanup is supported only for delete.")
+            binary_independent_delete(guard, adapter, bundle, storage)
+        else:
+            status = run("server", "status", capture=True).stdout
+            if any(len(row) >= 2 and row[0] in ("Server", "HA-Server") and row[1] == name
+                   for row in (line.split() for line in status.splitlines())):
+                run("server", "stop", name)
+            run("deletedb", name)
     if action == "delete":
-        print(f"Database absent: {name}")
+        if not binary_independent or not exists:
+            print(f"Database absent: {name}")
         return
     arguments = ["createdb", "--db-volume-size=20M", "--log-volume-size=20M"]
     if template:
@@ -115,19 +227,42 @@ def lifecycle(guard, adapter, bundle, action: str, template: str | None) -> None
 def main(*, name_only: bool = False) -> int:
     parser = argparse.ArgumentParser(description="Use the ready worktree manifest's database name and storage.")
     if not name_only:
-        parser.add_argument("action", choices=("ensure", "create", "recreate", "delete"))
+        parser.add_argument("action", choices=("list", "ensure", "create", "recreate", "delete"))
         parser.add_argument("--load", choices=("demodb",))
+        parser.add_argument("--expected-name")
     arguments = parser.parse_args()
     try:
-        if not name_only and arguments.action == "delete" and arguments.load:
+        if not name_only and arguments.action not in ("ensure", "create", "recreate") and arguments.load:
             raise ValueError("--load is only valid for ensure/create/recreate")
-        with ready_database(lifecycle_operation=not name_only) as (guard, adapter, bundle):
+        if not name_only and arguments.expected_name and arguments.action != "delete":
+            raise ValueError("--expected-name is only valid for delete")
+        with ready_database(
+            lifecycle_operation=not name_only and arguments.action != "list",
+            database_delete=not name_only and arguments.action == "delete",
+            expected_name=None if name_only else arguments.expected_name,
+        ) as (guard, adapter, bundle, binary_independent):
             if name_only:
                 print(bundle.database_name)
+            elif arguments.action == "list":
+                storage = guard.inspect_database_storage(
+                    adapter,
+                    bundle.database_name,
+                    bundle.database_registry,
+                    required=False,
+                )
+                if storage is not None:
+                    print(storage.name)
             else:
                 old_umask = os.umask(0o077)
                 try:
-                    lifecycle(guard, adapter, bundle, arguments.action, arguments.load)
+                    lifecycle(
+                        guard,
+                        adapter,
+                        bundle,
+                        arguments.action,
+                        arguments.load,
+                        binary_independent=binary_independent,
+                    )
                 finally:
                     os.umask(old_umask)
     except (ValueError, OSError, subprocess.CalledProcessError) as error:

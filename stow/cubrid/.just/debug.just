@@ -4,65 +4,66 @@ set shell := ["sh", "-cu"]
 
 # Debug csql connected to testdb.
 [working-directory(justfile_directory())]
-csql-cs: require-selected-testdb
-    cgdb --args csql -udba testdb
+csql-cs:
+    ~/my-cubrid/bin/cubrid-build-coordinator.sh runtime 300 --database testdb -- cgdb --args csql -udba testdb
 
 # Debug standalone csql connected to testdb.
 [working-directory(justfile_directory())]
-csql-sa: require-selected-testdb
-    cgdb --args csql -udba testdb -S
+csql-sa:
+    ~/my-cubrid/bin/cubrid-build-coordinator.sh runtime 300 --database testdb -- cgdb --args csql -udba testdb -S
 
-# Attach to a selected cub_server process.
+# Attach to a selected testdb server from this worktree and installation.
 [working-directory(justfile_directory())]
-server-interactive: print-current-server
-    cgdb -p "$(ps aux | rg vimkim | rg cub_server | fzf | awk '{print $2}')" "$CUBRID_BUILD_DIR/bin/cub_server"
+server-interactive:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    exec "$HOME/my-cubrid/bin/cubrid-build-coordinator.sh" runtime 300 --database testdb -- bash -euc '
+      pid="$($HOME/my-cubrid/bin/my-cubrid-process-select server --interactive)"
+      exec cgdb -p "$pid" "$CUBRID_BUILD_DIR/bin/cub_server"
+    '
 
 # Attach to the current worktree's testdb server.
 [working-directory(justfile_directory())]
-server: print-current-server require-selected-testdb
-    #!/bin/sh
-    set -eu
-
-    pid=
-    for process in /proc/[0-9]*; do
-        [ "$(basename "$(readlink -f "$process/exe")")" = cub_server ] || continue
-        [ "$(readlink -f "$process/cwd")" = "$PWD" ] || continue
-        tr '\0' '\n' <"$process/cmdline" | grep -Fxq testdb || continue
-        pid="${process##*/}"
-        break
-    done
-
-    if [ -z "$pid" ]; then
-        printf '%s\n' "No testdb cub_server is running from $PWD" >&2
-        exit 1
-    fi
-
-    exec cgdb -p "$pid" "$CUBRID_BUILD_DIR/bin/cub_server"
+server:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    exec "$HOME/my-cubrid/bin/cubrid-build-coordinator.sh" runtime 300 --database testdb -- bash -euc '
+      pid="$($HOME/my-cubrid/bin/my-cubrid-process-select server)"
+      exec cgdb -p "$pid" "$CUBRID_BUILD_DIR/bin/cub_server"
+    '
 
 # Debug client-server unloaddb.
 [working-directory(justfile_directory())]
-unloaddb-cs: require-selected-testdb
-    cgdb --args cubrid unloaddb testdb -C -t 0 -v
+unloaddb-cs:
+    ~/my-cubrid/bin/cubrid-build-coordinator.sh runtime 300 --database testdb -- \
+        cgdb --args cubrid unloaddb testdb -C -t 0 -v
 
 # Debug standalone unloaddb.
 [working-directory(justfile_directory())]
-unloaddb-sa: require-selected-testdb
-    cgdb --args cubrid unloaddb testdb -S -t 0 -v
+unloaddb-sa:
+    ~/my-cubrid/bin/cubrid-build-coordinator.sh runtime 300 --database testdb -- \
+        cgdb --args cubrid unloaddb testdb -S -t 0 -v
 
 # Debug client-server loaddb.
 [working-directory(justfile_directory())]
-loaddb-cs: require-selected-testdb
-    cgdb --args cubrid loaddb -udba -C -v testdb -d ./testdb_objects
+loaddb-cs:
+    ~/my-cubrid/bin/cubrid-build-coordinator.sh runtime 300 --database testdb -- \
+        cgdb --args cubrid loaddb -udba -C -v testdb -d ./testdb_objects
 
 # Open a csql core with cgdb.
 [working-directory(justfile_directory())]
 core-csql CORE:
     cgdb csql core {{ CORE }}
 
-# Attach to a selected cubrid utility process.
+# Attach to a selected testdb unloaddb from this worktree and installation.
 [working-directory(justfile_directory())]
-attach-unloaddb: print-current-server
-    cgdb -p "$(ps aux | rg vimkim | rg cubrid | fzf | awk '{print $2}')" "$CUBRID_BUILD_DIR/bin/cubrid"
+attach-unloaddb:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    exec "$HOME/my-cubrid/bin/cubrid-build-coordinator.sh" runtime 300 --database testdb -- bash -euc '
+      pid="$($HOME/my-cubrid/bin/my-cubrid-process-select unloaddb --interactive)"
+      exec cgdb -p "$pid" "$CUBRID_BUILD_DIR/bin/cubrid"
+    '
 
 # Open the most recent csql coredump through coredumpctl.
 [working-directory(justfile_directory())]
@@ -79,31 +80,3 @@ delete-cores:
 [working-directory(justfile_directory())]
 rr-replay:
     rr replay
-
-[private]
-[working-directory(justfile_directory())]
-print-current-server:
-    #!/bin/sh
-    set -eu
-
-    for process in /proc/[0-9]*; do
-        [ "$(basename "$(readlink -f "$process/exe")")" = cub_server ] || continue
-        cwd="$(readlink -f "$process/cwd")"
-        case "$cwd" in
-            *vimkim*)
-                ps -p "${process##*/}" -o pid=,ppid=,stat=,args=
-                printf '  cwd=%s\n' "$cwd"
-                ;;
-        esac
-    done
-
-[private]
-require-selected-testdb:
-    #!/usr/bin/env bash
-    set -euo pipefail
-    selected="$($HOME/my-cubrid/bin/my-cubrid-pwddb-getname)"
-    if [[ "$selected" != "testdb" ]]; then
-        printf 'Refusing fixed database recipe for testdb: manifest-selected database is %s.\n' \
-            "$selected" >&2
-        exit 1
-    fi

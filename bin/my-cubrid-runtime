@@ -2040,7 +2040,7 @@ def validate_database_name(name: str) -> None:
         )
 
 
-def default_database_name(worktree: Path, _runtime_identifier: str) -> str:
+def default_database_name(worktree: Path) -> str:
     readable = re.sub(r"[^A-Za-z0-9_]", "_", worktree.name)
     readable = re.sub(r"_+", "_", readable).strip("_") or "runtime"
     if not readable[0].isalpha():
@@ -3689,9 +3689,7 @@ def initialize(
             "Keep one valid CUBRID_WORKTREE_ID assignment before retrying.",
         ) from error
     runtime_identifier = selected_id or uuid.uuid4().hex[:16]
-    preview_database_name = database_override or default_database_name(
-        selection.worktree, runtime_identifier
-    )
+    preview_database_name = database_override or default_database_name(selection.worktree)
     validate_database_name(preview_database_name)
     adoption = (inspect_database_storage(adapter, preview_database_name, adoption_registry, required=True)
                 if adoption_registry is not None else None)
@@ -3849,7 +3847,7 @@ def initialize(
                 )
         observations = adapter.inspect_runtime()
         if retained is None:
-            database_name = database_override or default_database_name(selection.worktree, runtime_identifier)
+            database_name = database_override or default_database_name(selection.worktree)
             validate_database_name(database_name)
             bundle = create_resource_bundle(
                 runtime_identifier,
@@ -4899,11 +4897,6 @@ def load_validation_metadata(
                 "The retained transaction is unfinished or disagrees with the manifest; "
                 "retry the original explicit command with its original selection.",
             )
-    if not document["resource_bundle"]:
-        return reject_manifest(
-            "manifest_incomplete",
-            "Manifest does not contain a complete resource bundle.",
-        )
     runtime_observations = adapter.inspect_runtime()
     if not runtime_observations.complete:
         return invalid_result(
@@ -4918,6 +4911,11 @@ def load_validation_metadata(
             missing_evidence=("complete process, socket, listener, filesystem, configuration, and System V IPC visibility",),
             observation_scope=runtime_observations.scope,
         ), EXIT_INVALID
+    if not document["resource_bundle"]:
+        return reject_manifest(
+            "manifest_incomplete",
+            "Manifest does not contain a complete resource bundle.",
+        )
     database_name = document.get("database_name")
     claims = document.get("normalized_claims")
     installation = document.get("installation")
@@ -5113,6 +5111,8 @@ def validate(
     adapter: ObservationAdapter,
     selection: RuntimeSelection,
     deinitializing: GuardTransaction | None = None,
+    database_delete_utility_absent: bool = False,
+    require_idle: bool = False,
 ) -> tuple[ValidationResult, int]:
     metadata = load_validation_metadata(adapter, selection, deinitializing)
     if isinstance(metadata, tuple):
@@ -5131,6 +5131,36 @@ def validate(
     configurations = document["configurations"]
     reject_manifest = partial(manifest_validation_error, selection, manifest_path)
     runtime_observations = metadata.runtime_observations
+    database_utility = bundle.executable_directory / "cubrid"
+    if database_delete_utility_absent:
+        try:
+            database_utility.lstat()
+        except FileNotFoundError:
+            pass
+        else:
+            return invalid_result(
+                selection,
+                database_utility,
+                "installation_identity_invalid",
+                "The database utility appeared while binary-independent deletion was being validated.",
+                affected_kind="installation file",
+                source="manifest installation identity",
+                next_action="Retry deletion so the available utility receives full runtime validation.",
+                expected_value="absent",
+                observed_value="present",
+            ), EXIT_INVALID
+        if bundle.database_adopted:
+            return invalid_result(
+                selection,
+                bundle.database_registry,
+                "database_ownership_unproven",
+                "Binary-independent deletion is limited to fresh guard-created database storage.",
+                affected_kind="database storage",
+                source="manifest resource bundle",
+                next_action="Restore the selected CUBRID utility to delete adopted database storage.",
+                expected_value="fresh guard-created storage",
+                observed_value="adopted storage",
+            ), EXIT_INVALID
     for kind, environment_name in (
         ("engine", "CUBRID_CONF_FILE"),
         ("broker", "CUBRID_BROKER_CONF_FILE"),
@@ -5236,6 +5266,14 @@ def validate(
             ), EXIT_INVALID
     try:
         require_bundle_database(adapter, bundle)
+        if database_delete_utility_absent:
+            storage = inspect_database_storage(
+                adapter, bundle.database_name, bundle.database_registry, required=False
+            )
+            if storage is not None:
+                inspect_database_storage(
+                    adapter, bundle.database_name, bundle.database_registry, required=True
+                )
     except OperationError as error:
         return ValidationResult(outcome="invalid", selection=selection, diagnostic=error.diagnostic), EXIT_INVALID
     try:
@@ -5525,6 +5563,8 @@ def validate(
     for record in executable_records:
         assert isinstance(record, dict)
         identity_path = Path(record["path"])
+        if database_delete_utility_absent and identity_path == database_utility:
+            continue
         try:
             require_owned_installation_path(identity_path, "file", "installation file")
         except OperationError:
@@ -5601,6 +5641,34 @@ def validate(
     if ownership.classification in ("conflict", "unknown"):
         return ownership_failure_result(
             selection, runtime_observations, selected_runtime_id, ownership
+        ), EXIT_INVALID
+    if database_delete_utility_absent and ownership.classification != "free":
+        return ownership_failure_result(
+            selection,
+            runtime_observations,
+            selected_runtime_id,
+            ownership_assessment(
+                "unknown",
+                "database runtime",
+                bundle.database_name,
+                evidence=ownership.evidence,
+                missing_evidence=ownership.missing_evidence,
+                message="Binary-independent deletion requires the selected runtime to be completely idle.",
+            ),
+        ), EXIT_INVALID
+    if require_idle and ownership.classification != "free":
+        return ownership_failure_result(
+            selection,
+            runtime_observations,
+            selected_runtime_id,
+            ownership_assessment(
+                "unknown",
+                "installation runtime",
+                os.fspath(bundle.installation_root),
+                evidence=ownership.evidence,
+                missing_evidence=ownership.missing_evidence,
+                message="This operation requires the selected runtime to be completely idle.",
+            ),
         ), EXIT_INVALID
     result = ready_result(
         "validate", selection, selected_runtime_id, manifest_path, expected_environment_path
@@ -5892,6 +5960,11 @@ def parse_arguments() -> argparse.Namespace:
         command_parser.add_argument("--preset", help="active build preset (default: PRESET_MODE)")
         command_parser.add_argument("--json", action="store_true", help="emit structured diagnostics")
     initialize_parser.add_argument("--db-name", help="database identity for a new runtime")
+    validate_parser.add_argument(
+        "--require-idle",
+        action="store_true",
+        help="reject even positively owned live runtime resources",
+    )
     adopt_parser.add_argument("--db-name", help="existing database name to preserve")
     adopt_parser.add_argument("--registry", help="existing private CUBRID_DATABASES directory")
     return parser.parse_args()
@@ -5919,7 +5992,9 @@ def main() -> int:
         if arguments.command == "init":
             result, exit_status = initialize(adapter, selection, arguments.db_name)
         elif arguments.command == "validate":
-            result, exit_status = validate(adapter, selection)
+            result, exit_status = validate(
+                adapter, selection, require_idle=arguments.require_idle
+            )
         elif arguments.command == "adopt":
             for transaction in retained_transactions(state_root()).values():
                 if transaction["state"] != "ready" and transaction["manifest"]["worktree_path"] == os.fspath(worktree):

@@ -23,6 +23,8 @@ Actions:
   install [runtime-wait-seconds]
   install-target <target> [runtime-wait-seconds]
   runtime [lock-wait-seconds] -- command [args...]
+  database-delete [lock-wait-seconds] [--database name]
+  installation-delete [lock-wait-seconds]
   stop-and-build
 
 Exit status 75 means that the operation is safe to retry later.
@@ -172,20 +174,53 @@ runtime_guard_command()
   printf '%s/bin/my-cubrid-runtime' "${MY_CUBRID:-$HOME/my-cubrid}"
 }
 
-validate_runtime_ready()
+validate_runtime()
 {
+  local required_state="${1:-ready}"
   local report
   local status
   local guard
+  local -a validation_arguments=()
+
+  if [[ "$required_state" == idle ]]; then
+    validation_arguments+=(--require-idle)
+  elif [[ "$required_state" != ready ]]; then
+    die_usage "unknown runtime validation requirement: $required_state"
+  fi
 
   guard="$(runtime_guard_command)"
-  if report="$("$guard" validate --worktree "$PWD" --preset "$PRESET_MODE" --json)"; then
+  if report="$("$guard" validate --worktree "$PWD" --preset "$PRESET_MODE" \
+      "${validation_arguments[@]}" --json)"; then
     return 0
   else
     status=$?
   fi
   printf '%s\n' "$report" >&2
   return "$status"
+}
+
+validate_runtime_ready()
+{
+  validate_runtime ready
+}
+
+validate_runtime_idle()
+{
+  validate_runtime idle
+}
+
+require_selected_database()
+{
+  local expected="$1"
+  local selected
+  local selector="${MY_CUBRID:-$HOME/my-cubrid}/bin/my-cubrid-pwddb-getname"
+
+  selected="$("$selector")"
+  if [[ "$selected" != "$expected" ]]; then
+    printf 'Refusing fixed database command for %s: manifest-selected database is %s.\n' \
+      "$expected" "$selected" >&2
+    return 1
+  fi
 }
 
 initialize_guarded_runtime()
@@ -301,26 +336,63 @@ case "$action" in
       runtime_timeout="${1:-$DEFAULT_RUNTIME_LOCK_TIMEOUT}"
       [[ $# -ge 1 ]] && shift
     fi
+    expected_database=""
+    if [[ "${1:-}" == "--database" ]]; then
+      [[ $# -ge 2 ]] || die_usage "runtime --database requires a database name"
+      expected_database="$2"
+      shift 2
+    fi
     [[ "${1:-}" == "--" ]] && shift
     [[ $# -gt 0 ]] || die_usage "runtime requires a command"
-    if [[ "${CUBRID_RUNTIME_LOCK_HELD:-0}" == "1" ]]; then
-      validate_runtime_ready
-      exec "$@"
-    fi
     acquire_runtime_lock "$runtime_timeout"
-    export CUBRID_RUNTIME_LOCK_HELD=1
     validate_runtime_ready
+    [[ -z "$expected_database" ]] || require_selected_database "$expected_database"
     # Keep the lock in this supervisor, not in the command or its daemon children.
     (
       exec {RUNTIME_LOCK_FD}>&-
       exec "$@"
     )
     ;;
+  database-delete)
+    if [[ $# -eq 0 || "${1:-}" == "--database" ]]; then
+      runtime_timeout="$DEFAULT_RUNTIME_LOCK_TIMEOUT"
+    else
+      runtime_timeout="$1"
+      shift
+    fi
+    expected_database=""
+    if [[ "${1:-}" == "--database" ]]; then
+      [[ $# -eq 2 ]] || die_usage "database-delete --database requires exactly one database name"
+      expected_database="$2"
+      shift 2
+    fi
+    [[ $# -eq 0 ]] || die_usage "database-delete accepts only a timeout and optional database name"
+    acquire_runtime_lock "$runtime_timeout"
+    database_helper="${MY_CUBRID:-$HOME/my-cubrid}/bin/my-cubrid-pwddb"
+    database_arguments=(delete)
+    if [[ -n "$expected_database" ]]; then
+      database_arguments+=(--expected-name "$expected_database")
+    fi
+    (
+      exec {RUNTIME_LOCK_FD}>&-
+      exec "$database_helper" "${database_arguments[@]}"
+    )
+    ;;
+  installation-delete)
+    [[ $# -le 1 ]] || die_usage "installation-delete accepts at most one timeout"
+    runtime_timeout="${1:-$DEFAULT_RUNTIME_LOCK_TIMEOUT}"
+    acquire_runtime_lock "$runtime_timeout"
+    validate_runtime_idle
+    [[ "$INSTALL_PREFIX" != / && "$INSTALL_PREFIX" != "$HOME" ]] \
+      || die_usage "refusing to remove a broad installation path: $INSTALL_PREFIX"
+    /bin/rm -rf -- "$INSTALL_PREFIX"
+    ;;
   stop-and-build)
     [[ $# -eq 0 ]] || die_usage "stop-and-build takes no arguments"
     acquire_build_lock
     compile_unlocked
     acquire_runtime_lock "$DEFAULT_RUNTIME_LOCK_TIMEOUT"
+    validate_runtime_ready
     stop_current_runtime
     wait_for_runtime_to_stop
     install_unlocked

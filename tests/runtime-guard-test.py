@@ -1243,6 +1243,9 @@ class RuntimeGuardCliTest(unittest.TestCase):
 
         validated = self.run_runtime("validate", "--preset", "debug", "--json")
         human = self.run_runtime("validate", "--preset", "debug")
+        idle_required = self.run_runtime(
+            "validate", "--preset", "debug", "--require-idle", "--json"
+        )
 
         self.assertEqual(validated.returncode, 0, validated.stderr + validated.stdout)
         report = json.loads(validated.stdout)
@@ -1257,6 +1260,8 @@ class RuntimeGuardCliTest(unittest.TestCase):
         self.assertIn(f"Expected owner: {ownership['expected_owner']}", human.stdout)
         self.assertIn(f"Observed owner: {ownership['observed_owner']}", human.stdout)
         self.assertIn("Next action: " + ownership["next_action"], human.stdout)
+        self.assertEqual(idle_required.returncode, 4)
+        self.assertIn("completely idle", idle_required.stdout)
         self.assertFalse(self.calls.exists())
 
     def test_managed_foreign_listener_is_a_conflict_with_equivalent_diagnostics(self):
@@ -3795,6 +3800,37 @@ class RuntimeGuardCliTest(unittest.TestCase):
         self.assertEqual(
             report["diagnostic"]["affected_object"]["kind"], "runtime observation snapshot"
         )
+        self.assertFalse(self.calls.exists())
+
+    def test_incomplete_runtime_observations_precede_empty_resource_bundle(self):
+        self.use_fake_state("runtime-01", {
+            "type": "file",
+            "owner": os.geteuid(),
+            "mode": "0600",
+            "content": json.dumps({
+                "schema_version": 1,
+                "generation": 1,
+                "state": "ready",
+                "worktree_id": "runtime-01",
+                "worktree_path": str(self.worktree),
+                "git_common_dir": str(self.worktree / ".git"),
+                "active_preset": "debug",
+                "resource_bundle": {},
+            }),
+        }, observations={
+            "complete": False,
+            "processes": [],
+            "sockets": [],
+            "listeners": [],
+            "system_v_ipc": [],
+        })
+
+        result = self.run_cli("--preset", "debug", "--json")
+
+        self.assertEqual(result.returncode, 4, result.stderr + result.stdout)
+        report = json.loads(result.stdout)
+        self.assertEqual(report["diagnostic"]["code"], "observation_incomplete")
+        self.assertEqual(report["diagnostic"]["evidence_quality"], "unknown")
         self.assertFalse(self.calls.exists())
 
 

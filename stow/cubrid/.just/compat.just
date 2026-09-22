@@ -109,9 +109,6 @@ alias cubrid-createdb-testdb := db::create-testdb
 alias cubrid-deletedb-testdb := db::delete-testdb
 
 [private]
-alias cubrid-deletedb-all := db::delete-all
-
-[private]
 alias cubrid-recreate-testdb := db::recreate-testdb
 
 [private]
@@ -128,9 +125,6 @@ alias cubrid-deletedb-demodb := db::delete-demodb
 
 [private]
 alias cubrid-recreate-demodb := db::recreate-demodb
-
-[private]
-alias database-remove := db::remove-databases
 
 [private]
 alias cubrid-conf-enable-string-compression := db::enable-string-compression
@@ -179,9 +173,6 @@ alias cubrid-conf-data-buffer-set-512m := db::set-data-buffer-512m
 
 [private]
 alias cubrid-conf-edit := db::edit-config
-
-[private]
-alias edit-databases-txt := db::edit-databases
 
 [private]
 shell-debug TEST_DIR: (ctp::shell-debug TEST_DIR)
@@ -326,20 +317,6 @@ depthlog-pretty-print-log:
 [private]
 cmake-refresh-fetchcontent-depthlog:
     just local refresh-depthlog
-
-[private]
-update-cubrid-conf:
-    just local update-cubrid-conf
-
-[private]
-build-update:
-    just build
-    just local update-cubrid-conf
-
-[private]
-update-restart-testdb:
-    just local update-cubrid-conf
-    just db restart-testdb
 
 [private]
 n5:

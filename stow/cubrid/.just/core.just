@@ -248,7 +248,7 @@ delete-build: confirm-no
 # Remove the selected install directory after explicit confirmation.
 [working-directory(justfile_directory())]
 delete-install: confirm-no
-    /bin/rm -rf "$CUBRID"
+    ~/my-cubrid/bin/cubrid-build-coordinator.sh installation-delete 300
 
 # Restow shared CUBRID and GDB files into the current worktree.
 [working-directory(justfile_directory())]

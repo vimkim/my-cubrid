@@ -4,13 +4,13 @@ set shell := ["sh", "-cu"]
 
 # List all registered database names, including stopped databases.
 list-all:
-    @awk 'NF && $1 !~ /^#/ {print $1}' "${CUBRID_DATABASES:-.}/databases.txt"
+    @~/my-cubrid/bin/cubrid-build-coordinator.sh runtime 300 -- ~/my-cubrid/bin/my-cubrid-pwddb list
 
 # Select a registered database with fzf and start its server.
 start-interactive:
     #!/usr/bin/env bash
     set -euo pipefail
-    databases=$(awk 'NF && $1 !~ /^#/ && !seen[$1]++ {print $1}' "${CUBRID_DATABASES:-.}/databases.txt")
+    databases=$(~/my-cubrid/bin/cubrid-build-coordinator.sh runtime 300 -- ~/my-cubrid/bin/my-cubrid-pwddb list)
     if [[ -z $databases ]]; then
       echo 'No registered databases.'
       exit 0
@@ -22,13 +22,13 @@ start-interactive:
       [[ $status == 1 || $status == 130 ]] && exit 0
       exit "$status"
     fi
-    ~/my-cubrid/bin/cubrid-build-coordinator.sh runtime 0 -- cubrid server start "$database"
+    ~/my-cubrid/bin/cubrid-build-coordinator.sh runtime 0 --database "$database" -- cubrid server start "$database"
 
 # Select a running database server with fzf and stop it.
 stop-interactive:
     #!/usr/bin/env bash
     set -euo pipefail
-    server_status=$(cubrid server status)
+    server_status=$(~/my-cubrid/bin/cubrid-build-coordinator.sh runtime 0 -- cubrid server status)
     databases=$(awk '($1 == "Server" || $1 == "HA-Server") && !seen[$2]++ {print $2}' <<<"$server_status")
     if [[ -z $databases ]]; then
       echo 'No running database servers.'
@@ -41,126 +41,106 @@ stop-interactive:
       [[ $status == 1 || $status == 130 ]] && exit 0
       exit "$status"
     fi
-    ~/my-cubrid/bin/cubrid-build-coordinator.sh runtime 0 -- cubrid server stop "$database"
+    ~/my-cubrid/bin/cubrid-build-coordinator.sh runtime 0 --database "$database" -- cubrid server stop "$database"
 
 # Create the ready manifest's database, initially empty.
 pwddb-create:
-    ~/my-cubrid/bin/my-cubrid-pwddb create
+    ~/my-cubrid/bin/cubrid-build-coordinator.sh runtime 300 -- ~/my-cubrid/bin/my-cubrid-pwddb create
 
 # Replace only the resolved database with an empty database.
 pwddb-recreate:
-    ~/my-cubrid/bin/my-cubrid-pwddb recreate
+    ~/my-cubrid/bin/cubrid-build-coordinator.sh runtime 300 -- ~/my-cubrid/bin/my-cubrid-pwddb recreate
 
 # Delete only the resolved database.
 pwddb-delete:
-    ~/my-cubrid/bin/my-cubrid-pwddb delete
+    ~/my-cubrid/bin/cubrid-build-coordinator.sh database-delete 300
 
 # Populate the ready manifest's database with demodb sample data.
 pwddb-create-demodb:
-    ~/my-cubrid/bin/my-cubrid-pwddb create --load demodb
+    ~/my-cubrid/bin/cubrid-build-coordinator.sh runtime 300 -- ~/my-cubrid/bin/my-cubrid-pwddb create --load demodb
 
 # Replace the manifest's database and load demodb sample data.
 pwddb-recreate-demodb:
-    ~/my-cubrid/bin/my-cubrid-pwddb recreate --load demodb
+    ~/my-cubrid/bin/cubrid-build-coordinator.sh runtime 300 -- ~/my-cubrid/bin/my-cubrid-pwddb recreate --load demodb
 
 # Delete the manifest's database; template selection never changes its name.
 pwddb-delete-demodb:
-    ~/my-cubrid/bin/my-cubrid-pwddb delete
-
-# Refuse legacy fixed-name recipes unless their target is the ready manifest's database.
-[private]
-require-selected-database expected:
-    #!/usr/bin/env bash
-    set -euo pipefail
-    selected="$($HOME/my-cubrid/bin/my-cubrid-pwddb-getname)"
-    if [[ "$selected" != "{{ expected }}" ]]; then
-        printf 'Refusing fixed database recipe for %s: manifest-selected database is %s.\n' \
-            "{{ expected }}" "$selected" >&2
-        exit 1
-    fi
+    ~/my-cubrid/bin/cubrid-build-coordinator.sh database-delete 300
 
 # Start testdb while holding the runtime lock.
 [working-directory(justfile_directory())]
-start-testdb: (require-selected-database "testdb")
-    ~/my-cubrid/bin/cubrid-build-coordinator.sh runtime 300 -- cubrid server start testdb
+start-testdb:
+    ~/my-cubrid/bin/cubrid-build-coordinator.sh runtime 300 --database testdb -- cubrid server start testdb
 
 # Restart testdb while holding the runtime lock.
 [working-directory(justfile_directory())]
-restart-testdb: (require-selected-database "testdb")
-    ~/my-cubrid/bin/cubrid-build-coordinator.sh runtime 300 -- cubrid server restart testdb
+restart-testdb:
+    ~/my-cubrid/bin/cubrid-build-coordinator.sh runtime 300 --database testdb -- cubrid server restart testdb
 
 # Stop testdb while holding the runtime lock.
 [working-directory(justfile_directory())]
-stop-testdb: (require-selected-database "testdb")
-    ~/my-cubrid/bin/cubrid-build-coordinator.sh runtime 300 -- cubrid server stop testdb
+stop-testdb:
+    ~/my-cubrid/bin/cubrid-build-coordinator.sh runtime 300 --database testdb -- cubrid server stop testdb
 
 # Best-effort stop of testdb.
 [working-directory(justfile_directory())]
-stop-testdb-try: (require-selected-database "testdb")
-    ~/my-cubrid/bin/cubrid-build-coordinator.sh runtime 300 -- cubrid server stop testdb || true
+stop-testdb-try:
+    ~/my-cubrid/bin/cubrid-build-coordinator.sh runtime 300 --database testdb -- cubrid server stop testdb || true
 
 # Start demodb while holding the runtime lock.
 [working-directory(justfile_directory())]
-start-demodb: (require-selected-database "demodb")
-    ~/my-cubrid/bin/cubrid-build-coordinator.sh runtime 300 -- cubrid server start demodb
+start-demodb:
+    ~/my-cubrid/bin/cubrid-build-coordinator.sh runtime 300 --database demodb -- cubrid server start demodb
 
 # Restart demodb while holding the runtime lock.
 [working-directory(justfile_directory())]
-restart-demodb: (require-selected-database "demodb")
-    ~/my-cubrid/bin/cubrid-build-coordinator.sh runtime 300 -- cubrid server restart demodb
+restart-demodb:
+    ~/my-cubrid/bin/cubrid-build-coordinator.sh runtime 300 --database demodb -- cubrid server restart demodb
 
 # Stop demodb while holding the runtime lock.
 [working-directory(justfile_directory())]
-stop-demodb: (require-selected-database "demodb")
-    ~/my-cubrid/bin/cubrid-build-coordinator.sh runtime 300 -- cubrid server stop demodb
+stop-demodb:
+    ~/my-cubrid/bin/cubrid-build-coordinator.sh runtime 300 --database demodb -- cubrid server stop demodb
 
 # Show selected effective testdb parameters.
 [working-directory(justfile_directory())]
-paramdump-testdb: (require-selected-database "testdb")
-    cub-auto paramdump testdb | rg 'buffer|string'
+paramdump-testdb:
+    ~/my-cubrid/bin/cubrid-build-coordinator.sh runtime 300 --database testdb -- cub-auto paramdump testdb | rg 'buffer|string'
 
 # Open csql against testdb.
 [working-directory(justfile_directory())]
 csql: paramdump-testdb
-    csql.sh
+    ~/my-cubrid/bin/cubrid-build-coordinator.sh runtime 300 --database testdb -- csql.sh
 
 # Open csql against testdb in standalone mode.
 [working-directory(justfile_directory())]
-csql-sa: (require-selected-database "testdb")
-    csql.sh
+csql-sa:
+    ~/my-cubrid/bin/cubrid-build-coordinator.sh runtime 300 --database testdb -- csql.sh
 
 # Unload testdb in standalone mode.
 [working-directory(justfile_directory())]
-unloaddb-sa: (require-selected-database "testdb")
-    cubrid unloaddb testdb -S -t 0 -v
+unloaddb-sa:
+    ~/my-cubrid/bin/cubrid-build-coordinator.sh runtime 300 --database testdb -- cubrid unloaddb testdb -S -t 0 -v
 
 # Unload testdb in client-server mode.
 [working-directory(justfile_directory())]
-unloaddb-cs: (require-selected-database "testdb")
-    cubrid unloaddb testdb -C -t 0 -v
+unloaddb-cs:
+    ~/my-cubrid/bin/cubrid-build-coordinator.sh runtime 300 --database testdb -- cubrid unloaddb testdb -C -t 0 -v
 
 # Create testdb.
 [working-directory(justfile_directory())]
-create-testdb: (require-selected-database "testdb")
-    mkdir -p "$CUBRID_DATABASES/testdb"
-    cubrid createdb --db-volume-size=20M --log-volume-size=20M testdb en_US.utf8 -F "$CUBRID_DATABASES/testdb"
+create-testdb:
+    ~/my-cubrid/bin/cubrid-build-coordinator.sh runtime 300 --database testdb -- ~/my-cubrid/bin/my-cubrid-pwddb create
 
-# Delete testdb through the CUBRID utility.
+# Delete the manifest-selected testdb.
 [working-directory(justfile_directory())]
-delete-testdb: (require-selected-database "testdb")
-    cubrid deletedb testdb
+delete-testdb:
+    ~/my-cubrid/bin/cubrid-build-coordinator.sh database-delete 300 --database testdb
 
-# Delete all local databases after explicit confirmation.
+# Recreate the manifest-selected testdb.
 [working-directory(justfile_directory())]
-delete-all: (require-selected-database "testdb")
-    gum confirm "delete all db? This is dangerous"
-    /bin/rm -rf "$CUBRID_DATABASES"
-    /bin/rm -rf testdb*
-    mkdir -p "$CUBRID_DATABASES/testdb"
-
-# Recreate testdb from an empty local database directory.
-[working-directory(justfile_directory())]
-recreate-testdb: delete-all create-testdb
+recreate-testdb:
+    ~/my-cubrid/bin/cubrid-build-coordinator.sh runtime 300 --database testdb -- ~/my-cubrid/bin/my-cubrid-pwddb recreate
 
 # Stop, recreate, and start testdb.
 [working-directory(justfile_directory())]
@@ -168,40 +148,34 @@ stop-recreate-start-testdb: stop-testdb recreate-testdb start-testdb
 
 # Create and load demodb.
 [working-directory(justfile_directory())]
-create-demodb: (require-selected-database "demodb")
-    mkdir -p "$CUBRID_DATABASES/demodb"
-    cubrid createdb --db-page-size=16K --db-volume-size=20M --log-volume-size=20M demodb en_US.utf8 -F "$CUBRID_DATABASES/demodb"
-    cubrid loaddb -u dba -s "$CUBRID/demo/demodb_schema" -d "$CUBRID/demo/demodb_objects" demodb
+create-demodb:
+    ~/my-cubrid/bin/cubrid-build-coordinator.sh runtime 300 --database demodb -- ~/my-cubrid/bin/my-cubrid-pwddb create --load demodb
 
 # Delete demodb.
 [working-directory(justfile_directory())]
-delete-demodb: (require-selected-database "demodb")
-    cubrid deletedb demodb
+delete-demodb:
+    ~/my-cubrid/bin/cubrid-build-coordinator.sh database-delete 300 --database demodb
 
 # Recreate demodb.
 [working-directory(justfile_directory())]
-recreate-demodb: delete-demodb create-demodb
-
-# Remove all local databases after explicit confirmation.
-[working-directory(justfile_directory())]
-remove-databases: confirm-no
-    /bin/rm -rf "$CUBRID_DATABASES"
+recreate-demodb:
+    ~/my-cubrid/bin/cubrid-build-coordinator.sh runtime 300 --database demodb -- ~/my-cubrid/bin/my-cubrid-pwddb recreate --load demodb
 
 # Interactively update a CUBRID system parameter in the active runtime.
 [working-directory(justfile_directory())]
-ini database='testdb' section='common': (require-selected-database database)
-    cubrid-ini-fzf --database "{{ database }}" --section "{{ section }}"
+ini database='testdb' section='common':
+    ~/my-cubrid/bin/cubrid-build-coordinator.sh runtime 300 --database "{{ database }}" -- cubrid-ini-fzf --database "{{ database }}" --section "{{ section }}"
 
 # Show enable_string_compression from the installed config and effective testdb parameters.
 [working-directory(justfile_directory())]
 get-string-compression:
-    crudini --get "$CUBRID/conf/cubrid.conf" common enable_string_compression || true
+    ~/my-cubrid/bin/cubrid-build-coordinator.sh runtime 300 -- crudini --get "$CUBRID/conf/cubrid.conf" common enable_string_compression || true
     just db paramdump-string-compression
 
 # Enable string compression.
 [working-directory(justfile_directory())]
 enable-string-compression: get-string-compression
-    crudini --set "$CUBRID/conf/cubrid.conf" common enable_string_compression yes
+    ~/my-cubrid/bin/cubrid-build-coordinator.sh runtime 300 -- crudini --set "$CUBRID/conf/cubrid.conf" common enable_string_compression yes
     printf '%s\n' "string compression enabled:"
     just db get-string-compression
 
@@ -209,110 +183,99 @@ enable-string-compression: get-string-compression
 [working-directory(justfile_directory())]
 disable-string-compression: get-string-compression
     printf '%s\n' "string compression disabled:"
-    crudini --set "$CUBRID/conf/cubrid.conf" common enable_string_compression no
+    ~/my-cubrid/bin/cubrid-build-coordinator.sh runtime 300 -- crudini --set "$CUBRID/conf/cubrid.conf" common enable_string_compression no
     just db get-string-compression
 
 # Show effective string-compression configuration for testdb.
 [working-directory(justfile_directory())]
-paramdump-string-compression: (require-selected-database "testdb")
-    cub-auto paramdump testdb | rg enable_string_compression
+paramdump-string-compression:
+    ~/my-cubrid/bin/cubrid-build-coordinator.sh runtime 300 --database testdb -- cub-auto paramdump testdb | rg enable_string_compression
 
 # Show enable_pgbuf_inspector from the installed config (default: no).
 [working-directory(justfile_directory())]
 get-pgbuf-inspector:
-    crudini --get "$CUBRID/conf/cubrid.conf" common enable_pgbuf_inspector
+    ~/my-cubrid/bin/cubrid-build-coordinator.sh runtime 300 -- crudini --get "$CUBRID/conf/cubrid.conf" common enable_pgbuf_inspector
 
 # Enable the page-buffer inspector at the next database server startup.
 [working-directory(justfile_directory())]
 enable-pgbuf-inspector:
-    crudini --set "$CUBRID/conf/cubrid.conf" common enable_pgbuf_inspector yes
+    ~/my-cubrid/bin/cubrid-build-coordinator.sh runtime 300 -- crudini --set "$CUBRID/conf/cubrid.conf" common enable_pgbuf_inspector yes
     just db get-pgbuf-inspector
     printf '%s\n' "Restart the database server to apply enable_pgbuf_inspector."
 
 # Disable the page-buffer inspector at the next database server startup.
 [working-directory(justfile_directory())]
 disable-pgbuf-inspector:
-    crudini --set "$CUBRID/conf/cubrid.conf" common enable_pgbuf_inspector no
+    ~/my-cubrid/bin/cubrid-build-coordinator.sh runtime 300 -- crudini --set "$CUBRID/conf/cubrid.conf" common enable_pgbuf_inspector no
     just db get-pgbuf-inspector
     printf '%s\n' "Restart the database server to apply enable_pgbuf_inspector."
 
 # Show the effective hidden inspector parameter for a running database.
 [working-directory(justfile_directory())]
-paramdump-pgbuf-inspector database='testdb': (require-selected-database database)
-    cubrid paramdump -C --dump-flag=0x8 "{{ database }}" | rg enable_pgbuf_inspector
+paramdump-pgbuf-inspector database='testdb':
+    ~/my-cubrid/bin/cubrid-build-coordinator.sh runtime 300 --database "{{ database }}" -- cubrid paramdump -C --dump-flag=0x8 "{{ database }}" | rg enable_pgbuf_inspector
 
 # Show use_system_malloc.
 [working-directory(justfile_directory())]
 get-use-system-malloc:
-    crudini --get "$CUBRID/conf/cubrid.conf" common use_system_malloc || true
+    ~/my-cubrid/bin/cubrid-build-coordinator.sh runtime 300 -- crudini --get "$CUBRID/conf/cubrid.conf" common use_system_malloc || true
 
 # Enable system malloc.
 [working-directory(justfile_directory())]
 enable-use-system-malloc: get-use-system-malloc
-    crudini --set "$CUBRID/conf/cubrid.conf" common use_system_malloc yes
+    ~/my-cubrid/bin/cubrid-build-coordinator.sh runtime 300 -- crudini --set "$CUBRID/conf/cubrid.conf" common use_system_malloc yes
     just db get-use-system-malloc
 
 # Disable system malloc.
 [working-directory(justfile_directory())]
 disable-use-system-malloc: get-use-system-malloc
-    crudini --set "$CUBRID/conf/cubrid.conf" common use_system_malloc no
+    ~/my-cubrid/bin/cubrid-build-coordinator.sh runtime 300 -- crudini --set "$CUBRID/conf/cubrid.conf" common use_system_malloc no
     just db get-use-system-malloc
 
 # Show unfill_factor.
 [working-directory(justfile_directory())]
 get-unfill-factor:
-    crudini --get "$CUBRID/conf/cubrid.conf" common unfill_factor || true
+    ~/my-cubrid/bin/cubrid-build-coordinator.sh runtime 300 -- crudini --get "$CUBRID/conf/cubrid.conf" common unfill_factor || true
 
 # Set unfill_factor to zero.
 [working-directory(justfile_directory())]
 set-unfill-factor:
-    crudini --set "$CUBRID/conf/cubrid.conf" common unfill_factor 0.0
+    ~/my-cubrid/bin/cubrid-build-coordinator.sh runtime 300 -- crudini --set "$CUBRID/conf/cubrid.conf" common unfill_factor 0.0
 
 # Show cubrid_port_id.
 [working-directory(justfile_directory())]
 get-port:
-    crudini --get "$CUBRID/conf/cubrid.conf" common cubrid_port_id
+    ~/my-cubrid/bin/cubrid-build-coordinator.sh runtime 300 -- crudini --get "$CUBRID/conf/cubrid.conf" common cubrid_port_id
 
 # Set cubrid_port_id to the personal test port.
 [working-directory(justfile_directory())]
 set-port: get-port
-    crudini --set "$CUBRID/conf/cubrid.conf" common cubrid_port_id 12345
+    ~/my-cubrid/bin/cubrid-build-coordinator.sh runtime 300 -- crudini --set "$CUBRID/conf/cubrid.conf" common cubrid_port_id 12345
 
 # Show data_buffer_size.
 [working-directory(justfile_directory())]
 get-data-buffer-size:
-    crudini --get "$CUBRID/conf/cubrid.conf" common data_buffer_size
+    ~/my-cubrid/bin/cubrid-build-coordinator.sh runtime 300 -- crudini --get "$CUBRID/conf/cubrid.conf" common data_buffer_size
 
 # Set data_buffer_size to 20G.
 [working-directory(justfile_directory())]
 set-data-buffer-20g: get-data-buffer-size
-    crudini --set "$CUBRID/conf/cubrid.conf" common data_buffer_size 20G
+    ~/my-cubrid/bin/cubrid-build-coordinator.sh runtime 300 -- crudini --set "$CUBRID/conf/cubrid.conf" common data_buffer_size 20G
     just db get-data-buffer-size
 
 # Set data_buffer_size to 50G.
 [working-directory(justfile_directory())]
 set-data-buffer-50g: get-data-buffer-size
-    crudini --set "$CUBRID/conf/cubrid.conf" common data_buffer_size 50G
+    ~/my-cubrid/bin/cubrid-build-coordinator.sh runtime 300 -- crudini --set "$CUBRID/conf/cubrid.conf" common data_buffer_size 50G
     just db get-data-buffer-size
 
 # Set data_buffer_size to 512M.
 [working-directory(justfile_directory())]
 set-data-buffer-512m: get-data-buffer-size
-    crudini --set "$CUBRID/conf/cubrid.conf" common data_buffer_size 512m
+    ~/my-cubrid/bin/cubrid-build-coordinator.sh runtime 300 -- crudini --set "$CUBRID/conf/cubrid.conf" common data_buffer_size 512m
     just db get-data-buffer-size
 
 # Edit the installed cubrid.conf.
 [working-directory(justfile_directory())]
 edit-config:
-    nvim "$CUBRID/conf/cubrid.conf"
-
-# Edit databases.txt.
-[working-directory(justfile_directory())]
-edit-databases:
-    nvim "$CUBRID_DATABASES/databases.txt"
-
-[private]
-[working-directory(justfile_directory())]
-confirm-no:
-    echo "dangerous"
-    # @gum confirm --default=false
+    ~/my-cubrid/bin/cubrid-build-coordinator.sh runtime 300 -- nvim "$CUBRID/conf/cubrid.conf"

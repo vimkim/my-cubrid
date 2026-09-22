@@ -81,6 +81,17 @@ class PwddbTests(unittest.TestCase):
             f'{name} {self.bundle["data_root"]} localhost {self.bundle["log_root"]} file:{self.bundle["lob_root"]}\n' for name in names))
         (self.dbroot / 'databases.txt').chmod(0o600)
 
+    def register_storage(self, name='Chosen_DB'):
+        self.register(name)
+        data = Path(self.bundle['data_root'])
+        log = Path(self.bundle['log_root'])
+        lob = Path(self.bundle['lob_root'])
+        primary = data / name
+        primary.write_text('primary volume\n')
+        (data / f'{name}_vinf').write_text(f'0 {primary}\n')
+        (log / f'{name}_lgat').write_text('active log\n')
+        (lob / 'payload').write_text('lob data\n')
+
     def test_naming_precedence(self):
         self.assertEqual(self.run_cli('my-cubrid-ticket-get', ok=False).returncode, 1)
         self.assertEqual(self.run_cli('my-cubrid-pwddb-getname').stdout, 'Chosen_DB\n')
@@ -91,6 +102,13 @@ class PwddbTests(unittest.TestCase):
         child.mkdir()
         self.cwd = child
         self.assertEqual(self.run_cli('my-cubrid-pwddb-getname').stdout, 'Chosen_DB\n')
+
+    def test_list_reports_only_the_registered_database(self):
+        self.assertEqual(self.run_cli('my-cubrid-pwddb', 'list').stdout, '')
+        self.register('Chosen_DB')
+        self.assertEqual(self.run_cli('my-cubrid-pwddb', 'list').stdout, 'Chosen_DB\n')
+        self.run_cli('my-cubrid-pwddb', 'delete')
+        self.assertEqual(self.run_cli('my-cubrid-pwddb', 'list').stdout, '')
 
     def test_non_ready_manifests_refuse_every_helper_action(self):
         manifest_path = next(self.fixture.state_home.glob('cubrid-worktree-guard/worktrees/*/manifest.json'))
@@ -140,6 +158,17 @@ class PwddbTests(unittest.TestCase):
         wrapper.parent.mkdir(parents=True)
         wrapper.write_text('#!/bin/sh\nprintf "%s\\n" "$PWD" "$@"\n')
         wrapper.chmod(0o755)
+        coordinator = home / 'my-cubrid/bin/cubrid-build-coordinator.sh'
+        coordinator.write_text(
+            '#!/bin/sh\n'
+            'if [ "${1:-}" = database-delete ]; then\n'
+            '  exec "$(dirname "$0")/my-cubrid-pwddb" delete\n'
+            'fi\n'
+            'while [ "$#" -gt 0 ] && [ "$1" != "--" ]; do shift; done\n'
+            '[ "$#" -gt 0 ] && shift\n'
+            'exec "$@"\n'
+        )
+        coordinator.chmod(0o755)
         (self.cwd / 'justfile').write_text(
             "mod db '" + str(BIN.parent / 'stow/cubrid/.just/db.just') + "'\n")
         child = self.cwd / 'child'
@@ -248,6 +277,153 @@ class PwddbTests(unittest.TestCase):
             self.env.update(FAIL=failure, RUNNING='Chosen_DB')
             self.run_cli('my-cubrid-pwddb', 'recreate', ok=False)
             self.assertFalse(any(call[0] == 'createdb' for call in self.calls()))
+
+    def test_delete_falls_back_to_fresh_owned_storage_when_cubrid_is_absent(self):
+        self.register_storage()
+        (self.fixture.installation / 'bin' / 'cubrid').unlink()
+
+        result = self.run_cli('my-cubrid-pwddb', 'delete')
+
+        self.assertIn('binary-independent', result.stdout)
+        self.assertEqual(self.calls(), [])
+        self.assertEqual((self.dbroot / 'databases.txt').read_text(), '')
+        for role in ('data_root', 'log_root', 'lob_root'):
+            root = Path(self.bundle[role])
+            self.assertTrue(root.is_dir())
+            self.assertEqual(list(root.iterdir()), [])
+        lock = self.dbroot / '.pwddb.lock'
+        self.assertTrue(lock.is_file())
+        self.assertEqual(lock.stat().st_mode & 0o777, 0o600)
+
+    def test_delete_does_not_fallback_when_available_utility_fails(self):
+        self.register_storage()
+        registry = (self.dbroot / 'databases.txt').read_text()
+        self.env['FAIL'] = 'deletedb'
+
+        result = self.run_cli('my-cubrid-pwddb', 'delete', ok=False)
+
+        self.assertNotIn('binary-independent', result.stdout)
+        self.assertEqual((self.dbroot / 'databases.txt').read_text(), registry)
+        self.assertTrue((Path(self.bundle['data_root']) / 'Chosen_DB').is_file())
+        self.assertEqual([call[0] for call in self.calls()], ['server', 'deletedb'])
+
+    def test_recreate_does_not_delete_when_utility_is_absent(self):
+        self.register_storage()
+        registry = (self.dbroot / 'databases.txt').read_text()
+        database_file = Path(self.bundle['data_root']) / 'Chosen_DB'
+        (self.fixture.installation / 'bin' / 'cubrid').unlink()
+
+        result = self.run_cli('my-cubrid-pwddb', 'recreate', '--load', 'demodb', ok=False)
+
+        self.assertIn('installation', result.stderr)
+        self.assertEqual((self.dbroot / 'databases.txt').read_text(), registry)
+        self.assertTrue(database_file.is_file())
+        self.assertEqual(self.calls(), [])
+
+    def test_binary_independent_delete_requires_complete_idle_observations(self):
+        self.register_storage()
+        utility = self.fixture.installation / 'bin' / 'cubrid'
+        utility.unlink()
+        registry = (self.dbroot / 'databases.txt').read_text()
+
+        self.fixture.replace_observations({'complete': False})
+        incomplete = self.run_cli('my-cubrid-pwddb', 'delete', ok=False)
+        self.assertIn('evidence is incomplete', incomplete.stderr)
+        self.assertEqual((self.dbroot / 'databases.txt').read_text(), registry)
+
+        process = self.fixture.runtime_process(
+            self.manifest,
+            executable=str(self.fixture.installation / 'bin' / 'cub_server'),
+            fds=[{'path': str(Path(self.bundle['data_root']) / 'Chosen_DB')}],
+            system_v_keys=[],
+        )
+        self.fixture.replace_observations({'processes': [process]})
+        live = self.run_cli('my-cubrid-pwddb', 'delete', ok=False)
+        self.assertIn('completely idle', live.stderr)
+        self.assertEqual((self.dbroot / 'databases.txt').read_text(), registry)
+        self.assertTrue((Path(self.bundle['data_root']) / 'Chosen_DB').is_file())
+
+    def test_binary_independent_delete_rejects_present_unsafe_utility(self):
+        self.register_storage()
+        utility = self.fixture.installation / 'bin' / 'cubrid'
+        utility.unlink()
+        utility.symlink_to('/bin/true')
+        registry = (self.dbroot / 'databases.txt').read_text()
+
+        result = self.run_cli('my-cubrid-pwddb', 'delete', ok=False)
+
+        self.assertIn('installation', result.stderr)
+        self.assertEqual((self.dbroot / 'databases.txt').read_text(), registry)
+        self.assertTrue((Path(self.bundle['data_root']) / 'Chosen_DB').is_file())
+
+    def test_binary_independent_delete_rejects_adopted_storage(self):
+        deinitialized = self.fixture.run_runtime_for(
+            self.cwd, self.env, 'deinit', '--preset', 'debug', '--json'
+        )
+        self.assertEqual(
+            deinitialized.returncode,
+            0,
+            deinitialized.stdout + deinitialized.stderr,
+        )
+        registry, roots = self.fixture.adoption_database('Chosen_DB')
+        adopted = self.fixture.run_runtime_for(
+            self.cwd,
+            self.env,
+            'adopt',
+            '--preset',
+            'debug',
+            '--db-name',
+            'Chosen_DB',
+            '--registry',
+            str(registry),
+            '--json',
+        )
+        self.assertEqual(adopted.returncode, 0, adopted.stdout + adopted.stderr)
+        original_registry = (registry / 'databases.txt').read_text()
+        (self.fixture.installation / 'bin' / 'cubrid').unlink()
+
+        result = self.run_cli('my-cubrid-pwddb', 'delete', ok=False)
+
+        self.assertIn('fresh guard-created', result.stderr)
+        self.assertEqual((registry / 'databases.txt').read_text(), original_registry)
+        self.assertTrue((roots[0] / 'Chosen_DB').is_file())
+
+    def test_expected_name_rejection_changes_only_lock_metadata(self):
+        self.register_storage()
+        registry = (self.dbroot / 'databases.txt').read_text()
+
+        result = self.run_cli(
+            'my-cubrid-pwddb', 'delete', '--expected-name', 'testdb', ok=False
+        )
+
+        self.assertIn('manifest-selected database is Chosen_DB', result.stderr)
+        self.assertEqual((self.dbroot / 'databases.txt').read_text(), registry)
+        self.assertTrue((Path(self.bundle['data_root']) / 'Chosen_DB').is_file())
+        self.assertTrue((self.dbroot / '.pwddb.lock').is_file())
+
+        self.fixture.replace_observations({'complete': False})
+        incomplete = self.run_cli(
+            'my-cubrid-pwddb', 'delete', '--expected-name', 'testdb', ok=False
+        )
+        self.assertIn('evidence is incomplete', incomplete.stderr)
+        self.assertNotIn('manifest-selected database', incomplete.stderr)
+        self.assertEqual((self.dbroot / 'databases.txt').read_text(), registry)
+
+    def test_binary_independent_delete_reports_orphans_after_cleanup_failure(self):
+        self.register_storage()
+        blocked = Path(self.bundle['data_root']) / 'blocked'
+        blocked.mkdir(mode=0o700)
+        (blocked / 'orphan').write_text('retain after cleanup failure\n')
+        blocked.chmod(0o500)
+        (self.fixture.installation / 'bin' / 'cubrid').unlink()
+        try:
+            result = self.run_cli('my-cubrid-pwddb', 'delete', ok=False)
+
+            self.assertIn('orphaned files', result.stderr)
+            self.assertEqual((self.dbroot / 'databases.txt').read_text(), '')
+            self.assertTrue((blocked / 'orphan').is_file())
+        finally:
+            blocked.chmod(0o700)
 
     def test_preflight_before_deletion(self):
         self.register('Chosen_DB')

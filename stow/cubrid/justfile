@@ -91,10 +91,10 @@ install-wait timeout='300': (core::install-wait timeout)
 stop-and-build: core::stop-and-build
 
 dwb-off:
-    ini.sh -s common "$CUBRID/conf/cubrid.conf" double_write_buffer_size 0
+    ~/my-cubrid/bin/cubrid-build-coordinator.sh runtime 300 -- ini.sh -s common "$CUBRID/conf/cubrid.conf" double_write_buffer_size 0
 
 dwb-get:
-    ini.sh -s common "$CUBRID/conf/cubrid.conf" double_write_buffer_size
+    ~/my-cubrid/bin/cubrid-build-coordinator.sh runtime 300 -- ini.sh -s common "$CUBRID/conf/cubrid.conf" double_write_buffer_size
 
 cubrid-pr-status:
     cubrid-pr-status

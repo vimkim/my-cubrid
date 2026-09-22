@@ -53,6 +53,8 @@ Run options:
       --image IMAGE        Existing local image (default: UBI 9 init).
       --network MODE       Podman network mode (default: none).
       --timeout SECONDS    Wait for test completion (default: 120).
+      --wait-for-stop      After the test, wait for explicit container cleanup;
+                           keeps an enclosing runtime lock held while it runs.
 
 Environment contract available to tests:
   CUBRID_PODMAN=1
@@ -90,6 +92,24 @@ container_running()
 {
   local container_name=$1
   [[ $(podman inspect --format '{{.State.Running}}' "${container_name}" 2>/dev/null) == true ]]
+}
+
+container_presence()
+{
+  local container_name=$1
+  local status
+
+  if podman container exists "${container_name}"; then
+    printf '%s\n' present
+    return 0
+  else
+    status=$?
+  fi
+  if [[ "${status}" -eq 1 ]]; then
+    printf '%s\n' absent
+    return 0
+  fi
+  return "${status}"
 }
 
 container_label()
@@ -171,6 +191,116 @@ Cleanup (permanently deletes the ephemeral database):
 EOF
 }
 
+MANAGED_WAIT_CONTAINER=
+MANAGED_WAIT_TOKEN=
+
+managed_container_identity()
+{
+  local container_name=$1
+  local expected_token=$2
+  local presence
+  local observed_identity
+  local observed_id
+  local observed_token
+  local status
+
+  if presence=$(container_presence "${container_name}"); then
+    :
+  else
+    status=$?
+    return "${status}"
+  fi
+  if [[ "${presence}" == absent ]]; then
+    printf '%s\n' absent
+    return 0
+  fi
+  if observed_identity=$(podman inspect --format \
+      '{{.Id}} {{ index .Config.Labels "io.cubrid.podman-test.token" }}' \
+      "${container_name}" 2>/dev/null); then
+    :
+  else
+    status=$?
+    return "${status}"
+  fi
+  read -r observed_id observed_token _ <<<"${observed_identity}"
+  if [[ -n "${observed_id}" && "${observed_token}" == "${expected_token}" ]]; then
+    printf 'owned:%s\n' "${observed_id}"
+  else
+    printf '%s\n' foreign
+  fi
+}
+
+cleanup_managed_container()
+{
+  local result=$1
+  local identity
+
+  trap - EXIT HUP INT TERM
+  trap '' HUP INT TERM
+  while true; do
+    if identity=$(managed_container_identity "${MANAGED_WAIT_CONTAINER}" "${MANAGED_WAIT_TOKEN}"); then
+      case "${identity}" in
+        absent)
+          exit "${result}"
+          ;;
+        foreign)
+          printf 'Refusing to remove a same-name container not owned by this invocation: %s\n' \
+            "${MANAGED_WAIT_CONTAINER}" >&2
+          exit "${result}"
+          ;;
+        owned:*)
+          if ! podman rm --force --time 10 "${identity#owned:}" >/dev/null 2>&1; then
+            printf 'Cleanup failed for %s; retrying while the runtime lock remains held.\n' \
+              "${MANAGED_WAIT_CONTAINER}" >&2
+          fi
+          ;;
+      esac
+    else
+      printf 'Container ownership is unknown for %s; retrying while the runtime lock remains held.\n' \
+        "${MANAGED_WAIT_CONTAINER}" >&2
+    fi
+    sleep 1
+  done
+}
+
+arm_managed_container_cleanup()
+{
+  MANAGED_WAIT_CONTAINER=$1
+  MANAGED_WAIT_TOKEN=$2
+  trap 'cleanup_managed_container $?' EXIT
+  trap 'cleanup_managed_container 130' HUP INT TERM
+}
+
+disarm_managed_container_cleanup()
+{
+  trap - EXIT HUP INT TERM
+  MANAGED_WAIT_CONTAINER=
+  MANAGED_WAIT_TOKEN=
+}
+
+wait_for_container_stop()
+{
+  local container_name=$1
+  local result=$2
+  local identity
+
+  echo "Waiting for ${container_name} cleanup; the selected runtime remains in use."
+  while true; do
+    if identity=$(managed_container_identity "${container_name}" "${MANAGED_WAIT_TOKEN}"); then
+      case "${identity}" in
+        absent|foreign)
+          disarm_managed_container_cleanup
+          return "${result}"
+          ;;
+      esac
+    else
+      printf 'Container ownership is unknown for %s; retrying while the runtime lock remains held.\n' \
+        "${container_name}" >&2
+    fi
+    sleep 1
+  done
+}
+
 run_container()
 {
   require_podman
@@ -182,6 +312,8 @@ run_container()
   local image=${DEFAULT_IMAGE}
   local network_mode=none
   local wait_seconds=${DEFAULT_TIMEOUT}
+  local wait_for_stop=0
+  local container_token=
   local test_script=
   local test_dir test_name container_test_path generated_name deadline test_status mount_spec
   local -a extra_envs=()
@@ -234,6 +366,10 @@ run_container()
         [[ $# -ge 2 ]] || die "$1 requires a value"
         wait_seconds=$2
         shift 2
+        ;;
+      --wait-for-stop)
+        wait_for_stop=1
+        shift
         ;;
       --)
         shift
@@ -313,8 +449,11 @@ run_container()
       || die "environment must be KEY=VALUE: ${environment_entry}"
   done
 
-  if container_exists "${container_name}"; then
-    die "container already exists: ${container_name}"
+  local presence
+  if presence=$(container_presence "${container_name}"); then
+    [[ "${presence}" == absent ]] || die "container already exists: ${container_name}"
+  else
+    die "container presence cannot be determined safely: ${container_name}"
   fi
   podman image exists "${image}" || die "Podman image is not available locally: ${image}"
 
@@ -340,6 +479,11 @@ run_container()
     podman_env_args+=(--env "${environment_entry}")
   done
 
+  container_token=$(tr -d - </proc/sys/kernel/random/uuid)
+  if [[ "${wait_for_stop}" -eq 1 ]]; then
+    arm_managed_container_cleanup "${container_name}" "${container_token}"
+  fi
+
   podman run --detach --pull=never \
     --name "${container_name}" \
     --hostname cubrid-tc \
@@ -352,6 +496,7 @@ run_container()
     --init \
     --security-opt label=disable \
     --label io.cubrid.podman-test=true \
+    --label "io.cubrid.podman-test.token=${container_token}" \
     --label "io.cubrid.test.source=${test_script}" \
     --label "io.cubrid.root=${cubrid_root}" \
     --label "io.cubrid.db=${db_name}" \
@@ -383,12 +528,22 @@ run_container()
       test_status=$(podman exec "${container_name}" cat /sandbox/test.status)
       podman logs "${container_name}"
       print_inspection_help "${container_name}" "${db_name}"
+      if [[ "${wait_for_stop}" -eq 1 ]]; then
+        wait_for_container_stop "${container_name}" "${test_status}"
+      fi
       return "${test_status}"
     fi
     sleep 1
   done
 
   podman logs "${container_name}" >&2 || true
+  if [[ "${wait_for_stop}" -eq 1 ]]; then
+    printf 'ERROR: timed out after %ss; inspect and stop container %s to release the runtime.\n' \
+      "${wait_seconds}" "${container_name}" >&2
+    print_inspection_help "${container_name}" "${db_name}"
+    wait_for_container_stop "${container_name}" 124
+    return $?
+  fi
   die "timed out after ${wait_seconds}s; container ${container_name} was left running"
 }
 
@@ -510,12 +665,14 @@ stop_container()
   echo "Removed ${container_name}; its ephemeral database is no longer recoverable."
 }
 
-command_name=${1:-help}
-if [[ $# -gt 0 ]]; then
-  shift
-fi
+main()
+{
+  local command_name=${1:-help}
+  if [[ $# -gt 0 ]]; then
+    shift
+  fi
 
-case "${command_name}" in
+  case "${command_name}" in
   run)
     run_container "$@"
     ;;
@@ -550,4 +707,9 @@ case "${command_name}" in
     usage >&2
     die "unknown command: ${command_name}"
     ;;
-esac
+  esac
+}
+
+if [[ "${BASH_SOURCE[0]}" == "$0" ]]; then
+  main "$@"
+fi

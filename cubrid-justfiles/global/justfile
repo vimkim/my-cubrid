@@ -16,6 +16,14 @@ prepare-build:
     "{{ source_directory() }}/../../stow-create.sh"
     just --justfile ./justfile --working-directory . prepare-debug-gcc
 
+# Fuzzily select, checkout, and prepare one pull request awaiting review.
+pr-review:
+    cubrid-pr-review-worktree --interactive --prepare
+
+# Checkout and prepare every pull request awaiting review, skipping existing worktrees.
+pr-review-all:
+    cubrid-pr-review-worktree --all --prepare
+
 # Create NEW_BRANCH from BASE_BRANCH in both CUBRID testcase repositories.
 tc-branch-create base_branch new_branch:
     cubrid-tc-branch-create.sh "{{base_branch}}" "{{new_branch}}"

@@ -1,0 +1,586 @@
+#!/usr/bin/env python3
+"""Create a dedicated local worktree for reviewing a CUBRID pull request."""
+
+from __future__ import annotations
+
+import argparse
+import json
+import os
+import re
+import shlex
+import subprocess
+import sys
+from collections.abc import Mapping
+from dataclasses import dataclass
+from pathlib import Path
+from urllib.parse import urlsplit
+
+REPOSITORY = "CUBRID/cubrid"
+TICKET_RE = re.compile(r"\[([A-Za-z][A-Za-z0-9]*-[1-9][0-9]*)\]")
+
+
+class UserError(RuntimeError):
+    """An error that can be shown without a traceback."""
+
+
+class SelectionCancelled(RuntimeError):
+    """The user left the fuzzy picker without selecting a pull request."""
+
+
+@dataclass(frozen=True)
+class ReviewCandidate:
+    number: int
+    title: str
+    url: str
+    author_login: str
+    created_at: str
+    approved_count: int
+    reviewer_pool_count: int
+    review_state: str
+
+
+def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
+    parser = argparse.ArgumentParser(
+        description="Create a ~/gh/cb review worktree for a CUBRID pull request."
+    )
+    parser.add_argument(
+        "pr_url",
+        nargs="?",
+        help="CUBRID pull-request URL, for example https://github.com/CUBRID/cubrid/pull/7887",
+    )
+    parser.add_argument(
+        "--interactive",
+        action="store_true",
+        help="fuzzily select a PR that directly requests review from the configured reviewer",
+    )
+    parser.add_argument(
+        "--all",
+        action="store_true",
+        help="create every requested-review worktree that does not already exist",
+    )
+    parser.add_argument(
+        "--prepare",
+        action="store_true",
+        help="prepare the new worktree with the default debug GCC build environment",
+    )
+    args = parser.parse_args(argv)
+    mode_count = sum((args.pr_url is not None, args.interactive, args.all))
+    if mode_count != 1:
+        parser.error("provide exactly one of PR_URL, --interactive, or --all")
+    return args
+
+
+def parse_pr_url(value: str) -> tuple[int, str]:
+    parsed = urlsplit(value)
+    parts = [part for part in parsed.path.split("/") if part]
+    valid_path = (
+        len(parts) == 4
+        and parts[0].casefold() == "cubrid"
+        and parts[1].casefold() == "cubrid"
+        and parts[2] == "pull"
+        and parts[3].isdigit()
+        and int(parts[3]) > 0
+    )
+    if (
+        parsed.scheme != "https"
+        or parsed.netloc.casefold() != "github.com"
+        or not valid_path
+    ):
+        raise UserError(
+            "expected a CUBRID PR URL such as https://github.com/CUBRID/cubrid/pull/7887"
+        )
+
+    number = int(parts[3])
+    return number, f"https://github.com/CUBRID/cubrid/pull/{number}"
+
+
+def command_text(command: list[str]) -> str:
+    return shlex.join(command)
+
+
+def run_capture(command: list[str], cwd: Path) -> str:
+    try:
+        result = subprocess.run(
+            command,
+            cwd=cwd,
+            check=False,
+            capture_output=True,
+            text=True,
+        )
+    except FileNotFoundError as exc:
+        raise UserError(f"required command is not installed: {command[0]}") from exc
+
+    if result.returncode != 0:
+        detail = (result.stderr or result.stdout).strip()
+        suffix = f": {detail}" if detail else ""
+        raise UserError(f"command failed ({command_text(command)}){suffix}")
+    return result.stdout.strip()
+
+
+def run_stream(command: list[str], cwd: Path) -> None:
+    try:
+        result = subprocess.run(command, cwd=cwd, check=False)
+    except FileNotFoundError as exc:
+        raise UserError(f"required command is not installed: {command[0]}") from exc
+
+    if result.returncode != 0:
+        raise UserError(
+            f"command failed with exit status {result.returncode}: {command_text(command)}"
+        )
+
+
+def configured_paths(environment: Mapping[str, str]) -> tuple[Path, Path, Path]:
+    default_control = Path.home() / "gh" / "cb" / "develop"
+    control_dir = Path(
+        environment.get("CUBRID_REVIEW_CONTROL_DIR", os.fspath(default_control))
+    ).expanduser()
+    worktree_parent = Path(
+        environment.get("CUBRID_REVIEW_WORKTREE_PARENT", os.fspath(control_dir.parent))
+    ).expanduser()
+    justfile = Path(
+        environment.get(
+            "CUBRID_REVIEW_JUSTFILE",
+            os.fspath(Path.home() / "my-cubrid" / "cubrid-justfiles" / "justfile"),
+        )
+    ).expanduser()
+    return control_dir, worktree_parent, justfile
+
+
+def ensure_control_worktree(control_dir: Path, worktree_parent: Path) -> None:
+    if not control_dir.is_dir():
+        raise UserError(f"control worktree does not exist: {control_dir}")
+    if not worktree_parent.is_dir():
+        raise UserError(f"worktree parent directory does not exist: {worktree_parent}")
+
+    root = Path(
+        run_capture(["git", "rev-parse", "--show-toplevel"], cwd=control_dir)
+    ).resolve()
+    if root != control_dir.resolve():
+        raise UserError(
+            f"control path is not a Git worktree root: {control_dir} (root is {root})"
+        )
+
+
+def load_pr_details(pr_url: str, control_dir: Path) -> tuple[int, str]:
+    output = run_capture(
+        [
+            "gh",
+            "pr",
+            "view",
+            pr_url,
+            "--repo",
+            REPOSITORY,
+            "--json",
+            "number,title,url",
+        ],
+        cwd=control_dir,
+    )
+    try:
+        details = json.loads(output)
+        number = details["number"]
+        title = details["title"]
+        resolved_url = details["url"]
+    except (json.JSONDecodeError, KeyError, TypeError) as exc:
+        raise UserError(
+            "could not read PR number, title, and URL from gh output"
+        ) from exc
+
+    if not isinstance(number, int) or number <= 0:
+        raise UserError("gh returned an invalid PR number")
+    if not isinstance(title, str) or not title.strip():
+        raise UserError("gh returned an empty PR title")
+    if not isinstance(resolved_url, str):
+        raise UserError("gh returned an invalid PR URL")
+
+    resolved_number, _ = parse_pr_url(resolved_url)
+    if resolved_number != number:
+        raise UserError(
+            f"gh returned inconsistent PR metadata: number {number}, URL {resolved_url}"
+        )
+    return number, title
+
+
+def review_name(number: int, title: str) -> str:
+    match = TICKET_RE.search(title)
+    if match is None:
+        return f"review-noticket-pr-{number}"
+    return f"review-{match.group(1).upper()}-pr-{number}"
+
+
+def _required_string(row: dict[str, object], field: str) -> str:
+    value = row.get(field)
+    if not isinstance(value, str) or not value.strip():
+        raise UserError(f"cubrid-dev2-pr JSON row has an invalid {field!r}")
+    return value
+
+
+def _required_count(row: dict[str, object], field: str) -> int:
+    value = row.get(field)
+    if isinstance(value, bool) or not isinstance(value, int) or value < 0:
+        raise UserError(f"cubrid-dev2-pr JSON row has an invalid {field!r}")
+    return value
+
+
+def parse_review_candidates(output: str) -> list[ReviewCandidate]:
+    try:
+        rows = json.loads(output)
+    except json.JSONDecodeError as exc:
+        raise UserError("could not parse cubrid-dev2-pr JSON output") from exc
+    if not isinstance(rows, list):
+        raise UserError("cubrid-dev2-pr JSON output must be an array")
+
+    candidates: list[ReviewCandidate] = []
+    for raw_row in rows:
+        if not isinstance(raw_row, dict):
+            raise UserError("cubrid-dev2-pr JSON array contains a non-object row")
+        row: dict[str, object] = raw_row
+        number = _required_count(row, "number")
+        if number == 0:
+            raise UserError("cubrid-dev2-pr JSON row has an invalid 'number'")
+        url = _required_string(row, "url")
+        resolved_number, canonical_url = parse_pr_url(url)
+        if resolved_number != number:
+            raise UserError(
+                f"cubrid-dev2-pr returned inconsistent PR metadata: number {number}, URL {url}"
+            )
+        if row.get("requested") is not True:
+            raise UserError(
+                f"cubrid-dev2-pr --requested-only returned unrequested PR #{number}"
+            )
+        if not isinstance(row.get("is_draft"), bool):
+            raise UserError("cubrid-dev2-pr JSON row has an invalid 'is_draft'")
+
+        candidates.append(
+            ReviewCandidate(
+                number=number,
+                title=_required_string(row, "title"),
+                url=canonical_url,
+                author_login=_required_string(row, "author_login"),
+                created_at=_required_string(row, "created_at"),
+                approved_count=_required_count(row, "approved_count"),
+                reviewer_pool_count=_required_count(row, "reviewer_pool_count"),
+                review_state=_required_string(row, "review_state"),
+            )
+        )
+    return candidates
+
+
+def local_branch_exists(control_dir: Path, branch: str) -> bool:
+    command = [
+        "git",
+        "show-ref",
+        "--verify",
+        "--quiet",
+        f"refs/heads/{branch}",
+    ]
+    try:
+        result = subprocess.run(
+            command,
+            cwd=control_dir,
+            check=False,
+            capture_output=True,
+            text=True,
+        )
+    except FileNotFoundError as exc:
+        raise UserError("required command is not installed: git") from exc
+
+    if result.returncode == 0:
+        return True
+    if result.returncode == 1:
+        return False
+    detail = (result.stderr or result.stdout).strip()
+    suffix = f": {detail}" if detail else ""
+    raise UserError(f"could not inspect local branch {branch}{suffix}")
+
+
+def registered_worktree_paths(control_dir: Path) -> set[Path]:
+    output = run_capture(
+        ["git", "worktree", "list", "--porcelain", "-z"], cwd=control_dir
+    )
+    paths: set[Path] = set()
+    for field in output.split("\0"):
+        if field.startswith("worktree "):
+            paths.add(Path(field.removeprefix("worktree ")).resolve())
+    return paths
+
+
+def availability_error(
+    control_dir: Path,
+    target_path: Path,
+    branch: str,
+    registered_paths: set[Path] | None = None,
+) -> str | None:
+    if os.path.lexists(target_path):
+        return f"review worktree path already exists: {target_path}"
+    paths = (
+        registered_paths
+        if registered_paths is not None
+        else registered_worktree_paths(control_dir)
+    )
+    if target_path.resolve() in paths:
+        return f"review worktree path is already registered: {target_path}"
+    if local_branch_exists(control_dir, branch):
+        return f"review branch already exists: {branch}"
+    return None
+
+
+def ensure_available(control_dir: Path, target_path: Path, branch: str) -> None:
+    error = availability_error(control_dir, target_path, branch)
+    if error is not None:
+        raise UserError(error)
+
+
+def candidate_has_conflict(
+    candidate: ReviewCandidate,
+    control_dir: Path,
+    worktree_parent: Path,
+    registered_paths: set[Path],
+) -> bool:
+    branch = review_name(candidate.number, candidate.title)
+    target_path = worktree_parent / branch
+    return (
+        availability_error(control_dir, target_path, branch, registered_paths)
+        is not None
+    )
+
+
+def _single_line(value: str) -> str:
+    return " ".join(value.split())
+
+
+def candidate_display(candidate: ReviewCandidate, existing: bool = False) -> str:
+    marker = "[existing] " if existing else ""
+    return (
+        f"{marker}#{candidate.number}  {candidate.author_login}  "
+        f"{candidate.created_at[:10]}  "
+        f"{candidate.approved_count}/{candidate.reviewer_pool_count}  "
+        f"{_single_line(candidate.review_state)}  {_single_line(candidate.title)}"
+    )
+
+
+def requested_review_candidates(control_dir: Path) -> list[ReviewCandidate]:
+    output = run_capture(
+        ["cubrid-dev2-pr", "--json", "--requested-only"], cwd=control_dir
+    )
+    return parse_review_candidates(output)
+
+
+def select_requested_review(control_dir: Path, worktree_parent: Path) -> str | None:
+    candidates = requested_review_candidates(control_dir)
+    if not candidates:
+        print("No pull requests currently request your review.")
+        return None
+
+    registered_paths = registered_worktree_paths(control_dir)
+    rows: list[str] = []
+    candidate_urls = {candidate.url for candidate in candidates}
+    for candidate in candidates:
+        display = candidate_display(
+            candidate,
+            existing=candidate_has_conflict(
+                candidate, control_dir, worktree_parent, registered_paths
+            ),
+        )
+        rows.append(f"{candidate.url}\t{display}")
+
+    command = [
+        "fzf",
+        "--height=40%",
+        "--layout=reverse",
+        "--border",
+        "--no-multi",
+        "--no-preview",
+        "--prompt=Review PR> ",
+        "--delimiter=\t",
+        "--with-nth=2",
+        "--accept-nth=1",
+    ]
+    try:
+        result = subprocess.run(
+            command,
+            cwd=control_dir,
+            check=False,
+            capture_output=True,
+            input="\n".join(rows) + "\n",
+            text=True,
+        )
+    except FileNotFoundError as exc:
+        raise UserError("interactive selection requires fzf on PATH") from exc
+
+    if result.returncode in (1, 130):
+        raise SelectionCancelled
+    if result.returncode != 0:
+        detail = (result.stderr or result.stdout).strip()
+        suffix = f": {detail}" if detail else ""
+        raise UserError(f"fzf failed with exit status {result.returncode}{suffix}")
+
+    selected_url = result.stdout.strip()
+    if selected_url not in candidate_urls:
+        raise UserError("fzf returned an unknown or empty pull-request URL")
+    return selected_url
+
+
+def checkout_command(number: int, branch: str, target_path: Path) -> list[str]:
+    return [
+        "gh",
+        "pr",
+        "checkout",
+        str(number),
+        "--repo",
+        REPOSITORY,
+        "--branch",
+        branch,
+        "--worktree",
+        os.fspath(target_path),
+    ]
+
+
+def prepare_command(justfile: Path, target_path: Path) -> list[str]:
+    return [
+        "just",
+        "--justfile",
+        os.fspath(justfile),
+        "--working-directory",
+        os.fspath(target_path),
+        "prepare-build",
+    ]
+
+
+def create_review_worktree(
+    requested_number: int,
+    pr_url: str,
+    control_dir: Path,
+    worktree_parent: Path,
+    justfile: Path,
+    prepare_requested: bool,
+) -> None:
+    number, title = load_pr_details(pr_url, control_dir)
+    if number != requested_number:
+        raise UserError(
+            f"requested PR #{requested_number}, but gh resolved PR #{number}"
+        )
+
+    branch = review_name(number, title)
+    target_path = worktree_parent / branch
+    ensure_available(control_dir, target_path, branch)
+
+    checkout = checkout_command(number, branch, target_path)
+    try:
+        run_stream(checkout, cwd=control_dir)
+    except UserError as exc:
+        raise UserError(f"{exc}\nNo automatic cleanup was attempted.") from exc
+
+    print(f"Created review worktree: {target_path}")
+    print(f"Local branch: {branch}")
+
+    if not prepare_requested:
+        return
+
+    prepare = prepare_command(justfile, target_path)
+    try:
+        run_stream(prepare, cwd=target_path)
+    except UserError as exc:
+        raise UserError(
+            f"{exc}\n"
+            f"The review worktree remains at: {target_path}\n"
+            f"Retry preparation with: {command_text(prepare)}"
+        ) from exc
+    print(f"Prepared review worktree: {target_path}")
+
+
+def print_candidate_group(
+    heading: str, candidates: list[ReviewCandidate], existing: bool = False
+) -> None:
+    print(heading)
+    if not candidates:
+        print("  (none)")
+        return
+    for candidate in candidates:
+        print(f"  {candidate_display(candidate, existing=existing)}")
+
+
+def create_all_requested_reviews(
+    control_dir: Path,
+    worktree_parent: Path,
+    justfile: Path,
+    prepare_requested: bool,
+) -> int:
+    candidates = requested_review_candidates(control_dir)
+    registered_paths = registered_worktree_paths(control_dir)
+    to_create: list[ReviewCandidate] = []
+    existing: list[ReviewCandidate] = []
+    for candidate in candidates:
+        target = (
+            existing
+            if candidate_has_conflict(
+                candidate, control_dir, worktree_parent, registered_paths
+            )
+            else to_create
+        )
+        target.append(candidate)
+
+    print_candidate_group("Review worktrees to create:", to_create)
+    print_candidate_group(
+        "Review worktrees to skip [existing]:", existing, existing=True
+    )
+
+    failures = 0
+    for candidate in to_create:
+        try:
+            create_review_worktree(
+                candidate.number,
+                candidate.url,
+                control_dir,
+                worktree_parent,
+                justfile,
+                prepare_requested,
+            )
+        except UserError as exc:
+            failures += 1
+            print(f"error: PR #{candidate.number}: {exc}", file=sys.stderr)
+
+    if failures:
+        print(f"Failed to create {failures} review worktree(s).", file=sys.stderr)
+        return 1
+    return 0
+
+
+def main(argv: list[str] | None = None) -> int:
+    args = parse_args(argv)
+    try:
+        if args.pr_url is not None:
+            requested_number, pr_url = parse_pr_url(args.pr_url)
+        control_dir, worktree_parent, justfile = configured_paths(os.environ)
+        ensure_control_worktree(control_dir, worktree_parent)
+        if args.all:
+            return create_all_requested_reviews(
+                control_dir,
+                worktree_parent,
+                justfile,
+                args.prepare,
+            )
+        if args.interactive:
+            selected_url = select_requested_review(control_dir, worktree_parent)
+            if selected_url is None:
+                return 0
+            requested_number, pr_url = parse_pr_url(selected_url)
+        create_review_worktree(
+            requested_number,
+            pr_url,
+            control_dir,
+            worktree_parent,
+            justfile,
+            args.prepare,
+        )
+    except SelectionCancelled:
+        print("Selection cancelled.", file=sys.stderr)
+        return 130
+    except UserError as exc:
+        print(f"error: {exc}", file=sys.stderr)
+        return 1
+
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

@@ -21,6 +21,12 @@ foregrounded and holds the runtime lock until the harness is stopped.
 **Build-only worktree**:
 A worktree that has enough environment to build and install CUBRID but exposes no runnable CUBRID environment because its worktree runtime is not ready.
 
+**Review worktree**:
+A disposable local checkout dedicated to inspecting one pull request. Multiple review worktrees may coexist for the same ticket when they belong to different pull requests.
+
+**Review-request picker**:
+An interactive choice among pull requests that directly request review from the configured reviewer and belong to the normal tracked pull-request population.
+
 **Preset takeover**:
 The transition of a worktree runtime to another preset installation while retaining its stable identity and database selection. It is permitted only when the previous preset has no live or unknown runtime resources.
 

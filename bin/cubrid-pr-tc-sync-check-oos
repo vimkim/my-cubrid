@@ -1,262 +1,375 @@
-#!/usr/bin/env bash
+#!/usr/bin/env python3
+"""Check and optionally synchronize the OOS testcase pull-request branches."""
 
-set -euo pipefail
+from __future__ import annotations
 
-readonly FEATURE_BRANCH="feature/oos-merge"
-readonly PR_BRANCH="tc/pr-7990"
-readonly -a DEFAULT_PUBLIC_TC_DIRS=(
-  "/home/vimkim/gh/cubrid-testcases/develop"
+import argparse
+from dataclasses import dataclass
+import os
+from pathlib import Path
+import shutil
+import subprocess
+import sys
+
+
+FEATURE_BRANCH = "feature/oos-merge"
+PR_BRANCH = "tc/pr-7990"
+GRAPH_LIMIT = 24
+DEFAULT_PUBLIC_TC_DIRS = (Path("/home/vimkim/gh/cubrid-testcases/develop"),)
+DEFAULT_PRIVATE_TC_DIRS = (
+    Path("/home/vimkim/gh/cubrid-testcases-private-ex/develop"),
 )
-readonly -a DEFAULT_PRIVATE_TC_DIRS=(
-  "/home/vimkim/gh/cubrid-testcases-private-ex/develop"
-)
 
-usage ()
-{
-  cat <<'EOF'
-Usage: cubrid-pr-tc-sync-check-oos
 
-Check that tc/pr-7990 matches feature/oos-merge in both CUBRID testcase
-repositories. feature/oos-merge is authoritative: all testcase edits must land
-there first. If tc/pr-7990 is strictly behind, ask for confirmation, then
-fast-forward and push tc/pr-7990 without force.
+class UserError(RuntimeError):
+    """An error that can be shown without a traceback."""
 
-The command refuses to update anything when tc/pr-7990 is ahead of
-feature/oos-merge or the two branches have diverged.
 
-Environment overrides (primarily useful for testing):
-  CUBRID_TESTCASES_DIR
-  CUBRID_TESTCASES_PRIVATE_EX_DIR
-EOF
-}
+@dataclass(frozen=True)
+class Repository:
+    label: str
+    directory: Path
 
-die ()
-{
-  printf 'error: %s\n' "$*" >&2
-  exit 1
-}
 
-resolve_repository_directory ()
-{
-  local override="$1"
-  shift
-  local directory
+@dataclass(frozen=True)
+class BranchStatus:
+    repository: Repository
+    feature_sha: str
+    pr_sha: str
+    pr_only_count: int
+    feature_only_count: int
+    graph: str
 
-  if [[ -n "$override" ]]
-  then
-    printf '%s\n' "$override"
-    return
-  fi
+    @property
+    def state(self) -> str:
+        if self.pr_only_count == 0 and self.feature_only_count == 0:
+            return "synced"
+        if self.pr_only_count == 0:
+            return "needs-sync"
+        if self.feature_only_count == 0:
+            return "pr-ahead"
+        return "diverged"
 
-  for directory in "$@"
-  do
-    if git -C "$directory" rev-parse --is-inside-work-tree >/dev/null 2>&1
-    then
-      printf '%s\n' "$directory"
-      return
-    fi
-  done
 
-  printf '%s\n' "$1"
-}
+def parse_args() -> argparse.Namespace:
+    parser = argparse.ArgumentParser(
+        description=(
+            f"Check that {PR_BRANCH} matches {FEATURE_BRANCH} in both CUBRID "
+            "testcase repositories. If the PR branch is strictly behind, "
+            "offer to fast-forward and push it without force."
+        ),
+        epilog=(
+            "Repository locations may be overridden with CUBRID_TESTCASES_DIR "
+            "and CUBRID_TESTCASES_PRIVATE_EX_DIR."
+        ),
+    )
+    return parser.parse_args()
 
-ensure_repository ()
-{
-  local directory="$1"
 
-  [[ -d "$directory" ]] || die "repository directory does not exist: $directory"
-  git -C "$directory" rev-parse --is-inside-work-tree >/dev/null 2>&1 \
-    || die "not a Git worktree: $directory"
-  git -C "$directory" remote get-url origin >/dev/null 2>&1 \
-    || die "Git remote 'origin' is missing: $directory"
-}
+def git_command(
+    directory: Path,
+    *arguments: str,
+    capture_output: bool = True,
+) -> subprocess.CompletedProcess[str]:
+    try:
+        return subprocess.run(
+            ["git", "-C", str(directory), *arguments],
+            check=True,
+            capture_output=capture_output,
+            text=True,
+        )
+    except FileNotFoundError as exc:
+        raise UserError("git is not installed or not in PATH") from exc
+    except subprocess.CalledProcessError as exc:
+        detail = (exc.stderr or exc.stdout or "").strip()
+        command = "git " + " ".join(arguments)
+        raise UserError(
+            f"{command} failed in {directory}: "
+            f"{detail or f'exit status {exc.returncode}'}"
+        ) from exc
 
-fetch_repository ()
-{
-  local label="$1"
-  local directory="$2"
 
-  printf '\n==> Fetching %s\n' "$label"
-  git -C "$directory" fetch origin --prune
-}
+def is_git_worktree(directory: Path) -> bool:
+    result = subprocess.run(
+        ["git", "-C", str(directory), "rev-parse", "--is-inside-work-tree"],
+        capture_output=True,
+        text=True,
+    )
+    return result.returncode == 0
 
-remote_tracking_sha ()
-{
-  local directory="$1"
-  local branch="$2"
 
-  git -C "$directory" rev-parse --verify "refs/remotes/origin/${branch}^{commit}" 2>/dev/null
-}
+def resolve_repository_directory(
+    override: str | None, candidates: tuple[Path, ...]
+) -> Path:
+    if override:
+        return Path(override)
+    for directory in candidates:
+        if directory.is_dir() and is_git_worktree(directory):
+            return directory
+    return candidates[0]
 
-live_remote_sha ()
-{
-  local directory="$1"
-  local branch="$2"
-  local output
 
-  output="$(git -C "$directory" ls-remote --exit-code --refs origin "refs/heads/$branch" 2>/dev/null)" \
-    || return 1
-  printf '%s\n' "${output%%$'\t'*}"
-}
+def ensure_repository(repository: Repository) -> None:
+    directory = repository.directory
+    if not directory.is_dir():
+        raise UserError(f"repository directory does not exist: {directory}")
+    if not is_git_worktree(directory):
+        raise UserError(f"not a Git worktree: {directory}")
+    git_command(directory, "remote", "get-url", "origin")
 
-check_repository ()
-{
-  local label="$1"
-  local directory="$2"
-  local feature_sha
-  local pr_sha
 
-  feature_sha="$(remote_tracking_sha "$directory" "$FEATURE_BRANCH")" \
-    || die "origin/$FEATURE_BRANCH does not exist in $label"
-  pr_sha="$(remote_tracking_sha "$directory" "$PR_BRANCH")" \
-    || die "origin/$PR_BRANCH does not exist in $label"
+def fetch_repository(repository: Repository) -> None:
+    print(f"\n==> Fetching {repository.label}", flush=True)
+    git_command(
+        repository.directory,
+        "fetch",
+        "origin",
+        "--prune",
+        capture_output=False,
+    )
 
-  CHECK_FEATURE_SHA="$feature_sha"
-  CHECK_PR_SHA="$pr_sha"
 
-  if [[ "$feature_sha" == "$pr_sha" ]]
-  then
-    CHECK_STATE="synced"
-    return
-  fi
+def remote_tracking_sha(repository: Repository, branch: str) -> str:
+    reference = f"refs/remotes/origin/{branch}^{{commit}}"
+    try:
+        result = git_command(repository.directory, "rev-parse", "--verify", reference)
+    except UserError as exc:
+        raise UserError(f"origin/{branch} does not exist in {repository.label}") from exc
+    return result.stdout.strip()
 
-  if git -C "$directory" merge-base --is-ancestor "$pr_sha" "$feature_sha"
-  then
-    CHECK_STATE="needs-sync"
-    return
-  fi
 
-  if git -C "$directory" merge-base --is-ancestor "$feature_sha" "$pr_sha"
-  then
-    die "$label: $PR_BRANCH is ahead of $FEATURE_BRANCH; move those edits to $FEATURE_BRANCH first"
-  fi
+def live_remote_sha(repository: Repository, branch: str) -> str:
+    try:
+        result = git_command(
+            repository.directory,
+            "ls-remote",
+            "--exit-code",
+            "--refs",
+            "origin",
+            f"refs/heads/{branch}",
+        )
+    except UserError as exc:
+        raise UserError(f"cannot resolve live {repository.label}:{branch}") from exc
+    return result.stdout.partition("\t")[0]
 
-  die "$label: $FEATURE_BRANCH and $PR_BRANCH have diverged; cannot fast-forward"
-}
 
-confirm_sync ()
-{
-  local answer
+def difference_counts(repository: Repository) -> tuple[int, int]:
+    range_expression = f"origin/{PR_BRANCH}...origin/{FEATURE_BRANCH}"
+    result = git_command(
+        repository.directory,
+        "rev-list",
+        "--left-right",
+        "--count",
+        range_expression,
+    )
+    fields = result.stdout.split()
+    if len(fields) != 2:
+        raise UserError(f"git returned invalid branch counts for {repository.label}")
+    try:
+        return int(fields[0]), int(fields[1])
+    except ValueError as exc:
+        raise UserError(f"git returned invalid branch counts for {repository.label}") from exc
 
-  printf '\nFast-forward and push %s in the repositories listed above? [y/N] ' "$PR_BRANCH"
-  IFS= read -r answer || answer=""
-  case "$answer" in
-    y|Y|yes|YES|Yes) return 0 ;;
-    *) return 1 ;;
-  esac
-}
 
-main ()
-{
-  if [[ "${1:-}" == "-h" || "${1:-}" == "--help" ]]
-  then
-    usage
-    exit 0
-  fi
+def difference_graph(repository: Repository) -> str:
+    range_expression = f"origin/{PR_BRANCH}...origin/{FEATURE_BRANCH}"
+    result = git_command(
+        repository.directory,
+        "log",
+        "--graph",
+        "--left-right",
+        "--oneline",
+        "--no-color",
+        "--decorate=short",
+        f"--decorate-refs=refs/remotes/origin/{PR_BRANCH}",
+        f"--decorate-refs=refs/remotes/origin/{FEATURE_BRANCH}",
+        "--date-order",
+        "--boundary",
+        f"--max-count={GRAPH_LIMIT}",
+        range_expression,
+    )
+    return result.stdout.rstrip()
 
-  [[ $# -eq 0 ]] || {
-    usage >&2
-    exit 2
-  }
 
-  command -v git >/dev/null 2>&1 || die "git is required"
+def inspect_repository(repository: Repository) -> BranchStatus:
+    feature_sha = remote_tracking_sha(repository, FEATURE_BRANCH)
+    pr_sha = remote_tracking_sha(repository, PR_BRANCH)
+    pr_only_count, feature_only_count = difference_counts(repository)
+    graph = ""
+    if pr_only_count or feature_only_count:
+        graph = difference_graph(repository)
+    return BranchStatus(
+        repository=repository,
+        feature_sha=feature_sha,
+        pr_sha=pr_sha,
+        pr_only_count=pr_only_count,
+        feature_only_count=feature_only_count,
+        graph=graph,
+    )
 
-  local public_tc_dir
-  local private_tc_dir
-  public_tc_dir="$(resolve_repository_directory \
-    "${CUBRID_TESTCASES_DIR:-}" "${DEFAULT_PUBLIC_TC_DIRS[@]}")"
-  private_tc_dir="$(resolve_repository_directory \
-    "${CUBRID_TESTCASES_PRIVATE_EX_DIR:-}" "${DEFAULT_PRIVATE_TC_DIRS[@]}")"
 
-  local -a labels=(
-    "CUBRID/cubrid-testcases"
-    "CUBRID/cubrid-testcases-private-ex"
-  )
-  local -a directories=("$public_tc_dir" "$private_tc_dir")
-  local -a states=()
-  local -a feature_shas=()
-  local -a pr_shas=()
-  local index
-  local needs_sync=0
+def pluralized_commit(count: int) -> str:
+    return f"{count} commit{'s' if count != 1 else ''}"
 
-  for directory in "${directories[@]}"
-  do
-    ensure_repository "$directory"
-  done
 
-  # Fetch and validate both repositories before offering or performing writes.
-  for index in "${!directories[@]}"
-  do
-    fetch_repository "${labels[index]}" "${directories[index]}"
-  done
+def relation_description(status: BranchStatus) -> str:
+    if status.state == "needs-sync":
+        return (
+            f"needs sync — {PR_BRANCH} is "
+            f"{pluralized_commit(status.feature_only_count)} behind {FEATURE_BRANCH}"
+        )
+    if status.state == "pr-ahead":
+        return (
+            f"unsafe — {PR_BRANCH} is "
+            f"{pluralized_commit(status.pr_only_count)} ahead of {FEATURE_BRANCH}"
+        )
+    return (
+        f"unsafe — branches diverged: {PR_BRANCH} is "
+        f"{pluralized_commit(status.pr_only_count)} ahead and "
+        f"{pluralized_commit(status.feature_only_count)} behind"
+    )
 
-  printf '\nOOS testcase branch status:\n'
-  for index in "${!directories[@]}"
-  do
-    check_repository "${labels[index]}" "${directories[index]}"
-    states+=("$CHECK_STATE")
-    feature_shas+=("$CHECK_FEATURE_SHA")
-    pr_shas+=("$CHECK_PR_SHA")
 
-    if [[ "$CHECK_STATE" == "synced" ]]
-    then
-      printf '  %-43s synced at %s\n' "${labels[index]}" "${CHECK_FEATURE_SHA:0:12}"
-    else
-      printf '  %-43s %s %s -> %s %s\n' "${labels[index]}" \
-        "$PR_BRANCH" "${CHECK_PR_SHA:0:12}" "$FEATURE_BRANCH" "${CHECK_FEATURE_SHA:0:12}"
-      needs_sync=1
-    fi
-  done
+def print_status(status: BranchStatus) -> None:
+    print(f"\n{status.repository.label}")
+    if status.state == "synced":
+        print(f"  synced at {status.feature_sha[:12]}")
+        return
 
-  if ((needs_sync == 0))
-  then
-    printf '\nBoth testcase repositories are already synchronized.\n'
-    exit 0
-  fi
+    print(f"  {relation_description(status)}")
+    print(f"  {PR_BRANCH:<20} {status.pr_sha[:12]}")
+    print(f"  {FEATURE_BRANCH:<20} {status.feature_sha[:12]}")
+    print(
+        f"  difference graph (up to {GRAPH_LIMIT} commits; "
+        f"< {PR_BRANCH} only, > {FEATURE_BRANCH} only):"
+    )
+    for line in status.graph.splitlines():
+        print(f"    {line}")
 
-  if ! confirm_sync
-  then
-    printf '\nCancelled; no branches were changed.\n'
-    exit 0
-  fi
 
-  # Recheck all live tips after confirmation so no repository is written when
-  # either branch changed during the prompt.
-  for index in "${!directories[@]}"
-  do
-    local live_feature_sha
-    local live_pr_sha
-    live_feature_sha="$(live_remote_sha "${directories[index]}" "$FEATURE_BRANCH")" \
-      || die "cannot resolve live ${labels[index]}:$FEATURE_BRANCH"
-    live_pr_sha="$(live_remote_sha "${directories[index]}" "$PR_BRANCH")" \
-      || die "cannot resolve live ${labels[index]}:$PR_BRANCH"
-    [[ "$live_feature_sha" == "${feature_shas[index]}" && "$live_pr_sha" == "${pr_shas[index]}" ]] \
-      || die "${labels[index]} branches changed during confirmation; rerun the command"
-  done
+def unsafe_status_error(statuses: list[BranchStatus]) -> str | None:
+    errors: list[str] = []
+    for status in statuses:
+        if status.state == "pr-ahead":
+            errors.append(
+                f"{status.repository.label}: {PR_BRANCH} is ahead of "
+                f"{FEATURE_BRANCH}; move those edits to {FEATURE_BRANCH} first"
+            )
+        elif status.state == "diverged":
+            errors.append(
+                f"{status.repository.label}: {FEATURE_BRANCH} and {PR_BRANCH} "
+                "have diverged; cannot fast-forward"
+            )
+    return "; ".join(errors) or None
 
-  for index in "${!directories[@]}"
-  do
-    [[ "${states[index]}" == "needs-sync" ]] || continue
-    printf '\n==> Fast-forwarding %s:%s to %s\n' "${labels[index]}" "$PR_BRANCH" \
-      "${feature_shas[index]:0:12}"
-    git -C "${directories[index]}" push origin \
-      "${feature_shas[index]}:refs/heads/$PR_BRANCH"
-  done
 
-  for index in "${!directories[@]}"
-  do
-    local verified_feature_sha
-    local verified_pr_sha
-    verified_feature_sha="$(live_remote_sha "${directories[index]}" "$FEATURE_BRANCH")" \
-      || die "cannot verify ${labels[index]}:$FEATURE_BRANCH"
-    verified_pr_sha="$(live_remote_sha "${directories[index]}" "$PR_BRANCH")" \
-      || die "cannot verify ${labels[index]}:$PR_BRANCH"
-    [[ "$verified_feature_sha" == "$verified_pr_sha" ]] \
-      || die "verification failed for ${labels[index]}"
-    printf 'Verified %-34s %s\n' "${labels[index]}" "${verified_feature_sha:0:12}"
-  done
+def confirm_sync() -> bool:
+    try:
+        answer = input(
+            f"\nFast-forward and push {PR_BRANCH} in the repositories "
+            "listed above? [y/N] "
+        )
+    except EOFError:
+        return False
+    return answer.lower() in {"y", "yes"}
 
-  printf '\nSynchronized %s to %s in both testcase repositories.\n' "$PR_BRANCH" "$FEATURE_BRANCH"
-}
 
-main "$@"
+def ensure_remote_tips_unchanged(statuses: list[BranchStatus]) -> None:
+    for status in statuses:
+        live_feature_sha = live_remote_sha(status.repository, FEATURE_BRANCH)
+        live_pr_sha = live_remote_sha(status.repository, PR_BRANCH)
+        if live_feature_sha != status.feature_sha or live_pr_sha != status.pr_sha:
+            raise UserError(
+                f"{status.repository.label} branches changed during confirmation; "
+                "rerun the command"
+            )
+
+
+def push_updates(statuses: list[BranchStatus]) -> None:
+    for status in statuses:
+        if status.state != "needs-sync":
+            continue
+        print(
+            f"\n==> Fast-forwarding {status.repository.label}:{PR_BRANCH} "
+            f"to {status.feature_sha[:12]}",
+            flush=True,
+        )
+        git_command(
+            status.repository.directory,
+            "push",
+            "origin",
+            f"{status.feature_sha}:refs/heads/{PR_BRANCH}",
+            capture_output=False,
+        )
+
+
+def verify_updates(statuses: list[BranchStatus]) -> None:
+    for status in statuses:
+        feature_sha = live_remote_sha(status.repository, FEATURE_BRANCH)
+        pr_sha = live_remote_sha(status.repository, PR_BRANCH)
+        if feature_sha != pr_sha:
+            raise UserError(f"verification failed for {status.repository.label}")
+        print(f"Verified {status.repository.label:<34} {feature_sha[:12]}")
+
+
+def repositories_from_environment() -> list[Repository]:
+    return [
+        Repository(
+            "CUBRID/cubrid-testcases",
+            resolve_repository_directory(
+                os.environ.get("CUBRID_TESTCASES_DIR"), DEFAULT_PUBLIC_TC_DIRS
+            ),
+        ),
+        Repository(
+            "CUBRID/cubrid-testcases-private-ex",
+            resolve_repository_directory(
+                os.environ.get("CUBRID_TESTCASES_PRIVATE_EX_DIR"),
+                DEFAULT_PRIVATE_TC_DIRS,
+            ),
+        ),
+    ]
+
+
+def main() -> int:
+    parse_args()
+    if shutil.which("git") is None:
+        raise UserError("git is not installed or not in PATH")
+
+    repositories = repositories_from_environment()
+    for repository in repositories:
+        ensure_repository(repository)
+    for repository in repositories:
+        fetch_repository(repository)
+
+    statuses = [inspect_repository(repository) for repository in repositories]
+    print("\nOOS testcase branch status:")
+    for status in statuses:
+        print_status(status)
+
+    unsafe_error = unsafe_status_error(statuses)
+    if unsafe_error:
+        sys.stdout.flush()
+        raise UserError(unsafe_error)
+    if all(status.state == "synced" for status in statuses):
+        print("\nBoth testcase repositories are already synchronized.")
+        return 0
+    if not confirm_sync():
+        print("\nCancelled; no branches were changed.")
+        return 0
+
+    ensure_remote_tips_unchanged(statuses)
+    push_updates(statuses)
+    verify_updates(statuses)
+    print(
+        f"\nSynchronized {PR_BRANCH} to {FEATURE_BRANCH} "
+        "in both testcase repositories."
+    )
+    return 0
+
+
+if __name__ == "__main__":
+    try:
+        raise SystemExit(main())
+    except UserError as exc:
+        print(f"error: {exc}", file=sys.stderr)
+        raise SystemExit(1)

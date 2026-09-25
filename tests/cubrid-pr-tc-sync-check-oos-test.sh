@@ -73,11 +73,11 @@ run_sync ()
   then
     printf '%s\n' "$answer" | CUBRID_TESTCASES_DIR="$root/public" \
       CUBRID_TESTCASES_PRIVATE_EX_DIR="$root/private" \
-      bash "$repo_root/bin/cubrid-pr-tc-sync-check-oos" 2>&1
+      "$repo_root/bin/cubrid-pr-tc-sync-check-oos" 2>&1
   else
     CUBRID_TESTCASES_DIR="$root/public" \
       CUBRID_TESTCASES_PRIVATE_EX_DIR="$root/private" \
-      bash "$repo_root/bin/cubrid-pr-tc-sync-check-oos" 2>&1
+      "$repo_root/bin/cubrid-pr-tc-sync-check-oos" 2>&1
   fi
 }
 
@@ -94,6 +94,7 @@ root="$test_root/equal"
 create_pair "$root" equal equal
 output="$(run_sync "$root")"
 [[ "$output" == *"Both testcase repositories are already synchronized."* ]]
+[[ "$output" != *"difference graph"* ]]
 printf 'ok: equal branches require no confirmation or push\n'
 
 root="$test_root/decline"
@@ -102,6 +103,9 @@ public_before="$(remote_sha "$root" public "$pr_branch")"
 private_before="$(remote_sha "$root" private "$pr_branch")"
 output="$(run_sync "$root" n)"
 [[ "$output" == *"Cancelled; no branches were changed."* ]]
+[[ "$output" == *"needs sync — tc/pr-7990 is 1 commit behind feature/oos-merge"* ]]
+[[ "$(grep -c 'difference graph' <<<"$output")" -eq 2 ]]
+[[ "$output" == *">"*"feature-update"* ]]
 [[ "$(remote_sha "$root" public "$pr_branch")" == "$public_before" ]]
 [[ "$(remote_sha "$root" private "$pr_branch")" == "$private_before" ]]
 printf 'ok: declined confirmation leaves both repositories unchanged\n'
@@ -125,6 +129,10 @@ then
   exit 1
 fi
 [[ "$output" == *"tc/pr-7990 is ahead of feature/oos-merge; move those edits to feature/oos-merge first"* ]]
+[[ "$output" == *"CUBRID/cubrid-testcases"* ]]
+[[ "$output" == *"CUBRID/cubrid-testcases-private-ex"* ]]
+[[ "$output" == *">"*"feature-update"* ]]
+[[ "$output" == *"<"*"forbidden-pr-update"* ]]
 [[ "$(remote_sha "$root" public "$pr_branch")" == "$public_before" ]]
 printf 'ok: reverse-direction edit blocks both repositories before push\n'
 
@@ -136,4 +144,7 @@ then
   exit 1
 fi
 [[ "$output" == *"feature/oos-merge and tc/pr-7990 have diverged; cannot fast-forward"* ]]
+[[ "$output" == *"branches diverged: tc/pr-7990 is 1 commit ahead and 1 commit behind"* ]]
+[[ "$output" == *">"*"feature-update"* ]]
+[[ "$output" == *"<"*"pr-update"* ]]
 printf 'ok: diverged history is rejected\n'

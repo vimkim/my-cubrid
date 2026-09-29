@@ -51,3 +51,13 @@ The explicit association of an existing private database with a worktree runtime
 
 **demodb template**:
 The sample dataset explicitly selected to populate the manifest-selected database. Selecting the template does not change the database name.
+
+**PR testcase branch**:
+The published `tc/pr-N` branch associated with CUBRID pull request N in each
+of the public and private testcase repositories.
+
+**OOS-current PR testcase branch**:
+A PR testcase branch whose history includes the latest published
+`feature/oos-merge` tip in the same testcase repository. Additional testcase
+commits are allowed, whether the baseline was incorporated by merge or rebase.
+_Avoid_: Identical to OOS, proven to originate from OOS

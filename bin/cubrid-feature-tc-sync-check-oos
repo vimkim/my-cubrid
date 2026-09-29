@@ -7,7 +7,7 @@ readonly FEATURE_BRANCH="feature/oos-merge"
 usage ()
 {
   cat <<'EOF_USAGE'
-Usage: cubrid-feature-tc-sync-check-oos [--pr N]
+Usage: cubrid-feature-tc-sync-check-oos [--pr N] [--check]
 
 Find the open develop <- feature/oos-merge pull request and check that its
 tc/pr-N branch matches feature/oos-merge in both CUBRID testcase
@@ -15,7 +15,7 @@ repositories. If tc/pr-N is strictly behind, offer to fast-forward and push
 it without force.
 
 This is the OOS wrapper for:
-  cubrid-feature-tc-sync-check [--pr N] feature/oos-merge
+  cubrid-feature-tc-sync-check [--pr N] [--check] feature/oos-merge
 
 Environment overrides (primarily useful for testing):
   CUBRID_TESTCASES_DIR

@@ -5,7 +5,7 @@ set -euo pipefail
 usage ()
 {
   cat <<'EOF_USAGE'
-Usage: cubrid-feature-tc-sync-check [--pr N] <feature/NAME>
+Usage: cubrid-feature-tc-sync-check [--pr N] [--check] <feature/NAME>
 
 Find the open CUBRID/cubrid pull request that merges feature/NAME into
 develop, then check that its tc/pr-N branch matches feature/NAME in both
@@ -13,6 +13,8 @@ CUBRID testcase repositories. If tc/pr-N is strictly behind, offer to
 fast-forward and push it without force.
 
   --pr N   use PR N instead of looking it up with gh
+  --check  report only; never prompt or push. Exit 0 only when both
+           repositories are synced.
 
 This is a wrapper for:
   cubrid-pr-tc-sync-check feature/NAME tc/pr-N
@@ -51,6 +53,7 @@ feature_pr_number ()
 main ()
 {
   local pr=""
+  local -a sync_args=()
 
   while [[ $# -gt 0 ]]
   do
@@ -62,6 +65,7 @@ main ()
         pr="$2"
         shift 2
         ;;
+      --check) sync_args+=(--check); shift ;;
       -*) usage >&2; exit 2 ;;
       *) break ;;
     esac
@@ -79,7 +83,7 @@ main ()
 
   local script_dir
   script_dir="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
-  exec "$script_dir/cubrid-pr-tc-sync-check" "$feature" "tc/pr-$pr"
+  exec "$script_dir/cubrid-pr-tc-sync-check" "${sync_args[@]}" "$feature" "tc/pr-$pr"
 }
 
 main "$@"

@@ -56,7 +56,7 @@ class BranchStatus:
         return "diverged"
 
 
-def parse_args() -> BranchPair:
+def parse_args() -> tuple[BranchPair, bool]:
     parser = argparse.ArgumentParser(
         description=(
             "Check that TARGET_BRANCH matches SOURCE_BRANCH in both CUBRID "
@@ -65,7 +65,8 @@ def parse_args() -> BranchPair:
         ),
         epilog=(
             "Repository locations may be overridden with CUBRID_TESTCASES_DIR "
-            "and CUBRID_TESTCASES_PRIVATE_EX_DIR."
+            "and CUBRID_TESTCASES_PRIVATE_EX_DIR. With --check, exit 0 when "
+            "both repositories are synced and 1 otherwise."
         ),
     )
     parser.add_argument(
@@ -78,8 +79,13 @@ def parse_args() -> BranchPair:
         metavar="TARGET_BRANCH",
         help="branch to check and, after confirmation, fast-forward",
     )
+    parser.add_argument(
+        "--check",
+        action="store_true",
+        help="report only; never prompt or push, and fail unless synced",
+    )
     args = parser.parse_args()
-    return BranchPair(source=args.source_branch, target=args.target_branch)
+    return BranchPair(source=args.source_branch, target=args.target_branch), args.check
 
 
 def validate_branches(branches: BranchPair) -> None:
@@ -406,7 +412,7 @@ def repositories_from_environment() -> list[Repository]:
 
 
 def main() -> int:
-    branches = parse_args()
+    branches, check_only = parse_args()
     if shutil.which("git") is None:
         raise UserError("git is not installed or not in PATH")
     validate_branches(branches)
@@ -429,6 +435,9 @@ def main() -> int:
     if all(status.state == "synced" for status in statuses):
         print("\nBoth testcase repositories are already synchronized.")
         return 0
+    if check_only:
+        print(f"\nCheck only: {branches.target} needs a fast-forward to {branches.source}.")
+        return 1
     if not confirm_sync(branches):
         print("\nCancelled; no branches were changed.")
         return 0

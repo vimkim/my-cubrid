@@ -208,6 +208,21 @@ output="$(run_sync "$root" n)"
 [[ "$(remote_sha "$root" private "$pr_branch")" == "$private_before" ]]
 printf 'ok: declined confirmation leaves both repositories unchanged\n'
 
+root="$test_root/check-only"
+create_pair "$root" feature-ahead feature-ahead
+public_before="$(remote_sha "$root" public "$pr_branch")"
+if output="$(printf 'y\n' | run_oos_wrapper "$root" --check)"
+then
+  printf 'check-only mode passed an unsynced branch\n' >&2
+  exit 1
+fi
+[[ "$output" == *"Check only: tc/pr-7990 needs a fast-forward to feature/oos-merge."* ]]
+[[ "$output" != *"[y/N]"* ]]
+[[ "$(remote_sha "$root" public "$pr_branch")" == "$public_before" ]]
+create_pair "$test_root/check-only-equal" equal equal
+run_oos_wrapper "$test_root/check-only-equal" --check --pr 7990 >/dev/null
+printf 'ok: --check reports without prompting or pushing\n'
+
 root="$test_root/complete-graph"
 create_pair "$root" feature-ahead-long equal
 output="$(run_sync "$root" n)"

@@ -66,7 +66,8 @@ shows how the branches relate, and, only when `tc/pr-<number>` is strictly
 behind, asks before fast-forwarding and pushing it without force. If the TC
 branch is ahead or has diverged, it stops so the edits can move to the
 feature branch first. `tc-feature-sync-check-oos` fixes the feature to
-`feature/oos-merge`. Pass `--pr N` to skip the lookup.
+`feature/oos-merge`. Pass `--pr N` to skip the lookup, or `--check` to report
+without prompting or pushing (exit 0 only when both repositories are synced).
 
 ```bash
 just --justfile ~/my-cubrid/cubrid-justfiles/justfile tc-feature-sync-check-oos

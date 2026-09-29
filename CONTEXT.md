@@ -63,3 +63,9 @@ testcase repository. Additional testcase commits are allowed, whether the
 baseline was incorporated by merge or rebase. The OOS case uses
 `feature/oos-merge`.
 _Avoid_: Identical to the feature branch, proven to originate from the feature branch
+
+**Feature merge PR testcase branch**:
+The PR testcase branch of the open `develop <- feature/<name>` pull request.
+It must always have the same tip as `feature/<name>` in each testcase
+repository; testcase edits land on `feature/<name>` first.
+_Avoid_: Contains the feature branch (that is the weaker feature-current rule)

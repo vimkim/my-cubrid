@@ -37,7 +37,9 @@ takes precedence over status 1.
 
 The existing sync checker requires equal tips and can offer to push a
 fast-forward; this helper has a different acceptance rule and is check-only.
-The existing OOS sync wrapper remains specific to PR 7990.
+For the feature branch's own `develop <- feature/<name>` PR, use
+`cubrid-feature-tc-sync-check` (OOS wrapper: `cubrid-feature-tc-sync-check-oos`),
+which requires equal tips instead.
 
 This helper was previously named `cubrid-pr-tc-oos-check`.
 

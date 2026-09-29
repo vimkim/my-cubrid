@@ -7,7 +7,7 @@ test_root="$(mktemp -d)"
 trap 'rm -rf -- "$test_root"' EXIT
 export GIT_CONFIG_NOSYSTEM=1
 export GIT_CONFIG_GLOBAL=/dev/null
-export GIT_AUTHOR_NAME="OOS TC Sync Test" GIT_COMMITTER_NAME="OOS TC Sync Test"
+export GIT_AUTHOR_NAME="Feature TC Sync Test" GIT_COMMITTER_NAME="Feature TC Sync Test"
 export GIT_AUTHOR_EMAIL="test@example.invalid" GIT_COMMITTER_EMAIL="test@example.invalid"
 
 feature_branch=feature/oos-merge
@@ -97,13 +97,30 @@ run_sync ()
   fi
 }
 
+# Fake gh: print $FAKE_GH_JSON through the requested --jq filter, as gh does.
+fake_bin="$test_root/bin"
+mkdir -p "$fake_bin"
+cat >"$fake_bin/gh" <<'EOF_GH'
+#!/usr/bin/env bash
+printf '%s\n' "$*" >>"$FAKE_GH_LOG"
+[[ -z "${FAKE_GH_FAIL:-}" ]] || exit 1
+while [[ $# -gt 0 && "$1" != --jq ]]; do shift; done
+jq -r "$2" <<<"$FAKE_GH_JSON"
+EOF_GH
+chmod +x "$fake_bin/gh"
+export FAKE_GH_LOG="$test_root/gh.log"
+cubrid_pr='{"number":7990,"headRepositoryOwner":{"login":"CUBRID"}}'
+fork_pr='{"number":8001,"headRepositoryOwner":{"login":"someone"}}'
+export FAKE_GH_JSON="[$cubrid_pr,$fork_pr]"
+
 run_oos_wrapper ()
 {
   local root="$1"
+  shift
 
-  CUBRID_TESTCASES_DIR="$root/public" \
+  PATH="$fake_bin:$PATH" CUBRID_TESTCASES_DIR="$root/public" \
     CUBRID_TESTCASES_PRIVATE_EX_DIR="$root/private" \
-    "$repo_root/bin/cubrid-pr-tc-sync-check-oos" 2>&1
+    "$repo_root/bin/cubrid-feature-tc-sync-check-oos" "$@" 2>&1
 }
 
 remote_sha ()
@@ -132,6 +149,39 @@ output="$(run_oos_wrapper "$root")"
 [[ "$output" == *"origin/tc/pr-7990"* ]]
 [[ "$output" == *"origin/feature/oos-merge"* ]]
 printf 'ok: equal branches require no confirmation or push\n'
+
+[[ "$output" == *"PR #7990: develop <- feature/oos-merge"* ]]
+grep -q -- "--repo CUBRID/cubrid --head feature/oos-merge --base develop --state open" "$FAKE_GH_LOG"
+printf 'ok: OOS wrapper resolves the develop <- feature/oos-merge PR and ignores forks\n'
+
+: >"$FAKE_GH_LOG"
+output="$(FAKE_GH_JSON='[]' run_oos_wrapper "$root" --pr 7990)"
+[[ "$output" == *"Both testcase repositories are already synchronized."* ]]
+[[ ! -s "$FAKE_GH_LOG" ]]
+printf 'ok: --pr skips the gh lookup\n'
+
+for json in '[]' "[$fork_pr]" "[$cubrid_pr,$cubrid_pr]"
+do
+  if output="$(FAKE_GH_JSON="$json" run_oos_wrapper "$root")"
+  then
+    printf 'ambiguous or missing feature PR was accepted: %s\n' "$json" >&2
+    exit 1
+  fi
+  [[ "$output" == *"use --pr N"* ]]
+done
+if output="$(FAKE_GH_FAIL=1 run_oos_wrapper "$root")"
+then
+  printf 'gh failure was accepted\n' >&2
+  exit 1
+fi
+[[ "$output" == *"cannot list CUBRID/cubrid pull requests"* ]]
+if output="$(PATH="$fake_bin:$PATH" "$repo_root/bin/cubrid-feature-tc-sync-check" develop 2>&1)"
+then
+  printf 'non-feature branch was accepted\n' >&2
+  exit 1
+fi
+[[ "$output" == *"Usage:"* ]]
+printf 'ok: missing, fork-only, duplicate, failed, and non-feature lookups are rejected\n'
 
 root="$test_root/custom-branches"
 custom_source=release/mock-feature

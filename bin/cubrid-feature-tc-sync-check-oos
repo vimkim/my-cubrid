@@ -1,0 +1,39 @@
+#!/usr/bin/env bash
+
+set -euo pipefail
+
+readonly FEATURE_BRANCH="feature/oos-merge"
+
+usage ()
+{
+  cat <<'EOF_USAGE'
+Usage: cubrid-feature-tc-sync-check-oos [--pr N]
+
+Find the open develop <- feature/oos-merge pull request and check that its
+tc/pr-N branch matches feature/oos-merge in both CUBRID testcase
+repositories. If tc/pr-N is strictly behind, offer to fast-forward and push
+it without force.
+
+This is the OOS wrapper for:
+  cubrid-feature-tc-sync-check [--pr N] feature/oos-merge
+
+Environment overrides (primarily useful for testing):
+  CUBRID_TESTCASES_DIR
+  CUBRID_TESTCASES_PRIVATE_EX_DIR
+EOF_USAGE
+}
+
+main ()
+{
+  if [[ "${1:-}" == "-h" || "${1:-}" == "--help" ]]
+  then
+    usage
+    exit 0
+  fi
+
+  local script_dir
+  script_dir="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
+  exec "$script_dir/cubrid-feature-tc-sync-check" "$@" "$FEATURE_BRANCH"
+}
+
+main "$@"

@@ -41,3 +41,11 @@ tc-base-check *args:
 [no-cd]
 tc-base-check-oos *args:
     cubrid-pr-tc-base-check-oos {{args}}
+
+# Check tc/pr-N of the develop <- FEATURE PR matches FEATURE; offer a fast-forward push.
+tc-feature-sync-check feature *args:
+    cubrid-feature-tc-sync-check {{args}} "{{feature}}"
+
+# Check tc/pr-N of the develop <- feature/oos-merge PR matches feature/oos-merge.
+tc-feature-sync-check-oos *args:
+    cubrid-feature-tc-sync-check-oos {{args}}

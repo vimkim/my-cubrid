@@ -55,3 +55,21 @@ recipes run in the invoking directory and accept `--pr N`.
 just --justfile ~/my-cubrid/cubrid-justfiles/justfile tc-base-check-oos
 just --justfile ~/my-cubrid/cubrid-justfiles/justfile tc-base-check --pr 7990
 ```
+
+## Feature PR testcase synchronization
+
+A feature branch's own merge PR (`develop <- feature/<name>`) also has
+`tc/pr-<number>` testcase branches, and they must always match
+`feature/<name>` in both testcase repositories. `tc-feature-sync-check`
+finds the open `develop <- feature/<name>` PR in `CUBRID/cubrid` with `gh`,
+shows how the branches relate, and, only when `tc/pr-<number>` is strictly
+behind, asks before fast-forwarding and pushing it without force. If the TC
+branch is ahead or has diverged, it stops so the edits can move to the
+feature branch first. `tc-feature-sync-check-oos` fixes the feature to
+`feature/oos-merge`. Pass `--pr N` to skip the lookup.
+
+```bash
+just --justfile ~/my-cubrid/cubrid-justfiles/justfile tc-feature-sync-check-oos
+just --justfile ~/my-cubrid/cubrid-justfiles/justfile \
+  tc-feature-sync-check feature/oos-merge --pr 7990
+```

@@ -1,0 +1,451 @@
+#!/usr/bin/env python3
+"""Check and optionally synchronize branches in both testcase repositories."""
+
+from __future__ import annotations
+
+import argparse
+from dataclasses import dataclass
+import os
+from pathlib import Path
+import shutil
+import subprocess
+import sys
+
+
+DEFAULT_PUBLIC_TC_DIRS = (Path("/home/vimkim/gh/cubrid-testcases/develop"),)
+DEFAULT_PRIVATE_TC_DIRS = (
+    Path("/home/vimkim/gh/cubrid-testcases-private-ex/develop"),
+)
+
+
+class UserError(RuntimeError):
+    """An error that can be shown without a traceback."""
+
+
+@dataclass(frozen=True)
+class Repository:
+    label: str
+    directory: Path
+
+
+@dataclass(frozen=True)
+class BranchPair:
+    source: str
+    target: str
+
+
+@dataclass(frozen=True)
+class BranchStatus:
+    repository: Repository
+    branches: BranchPair
+    source_sha: str
+    target_sha: str
+    merge_base_sha: str
+    target_only_count: int
+    source_only_count: int
+    graph: str
+
+    @property
+    def state(self) -> str:
+        if self.target_only_count == 0 and self.source_only_count == 0:
+            return "synced"
+        if self.target_only_count == 0:
+            return "needs-sync"
+        if self.source_only_count == 0:
+            return "target-ahead"
+        return "diverged"
+
+
+def parse_args() -> BranchPair:
+    parser = argparse.ArgumentParser(
+        description=(
+            "Check that TARGET_BRANCH matches SOURCE_BRANCH in both CUBRID "
+            "testcase repositories. If the target is strictly behind, offer "
+            "to fast-forward it to the source and push without force."
+        ),
+        epilog=(
+            "Repository locations may be overridden with CUBRID_TESTCASES_DIR "
+            "and CUBRID_TESTCASES_PRIVATE_EX_DIR."
+        ),
+    )
+    parser.add_argument(
+        "source_branch",
+        metavar="SOURCE_BRANCH",
+        help="authoritative branch whose tip the target should match",
+    )
+    parser.add_argument(
+        "target_branch",
+        metavar="TARGET_BRANCH",
+        help="branch to check and, after confirmation, fast-forward",
+    )
+    args = parser.parse_args()
+    return BranchPair(source=args.source_branch, target=args.target_branch)
+
+
+def validate_branches(branches: BranchPair) -> None:
+    if branches.source == branches.target:
+        raise UserError("SOURCE_BRANCH and TARGET_BRANCH must be different")
+    for label, branch in (
+        ("SOURCE_BRANCH", branches.source),
+        ("TARGET_BRANCH", branches.target),
+    ):
+        result = subprocess.run(
+            ["git", "check-ref-format", "--branch", branch],
+            capture_output=True,
+            text=True,
+        )
+        if result.returncode != 0:
+            raise UserError(f"{label} is not a valid Git branch name: {branch}")
+
+
+def git_command(
+    directory: Path,
+    *arguments: str,
+    capture_output: bool = True,
+) -> subprocess.CompletedProcess[str]:
+    try:
+        return subprocess.run(
+            ["git", "-C", str(directory), *arguments],
+            check=True,
+            capture_output=capture_output,
+            text=True,
+        )
+    except FileNotFoundError as exc:
+        raise UserError("git is not installed or not in PATH") from exc
+    except subprocess.CalledProcessError as exc:
+        detail = (exc.stderr or exc.stdout or "").strip()
+        command = "git " + " ".join(arguments)
+        raise UserError(
+            f"{command} failed in {directory}: "
+            f"{detail or f'exit status {exc.returncode}'}"
+        ) from exc
+
+
+def is_git_worktree(directory: Path) -> bool:
+    result = subprocess.run(
+        ["git", "-C", str(directory), "rev-parse", "--is-inside-work-tree"],
+        capture_output=True,
+        text=True,
+    )
+    return result.returncode == 0
+
+
+def resolve_repository_directory(
+    override: str | None, candidates: tuple[Path, ...]
+) -> Path:
+    if override:
+        return Path(override)
+    for directory in candidates:
+        if directory.is_dir() and is_git_worktree(directory):
+            return directory
+    return candidates[0]
+
+
+def ensure_repository(repository: Repository) -> None:
+    directory = repository.directory
+    if not directory.is_dir():
+        raise UserError(f"repository directory does not exist: {directory}")
+    if not is_git_worktree(directory):
+        raise UserError(f"not a Git worktree: {directory}")
+    git_command(directory, "remote", "get-url", "origin")
+
+
+def fetch_repository(repository: Repository) -> None:
+    print(f"\n==> Fetching {repository.label}", flush=True)
+    git_command(
+        repository.directory,
+        "fetch",
+        "origin",
+        "--prune",
+        capture_output=False,
+    )
+
+
+def remote_tracking_sha(repository: Repository, branch: str) -> str:
+    reference = f"refs/remotes/origin/{branch}^{{commit}}"
+    try:
+        result = git_command(repository.directory, "rev-parse", "--verify", reference)
+    except UserError as exc:
+        raise UserError(f"origin/{branch} does not exist in {repository.label}") from exc
+    return result.stdout.strip()
+
+
+def live_remote_sha(repository: Repository, branch: str) -> str:
+    try:
+        result = git_command(
+            repository.directory,
+            "ls-remote",
+            "--exit-code",
+            "--refs",
+            "origin",
+            f"refs/heads/{branch}",
+        )
+    except UserError as exc:
+        raise UserError(f"cannot resolve live {repository.label}:{branch}") from exc
+    return result.stdout.partition("\t")[0]
+
+
+def difference_counts(
+    repository: Repository, branches: BranchPair
+) -> tuple[int, int]:
+    range_expression = f"origin/{branches.target}...origin/{branches.source}"
+    result = git_command(
+        repository.directory,
+        "rev-list",
+        "--left-right",
+        "--count",
+        range_expression,
+    )
+    fields = result.stdout.split()
+    if len(fields) != 2:
+        raise UserError(f"git returned invalid branch counts for {repository.label}")
+    try:
+        return int(fields[0]), int(fields[1])
+    except ValueError as exc:
+        raise UserError(f"git returned invalid branch counts for {repository.label}") from exc
+
+
+def merge_base_sha(repository: Repository, branches: BranchPair) -> str:
+    try:
+        result = git_command(
+            repository.directory,
+            "merge-base",
+            f"origin/{branches.target}",
+            f"origin/{branches.source}",
+        )
+    except UserError as exc:
+        raise UserError(
+            f"{branches.target} and {branches.source} have no common ancestor "
+            f"in {repository.label}"
+        ) from exc
+    return result.stdout.strip()
+
+
+def relationship_graph(
+    repository: Repository, branches: BranchPair, merge_base: str
+) -> str:
+    result = git_command(
+        repository.directory,
+        "log",
+        "--graph",
+        "--no-color",
+        "--decorate=short",
+        f"--decorate-refs=refs/remotes/origin/{branches.target}",
+        f"--decorate-refs=refs/remotes/origin/{branches.source}",
+        "--date-order",
+        "--abbrev=12",
+        "--format=%h %as %an%d %s",
+        f"origin/{branches.target}",
+        f"origin/{branches.source}",
+        "--not",
+        f"{merge_base}^@",
+    )
+    graph = result.stdout.rstrip()
+    abbreviated_base = git_command(
+        repository.directory,
+        "rev-parse",
+        "--short=12",
+        merge_base,
+    ).stdout.strip()
+    if abbreviated_base not in graph:
+        raise UserError(
+            f"git omitted the common ancestor from the branch graph for "
+            f"{repository.label}"
+        )
+    return graph.replace(
+        abbreviated_base,
+        f"{abbreviated_base} [common ancestor]",
+        1,
+    )
+
+
+def inspect_repository(
+    repository: Repository, branches: BranchPair
+) -> BranchStatus:
+    source_sha = remote_tracking_sha(repository, branches.source)
+    target_sha = remote_tracking_sha(repository, branches.target)
+    merge_base = merge_base_sha(repository, branches)
+    target_only_count, source_only_count = difference_counts(repository, branches)
+    return BranchStatus(
+        repository=repository,
+        branches=branches,
+        source_sha=source_sha,
+        target_sha=target_sha,
+        merge_base_sha=merge_base,
+        target_only_count=target_only_count,
+        source_only_count=source_only_count,
+        graph=relationship_graph(repository, branches, merge_base),
+    )
+
+
+def pluralized_commit(count: int) -> str:
+    return f"{count} commit{'s' if count != 1 else ''}"
+
+
+def relation_description(status: BranchStatus) -> str:
+    branches = status.branches
+    if status.state == "needs-sync":
+        return (
+            f"needs sync — {branches.target} is "
+            f"{pluralized_commit(status.source_only_count)} behind {branches.source}"
+        )
+    if status.state == "target-ahead":
+        return (
+            f"unsafe — {branches.target} is "
+            f"{pluralized_commit(status.target_only_count)} ahead of {branches.source}"
+        )
+    return (
+        f"unsafe — branches diverged: {branches.target} is "
+        f"{pluralized_commit(status.target_only_count)} ahead and "
+        f"{pluralized_commit(status.source_only_count)} behind"
+    )
+
+
+def print_status(status: BranchStatus) -> None:
+    print(f"\n{status.repository.label}")
+    if status.state == "synced":
+        print(f"  synced at {status.source_sha[:12]}")
+    else:
+        print(f"  {relation_description(status)}")
+    print(
+        f"  branch relationship (source: {status.branches.source}; "
+        f"target: {status.branches.target}):"
+    )
+    for line in status.graph.splitlines():
+        print(f"    {line}")
+
+
+def unsafe_status_error(statuses: list[BranchStatus]) -> str | None:
+    errors: list[str] = []
+    for status in statuses:
+        branches = status.branches
+        if status.state == "target-ahead":
+            errors.append(
+                f"{status.repository.label}: {branches.target} is ahead of "
+                f"{branches.source}; move those edits to {branches.source} first"
+            )
+        elif status.state == "diverged":
+            errors.append(
+                f"{status.repository.label}: {branches.source} and "
+                f"{branches.target} have diverged; cannot fast-forward"
+            )
+    return "; ".join(errors) or None
+
+
+def confirm_sync(branches: BranchPair) -> bool:
+    try:
+        answer = input(
+            f"\nFast-forward {branches.target} to {branches.source} and push "
+            "the target branch in the repositories listed above? [y/N] "
+        )
+    except EOFError:
+        return False
+    return answer.lower() in {"y", "yes"}
+
+
+def ensure_remote_tips_unchanged(statuses: list[BranchStatus]) -> None:
+    for status in statuses:
+        branches = status.branches
+        live_source_sha = live_remote_sha(status.repository, branches.source)
+        live_target_sha = live_remote_sha(status.repository, branches.target)
+        if (
+            live_source_sha != status.source_sha
+            or live_target_sha != status.target_sha
+        ):
+            raise UserError(
+                f"{status.repository.label} branches changed during confirmation; "
+                "rerun the command"
+            )
+
+
+def push_updates(statuses: list[BranchStatus]) -> None:
+    for status in statuses:
+        if status.state != "needs-sync":
+            continue
+        branches = status.branches
+        print(
+            f"\n==> Fast-forwarding {status.repository.label}:{branches.target} "
+            f"to {status.source_sha[:12]}",
+            flush=True,
+        )
+        git_command(
+            status.repository.directory,
+            "push",
+            "origin",
+            f"{status.source_sha}:refs/heads/{branches.target}",
+            capture_output=False,
+        )
+
+
+def verify_updates(statuses: list[BranchStatus]) -> None:
+    for status in statuses:
+        branches = status.branches
+        source_sha = live_remote_sha(status.repository, branches.source)
+        target_sha = live_remote_sha(status.repository, branches.target)
+        if source_sha != target_sha:
+            raise UserError(f"verification failed for {status.repository.label}")
+        print(f"Verified {status.repository.label:<34} {source_sha[:12]}")
+
+
+def repositories_from_environment() -> list[Repository]:
+    return [
+        Repository(
+            "CUBRID/cubrid-testcases",
+            resolve_repository_directory(
+                os.environ.get("CUBRID_TESTCASES_DIR"), DEFAULT_PUBLIC_TC_DIRS
+            ),
+        ),
+        Repository(
+            "CUBRID/cubrid-testcases-private-ex",
+            resolve_repository_directory(
+                os.environ.get("CUBRID_TESTCASES_PRIVATE_EX_DIR"),
+                DEFAULT_PRIVATE_TC_DIRS,
+            ),
+        ),
+    ]
+
+
+def main() -> int:
+    branches = parse_args()
+    if shutil.which("git") is None:
+        raise UserError("git is not installed or not in PATH")
+    validate_branches(branches)
+
+    repositories = repositories_from_environment()
+    for repository in repositories:
+        ensure_repository(repository)
+    for repository in repositories:
+        fetch_repository(repository)
+
+    statuses = [inspect_repository(repository, branches) for repository in repositories]
+    print("\nTestcase branch status:")
+    for status in statuses:
+        print_status(status)
+
+    unsafe_error = unsafe_status_error(statuses)
+    if unsafe_error:
+        sys.stdout.flush()
+        raise UserError(unsafe_error)
+    if all(status.state == "synced" for status in statuses):
+        print("\nBoth testcase repositories are already synchronized.")
+        return 0
+    if not confirm_sync(branches):
+        print("\nCancelled; no branches were changed.")
+        return 0
+
+    ensure_remote_tips_unchanged(statuses)
+    push_updates(statuses)
+    verify_updates(statuses)
+    print(
+        f"\nSynchronized {branches.target} to {branches.source} "
+        "in both testcase repositories."
+    )
+    return 0
+
+
+if __name__ == "__main__":
+    try:
+        raise SystemExit(main())
+    except UserError as exc:
+        print(f"error: {exc}", file=sys.stderr)
+        raise SystemExit(1)

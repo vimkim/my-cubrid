@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Check published PR testcase branches against the latest OOS baseline."""
+"""Check that a feature-branch PR's testcase branches contain the feature baseline."""
 
 import argparse
 import json
@@ -9,8 +9,6 @@ import re
 import subprocess
 import sys
 
-BASE = "feature/oos-merge"
-
 
 def command(*args, cwd=None, allowed=(0,)):
     result = subprocess.run(args, cwd=cwd, capture_output=True, text=True, timeout=120)
@@ -19,12 +17,14 @@ def command(*args, cwd=None, allowed=(0,)):
     return result
 
 
-def current_pr():
-    result = command("gh", "pr", "view", "--json", "number,url")
-    pr = json.loads(result.stdout)
+def pr_metadata(pr=None):
+    args = ["gh", "pr", "view"]
+    if pr is not None:
+        args += [str(pr), "--repo", "CUBRID/cubrid"]
+    pr = json.loads(command(*args, "--json", "number,url,baseRefName").stdout)
     if not re.fullmatch(r"https://github\.com/CUBRID/cubrid/pull/[1-9][0-9]*", pr["url"], re.I):
         raise RuntimeError("Current PR must belong to CUBRID/cubrid; use --pr N explicitly.")
-    return positive_number(str(pr["number"]))
+    return positive_number(str(pr["number"])), pr["baseRefName"]
 
 
 def positive_number(value):
@@ -33,7 +33,13 @@ def positive_number(value):
     return int(value)
 
 
-def inspect(label, directory, target):
+def feature_branch(value):
+    if not re.fullmatch(r"feature/[^\s]+", value):
+        raise argparse.ArgumentTypeError("base must be a feature/<name> branch")
+    return value
+
+
+def inspect(label, directory, base, target):
     def git(*args, allowed=(0,)):
         return command("git", "-C", str(directory), *args, allowed=allowed)
 
@@ -42,15 +48,15 @@ def inspect(label, directory, target):
     # leave either inspected ref stale. Prune also removes deleted TC branches.
     git("fetch", "--prune", "--no-tags", "origin",
         "+refs/heads/*:refs/remotes/origin/*")
-    refs = [f"refs/remotes/origin/{branch}" for branch in (BASE, target)]
+    refs = [f"refs/remotes/origin/{branch}" for branch in (base, target)]
     tips = []
-    for branch, ref in zip((BASE, target), refs):
+    for branch, ref in zip((base, target), refs):
         result = git("rev-parse", "--verify", f"{ref}^{{commit}}", allowed=(0, 128))
         if result.returncode:
             raise RuntimeError(f"missing published branch origin/{branch}")
         tips.append(result.stdout.strip())
     source, tc = tips
-    print(f"  origin/{BASE}: {source}\n  origin/{target}: {tc}")
+    print(f"  origin/{base}: {source}\n  origin/{target}: {tc}")
     # A shallow boundary can conceal ancestry; never report that as divergence.
     if git("rev-parse", "--is-shallow-repository").stdout.strip() == "true":
         raise RuntimeError("shallow history: fetch full history before checking ancestry")
@@ -58,12 +64,12 @@ def inspect(label, directory, target):
     tc_only, base_only = map(int, git("rev-list", "--left-right", "--count", f"{tc}...{source}").stdout.split())
     bases = git("merge-base", "--all", source, tc, allowed=(0, 1)).stdout.split()
     if contains:
-        state = "PASS: contains latest OOS tip"
+        state = f"PASS: contains latest {base} tip"
     elif not bases:
         state = "FAIL: unrelated histories"
     else:
-        state = "FAIL: latest OOS tip is not an ancestor"
-    print(f"  {state}; TC-only={tc_only}, OOS-only={base_only}")
+        state = f"FAIL: latest {base} tip is not an ancestor"
+    print(f"  {state}; TC-only={tc_only}, base-only={base_only}")
     print("  Common ancestors: " + (", ".join(bases) or "none"))
     args = ["log", "--graph", "--no-color", "--decorate=short", "--date-order",
             "--abbrev=12", "--format=%h %as%d %s"]
@@ -72,8 +78,8 @@ def inspect(label, directory, target):
     if bases:
         args += ["--not"] + [f"{base}^@" for base in bases]
     graph = git(*args).stdout.rstrip()
-    for base in bases:
-        short = git("rev-parse", "--short=12", base).stdout.strip()
+    for merge_base in bases:
+        short = git("rev-parse", "--short=12", merge_base).stdout.strip()
         graph = graph.replace(short, f"{short} [common ancestor]", 1)
     print("  Branch relationship:")
     for line in graph.splitlines():
@@ -83,14 +89,28 @@ def inspect(label, directory, target):
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__, epilog=(
+        "A PR targeting feature/<name> passes when origin/feature/<name> is an ancestor "
+        "of origin/tc/pr-N in both testcase repositories; other PR bases are skipped. "
         "Fetches origin refs only; never merges, rebases, checks out, or pushes. "
-        "Exit 0: both pass; 1: ancestry failure or missing branch; 2: setup/check error. "
+        "Exit 0: both pass or skipped; 1: ancestry failure or missing branch; "
+        "2: setup/check error. "
         "Paths: CUBRID_TESTCASES_DIR and CUBRID_TESTCASES_PRIVATE_EX_DIR."))
     parser.add_argument("--pr", type=positive_number, help="CUBRID PR number (default: current worktree PR)")
+    parser.add_argument("--base", type=feature_branch, help=(
+        "expected feature/<name> PR base; with --pr, GitHub is not queried "
+        "(default: the PR's base branch)"))
     args = parser.parse_args()
-    pr = args.pr if args.pr is not None else current_pr()
+    if args.pr is not None and args.base is not None:
+        pr, base = args.pr, args.base
+    else:
+        pr, base = pr_metadata(args.pr)
+        if args.base is not None and base != args.base:
+            raise RuntimeError(f"PR #{pr} targets {base}, not {args.base}")
+    if not base.startswith("feature/"):
+        print(f"PR #{pr} targets {base}: SKIP, testcase baseline check applies only to feature/* bases.")
+        return 0
     target = f"tc/pr-{pr}"
-    print(f"PR #{pr}: published {target} must contain latest {BASE} (fetched snapshot).")
+    print(f"PR #{pr}: published {target} must contain latest {base} (fetched snapshot).")
     repositories = (
         ("CUBRID/cubrid-testcases", "CUBRID_TESTCASES_DIR", "/home/vimkim/gh/cubrid-testcases/develop"),
         ("CUBRID/cubrid-testcases-private-ex", "CUBRID_TESTCASES_PRIVATE_EX_DIR",
@@ -99,7 +119,7 @@ def main():
     exit_code = 0
     for label, variable, default in repositories:
         try:
-            if not inspect(label, Path(os.environ.get(variable, default)), target):
+            if not inspect(label, Path(os.environ.get(variable, default)), base, target):
                 exit_code = max(exit_code, 1)
         except (RuntimeError, OSError, subprocess.TimeoutExpired) as exc:
             print(f"  FAIL: {exc}", flush=True)

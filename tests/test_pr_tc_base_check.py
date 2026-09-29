@@ -6,7 +6,9 @@ import subprocess
 import tempfile
 import unittest
 
-SCRIPT = Path(__file__).resolve().parents[1] / 'bin/cubrid-pr-tc-oos-check'
+BIN = Path(__file__).resolve().parents[1] / 'bin'
+SCRIPT = BIN / 'cubrid-pr-tc-base-check'
+WRAPPER = BIN / 'cubrid-pr-tc-base-check-oos'
 
 
 class CheckerTest(unittest.TestCase):
@@ -37,9 +39,9 @@ class CheckerTest(unittest.TestCase):
     def git(self, repo, *args):
         return self.run_cmd('git', '-C', str(repo), *args)
 
-    def check(self, expected, *args):
+    def check(self, expected, *args, script=WRAPPER):
         before = [self.git(p, 'show-ref', '--heads') for p in self.repos]
-        result = subprocess.run([str(SCRIPT), *args], env=self.env, cwd=self.root,
+        result = subprocess.run([str(script), *args], env=self.env, cwd=self.root,
                                 text=True, capture_output=True)
         self.assertEqual(result.returncode, expected, result.stdout + result.stderr)
         self.assertEqual(before, [self.git(p, 'show-ref', '--heads') for p in self.repos])
@@ -51,20 +53,20 @@ class CheckerTest(unittest.TestCase):
         self.git(repo, 'checkout', 'tc/pr-42')
         self.git(repo, 'commit', '--allow-empty', '-m', 'TC addition')
         self.git(repo, 'push', 'origin', 'tc/pr-42')
-        self.assertIn('TC-only=1, OOS-only=0', self.check(0, '--pr', '42'))
+        self.assertIn('TC-only=1, base-only=0', self.check(0, '--pr', '42'))
 
     def test_stale_diverged_merge_and_rebase(self):
         for repo in self.repos:
             self.git(repo, 'commit', '--allow-empty', '-m', 'new baseline')
             self.git(repo, 'push', 'origin', 'feature/oos-merge')
-        self.assertIn('TC-only=0, OOS-only=1', self.check(1, '--pr', '42'))
+        self.assertIn('TC-only=0, base-only=1', self.check(1, '--pr', '42'))
         for repo in self.repos:
             self.git(repo, 'checkout', 'tc/pr-42')
             (repo / 'testcase').write_text('test\n')
             self.git(repo, 'add', 'testcase')
             self.git(repo, 'commit', '-m', 'TC change')
             self.git(repo, 'push', 'origin', 'tc/pr-42')
-        self.assertIn('TC-only=1, OOS-only=1', self.check(1, '--pr', '42'))
+        self.assertIn('TC-only=1, base-only=1', self.check(1, '--pr', '42'))
         self.git(self.repos[0], 'merge', '--no-edit', 'feature/oos-merge')
         self.git(self.repos[1], 'rebase', 'feature/oos-merge')
         for repo in self.repos:
@@ -89,18 +91,39 @@ class CheckerTest(unittest.TestCase):
         self.git(repo, 'remote', 'set-url', 'origin', str(self.root / 'absent'))
         self.assertIn('PASS:', self.check(2, '--pr', '42'))
 
-    def test_pr_detection_and_validation(self):
+    def fake_gh(self, number, base, url=None):
         fake_bin = self.root / 'bin'
-        fake_bin.mkdir()
+        fake_bin.mkdir(exist_ok=True)
         gh = fake_bin / 'gh'
-        gh.write_text('#!/bin/sh\nprintf \'%s\\n\' \'{"number":42,"url":"https://github.com/CUBRID/cubrid/pull/42"}\'\n')
+        url = url or f'https://github.com/CUBRID/cubrid/pull/{number}'
+        payload = f'{{"number":{number},"url":"{url}","baseRefName":"{base}"}}'
+        gh.write_text(f"#!/bin/sh\nprintf '%s\\n' '{payload}'\n")
         gh.chmod(0o755)
-        self.env['PATH'] = str(fake_bin) + os.pathsep + self.env['PATH']
+        self.env['PATH'] = str(fake_bin) + os.pathsep + os.environ['PATH']
+
+    def test_pr_detection_and_validation(self):
+        self.fake_gh(42, 'feature/oos-merge')
         self.assertIn('PR #42:', self.check(0))
-        gh.write_text('#!/bin/sh\nprintf \'%s\\n\' \'{"number":42,"url":"https://github.com/other/repo/pull/42"}\'\n')
+        self.assertIn('PR #42:', self.check(0, script=SCRIPT))
+        self.fake_gh(42, 'feature/oos-merge', 'https://github.com/other/repo/pull/42')
         self.assertIn('must belong to CUBRID', self.check(2))
         self.assertIn('positive integer', self.check(2, '--pr', '0'))
+        self.assertIn('feature/<name>', self.check(2, '--base', 'develop', script=SCRIPT))
 
+    def test_generic_base_detection(self):
+        self.fake_gh(42, 'feature/other')
+        self.assertIn('missing published branch origin/feature/other', self.check(1, script=SCRIPT))
+        self.assertIn('targets feature/other, not feature/oos-merge', self.check(2))
+        for repo in self.repos:
+            self.git(repo, 'checkout', '-b', 'feature/other', 'feature/oos-merge')
+            self.git(repo, 'commit', '--allow-empty', '-m', 'other baseline')
+            self.git(repo, 'push', 'origin', 'feature/other')
+        output = self.check(1, script=SCRIPT)
+        self.assertIn('FAIL: latest feature/other tip is not an ancestor', output)
+        self.assertIn('TC-only=0, base-only=1', output)
+        self.fake_gh(42, 'develop')
+        self.assertIn('SKIP', self.check(0, script=SCRIPT))
+        self.assertIn('PASS:', self.check(0, '--pr', '42', '--base', 'feature/oos-merge', script=SCRIPT))
 
 if __name__ == '__main__':
     unittest.main()

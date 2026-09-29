@@ -31,3 +31,13 @@ tc-branch-create base_branch new_branch:
 # Merge and push the testcase branches associated with CUBRID_PR_URL.
 tc-sync cubrid_pr_url:
     cubrid-tc-sync.sh "{{cubrid_pr_url}}"
+
+# Check the current PR's testcase branches contain its feature/<name> baseline.
+[no-cd]
+tc-base-check *args:
+    cubrid-pr-tc-base-check {{args}}
+
+# Check the current PR targets feature/oos-merge and its testcase branches contain it.
+[no-cd]
+tc-base-check-oos *args:
+    cubrid-pr-tc-base-check-oos {{args}}

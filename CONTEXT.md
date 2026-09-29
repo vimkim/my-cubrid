@@ -56,8 +56,10 @@ The sample dataset explicitly selected to populate the manifest-selected databas
 The published `tc/pr-N` branch associated with CUBRID pull request N in each
 of the public and private testcase repositories.
 
-**OOS-current PR testcase branch**:
-A PR testcase branch whose history includes the latest published
-`feature/oos-merge` tip in the same testcase repository. Additional testcase
-commits are allowed, whether the baseline was incorporated by merge or rebase.
-_Avoid_: Identical to OOS, proven to originate from OOS
+**Feature-current PR testcase branch**:
+For a CUBRID pull request targeting `feature/<name>`, a PR testcase branch
+whose history includes the latest published `feature/<name>` tip in the same
+testcase repository. Additional testcase commits are allowed, whether the
+baseline was incorporated by merge or rebase. The OOS case uses
+`feature/oos-merge`.
+_Avoid_: Identical to the feature branch, proven to originate from the feature branch

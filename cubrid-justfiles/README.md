@@ -41,3 +41,17 @@ just --justfile ~/my-cubrid/cubrid-justfiles/justfile \
 just --justfile ~/my-cubrid/cubrid-justfiles/justfile \
   tc-sync https://github.com/CUBRID/cubrid/pull/7588
 ```
+
+## Testcase feature-baseline check
+
+Run `tc-base-check` from a CUBRID source worktree whose PR targets
+`feature/<name>`. It checks, without changing any branch, that `tc/pr-<number>`
+in both testcase repositories contains the latest `origin/feature/<name>`.
+PRs targeting other bases are skipped. `tc-base-check-oos` fixes the base to
+`feature/oos-merge` and fails when the current PR targets another base. Both
+recipes run in the invoking directory and accept `--pr N`.
+
+```bash
+just --justfile ~/my-cubrid/cubrid-justfiles/justfile tc-base-check-oos
+just --justfile ~/my-cubrid/cubrid-justfiles/justfile tc-base-check --pr 7990
+```

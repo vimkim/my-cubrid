@@ -1,0 +1,39 @@
+#!/usr/bin/env bash
+
+set -euo pipefail
+
+readonly BASE_BRANCH="feature/oos-merge"
+
+usage ()
+{
+  cat <<'EOF'
+Usage: cubrid-pr-tc-base-check-oos [--pr N]
+
+Check that the PR targets feature/oos-merge and that its published tc/pr-N
+branches in both CUBRID testcase repositories contain the latest
+origin/feature/oos-merge. Without --pr, the PR is resolved from the current
+worktree with gh; a PR targeting another base is an error.
+
+This is the OOS wrapper for:
+  cubrid-pr-tc-base-check --base feature/oos-merge [--pr N]
+
+Environment overrides (primarily useful for testing):
+  CUBRID_TESTCASES_DIR
+  CUBRID_TESTCASES_PRIVATE_EX_DIR
+EOF
+}
+
+main ()
+{
+  if [[ "${1:-}" == "-h" || "${1:-}" == "--help" ]]
+  then
+    usage
+    exit 0
+  fi
+
+  local script_dir
+  script_dir="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
+  exec "$script_dir/cubrid-pr-tc-base-check" --base "$BASE_BRANCH" "$@"
+}
+
+main "$@"

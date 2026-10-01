@@ -3143,9 +3143,7 @@ def reject_managed_claim_collisions(
             "The complete resource bundle would reuse a System V key claimed by another worktree runtime.",
             "Restore disjoint managed claims before retrying initialization.",
         )
-    conflicting_path = next(
-        (path for path in claims.paths if any(paths_overlap(path, used, adapter) for used in used_paths)), None
-    )
+    conflicting_path = first_overlapping_claim(claims.paths, used_paths, adapter)
     if conflicting_path is not None:
         raise OperationError(
             "managed_path_collision",
@@ -3155,6 +3153,35 @@ def reject_managed_claim_collisions(
             "The complete resource bundle would reuse a path claimed by another worktree runtime.",
             "Select a distinct private installation and runtime identity before retrying initialization.",
         )
+
+
+def first_overlapping_claim(
+    paths: tuple[Path, ...], used_paths: set[Path], adapter: ObservationAdapter,
+) -> Path | None:
+    """Index one observation per retained claim instead of comparing every pair.
+
+    Keep the index local to this validation: subsequent operations must observe
+    filesystem changes again. Lexical ancestry and filesystem aliases both
+    constitute overlap, including claims whose paths do not exist yet.
+    """
+    if not used_paths:
+        return None
+    used_ancestors = {parent for used in used_paths for parent in used.parents}
+    used_identities: set[tuple[int, int]] | None = None
+    for path in paths:
+        if path in used_paths or path in used_ancestors or any(parent in used_paths for parent in path.parents):
+            return path
+        if used_identities is None:
+            used_identities = set()
+            for used in used_paths:
+                observation = adapter.inspect_file(used)
+                if observation.exists and observation.device is not None and observation.inode is not None:
+                    used_identities.add((observation.device, observation.inode))
+        observation = adapter.inspect_file(path)
+        if (observation.exists and observation.device is not None and observation.inode is not None
+                and (observation.device, observation.inode) in used_identities):
+            return path
+    return None
 
 
 def paths_overlap(path: Path, other: Path, adapter: ObservationAdapter) -> bool:

@@ -156,6 +156,26 @@ class WorkenvDatabaseTest(unittest.TestCase):
         self.assertEqual(self.registry.read_bytes(), before)
         self.assertTrue((self.runtime / 'db/testdb/data/testdb').exists())
 
+    def test_demodb_recreation_checks_samples_before_deleting_existing_database(self):
+        for database, recipe in (('demodb', 'db::recreate-demodb'),
+                                 ('testdb', 'db::pwddb-recreate-demodb')):
+            self.run_db('create', database, '--load', 'demodb')
+            for sample_name in ('demodb_schema', 'demodb_objects'):
+                with self.subTest(recipe=recipe, missing=sample_name):
+                    sample = self.install / 'demo' / sample_name
+                    sample.unlink()
+                    paths = [self.registry, self.runtime / f'created-{database}.json',
+                             *sorted((self.runtime / 'db' / database).rglob('*'))]
+                    before = {str(path): (path.stat().st_ino, path.read_bytes())
+                              for path in paths if path.is_file()}
+                    result = subprocess.run(['just', recipe], cwd=self.root, env=self.env,
+                                            capture_output=True, text=True, timeout=15)
+                    self.assertNotEqual(result.returncode, 0)
+                    self.assertIn('sample files; database unchanged', result.stderr)
+                    self.assertEqual({str(path): (path.stat().st_ino, path.read_bytes())
+                                      for path in paths if path.is_file()}, before)
+                    sample.touch()
+
 
 if __name__ == '__main__':
     unittest.main()

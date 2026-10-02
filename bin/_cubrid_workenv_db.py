@@ -37,12 +37,15 @@ def native(*arguments, env=None):
                    env=env, check=True)
 
 
-def create(root, name, template, recreate=False):
-    registry = root / 'databases/databases.txt'
+def check_creation_prerequisites(template):
     if template:
         for part in ('schema', 'objects'):
-            if not (Path(os.environ['CUBRID']) / 'demo' / f'demodb_{part}').is_file():
-                raise ValueError('Missing CUBRID/demo sample files; no database created')
+            sample = Path(os.environ['CUBRID']) / 'demo' / f'demodb_{part}'
+            if not sample.is_file() or not os.access(sample, os.R_OK):
+                raise ValueError('Missing or unreadable CUBRID/demo sample files; database unchanged')
+
+
+def create(root, name, template, recreate=False):
     command = [os.environ.get('CUB_WORKENV_CLI', 'cub-workenv'), 'create-db', name,
                '--worktree', str(root.parent)]
     if recreate:
@@ -169,6 +172,8 @@ def main():
         elif args.action == 'ensure' and name in rows:
             print(f'Database already registered: {name}; unchanged')
         else:
+            if args.action in ('create', 'ensure', 'recreate'):
+                check_creation_prerequisites(args.load)
             if args.action in ('delete', 'recreate'):
                 delete(root, name)
             if args.action in ('create', 'ensure', 'recreate'):

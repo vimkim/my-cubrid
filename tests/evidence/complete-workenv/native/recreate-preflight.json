@@ -1,0 +1,39 @@
+{
+  "root": "/home/vimkim/tmp/cwe-migration-1nvtheys",
+  "tooling": "/home/vimkim/my-cubrid-complete-workenv",
+  "cases": [
+    {
+      "recipe": "db::recreate-demodb",
+      "missing": "demodb_schema",
+      "returncode": 1,
+      "registry_receipts_and_all_internal_db_hashes_unchanged": true,
+      "stdout": "",
+      "stderr": "\"${MY_CUBRID:-$HOME/my-cubrid}/bin/cubrid-workenv-db\" recreate demodb --load demodb\nError: Missing or unreadable CUBRID/demo sample files; database unchanged\nerror: recipe `recreate-demodb` failed on line 162 with exit code 1\n"
+    },
+    {
+      "recipe": "db::recreate-demodb",
+      "missing": "demodb_objects",
+      "returncode": 1,
+      "registry_receipts_and_all_internal_db_hashes_unchanged": true,
+      "stdout": "",
+      "stderr": "\"${MY_CUBRID:-$HOME/my-cubrid}/bin/cubrid-workenv-db\" recreate demodb --load demodb\nError: Missing or unreadable CUBRID/demo sample files; database unchanged\nerror: recipe `recreate-demodb` failed on line 162 with exit code 1\n"
+    },
+    {
+      "recipe": "db::pwddb-recreate-demodb",
+      "missing": "demodb_schema",
+      "returncode": 1,
+      "registry_receipts_and_all_internal_db_hashes_unchanged": true,
+      "stdout": "",
+      "stderr": "\"${MY_CUBRID:-$HOME/my-cubrid}/bin/cubrid-workenv-db\" recreate --load demodb\nError: Missing or unreadable CUBRID/demo sample files; database unchanged\nerror: recipe `pwddb-recreate-demodb` failed on line 64 with exit code 1\n"
+    },
+    {
+      "recipe": "db::pwddb-recreate-demodb",
+      "missing": "demodb_objects",
+      "returncode": 1,
+      "registry_receipts_and_all_internal_db_hashes_unchanged": true,
+      "stdout": "",
+      "stderr": "\"${MY_CUBRID:-$HOME/my-cubrid}/bin/cubrid-workenv-db\" recreate --load demodb\nError: Missing or unreadable CUBRID/demo sample files; database unchanged\nerror: recipe `pwddb-recreate-demodb` failed on line 64 with exit code 1\n"
+    }
+  ],
+  "verdict": "pass"
+}

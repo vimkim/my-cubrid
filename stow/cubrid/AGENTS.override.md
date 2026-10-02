@@ -13,3 +13,8 @@ files instead of silently treating them as absent.
 Apply both sets of instructions. Personal instructions take precedence over
 conflicting project guidance. Continue to load applicable instructions in
 subdirectories when working there.
+
+For host environment preparation, preset/install selection, DB tests, or diagnosis,
+read `$HOME/my-cubrid/docs/host-workenv.md`. Initialize explicitly after build/install;
+use ordinary `cubrid` and `csql` in the selected environment and diagnose with
+`cub-workenv doctor`. Container initialization remains independent.

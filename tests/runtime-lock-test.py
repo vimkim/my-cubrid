@@ -41,6 +41,15 @@ class RuntimeLockTest(unittest.TestCase):
         environment.pop('CUBRID_RUNTIME_LOCK_HELD', None)
         return environment
 
+    def test_installation_use_does_not_require_host_initialization(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            env = self.coordinator_environment(root, guard_status=4)
+            result = subprocess.run([str(COORDINATOR), 'installation-use', '0', '--',
+                'printf', 'container command'], cwd=root, env=env, text=True, capture_output=True)
+            self.assertEqual(result.returncode, 0, result.stderr)
+            self.assertEqual(result.stdout, 'container command')
+
     def test_runtime_action_revalidates_before_running_command(self):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
@@ -283,7 +292,7 @@ class RuntimeLockTest(unittest.TestCase):
                 'delete --expected-name testdb',
             )
 
-    def test_full_install_initializes_guarded_runtime(self):
+    def test_full_install_leaves_initialization_explicit(self):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
             command_log = root / 'commands.log'
@@ -321,10 +330,8 @@ class RuntimeLockTest(unittest.TestCase):
             self.assertEqual(result.returncode, 0, result.stderr)
             commands = command_log.read_text().splitlines()
             self.assertEqual(commands[0], f'cmake --install {root / "build"} --prefix {root / "install"}')
-            self.assertEqual(
-                commands[1],
-                f'guard init --worktree {root} --preset debug',
-            )
+            self.assertEqual(len(commands), 1)
+            self.assertIn('cub-workenv init', result.stdout)
 
     def test_partial_install_does_not_initialize_guarded_runtime(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -361,7 +368,7 @@ class RuntimeLockTest(unittest.TestCase):
                 ['cmake --build --preset debug --target util/install'],
             )
 
-    def test_initialization_failure_fails_after_completed_install(self):
+    def test_install_does_not_call_a_failing_legacy_initializer(self):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
             command_log = root / 'commands.log'
@@ -393,13 +400,12 @@ class RuntimeLockTest(unittest.TestCase):
                 timeout=5,
             )
 
-            self.assertEqual(result.returncode, 4)
+            self.assertEqual(result.returncode, 0)
             self.assertTrue(installed.exists())
             self.assertEqual(
                 command_log.read_text().splitlines(),
                 [
                     f'cmake --install {root / "build"} --prefix {root / "install"}',
-                    f'guard init --worktree {root} --preset debug',
                 ],
             )
 

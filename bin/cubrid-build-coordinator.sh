@@ -23,6 +23,7 @@ Actions:
   install [runtime-wait-seconds]
   install-target <target> [runtime-wait-seconds]
   runtime [lock-wait-seconds] -- command [args...]
+  installation-use [lock-wait-seconds] -- command [args...]
   database-delete [lock-wait-seconds] [--database name]
   installation-delete [lock-wait-seconds]
   stop-and-build
@@ -188,6 +189,23 @@ validate_runtime()
     die_usage "unknown runtime validation requirement: $required_state"
   fi
 
+  if [[ -e "$PWD/.cub-workenv" ]]; then
+    local shell_code workenv_status=0
+    local cli="${CUB_WORKENV_CLI:-cub-workenv}"
+    shell_code="$("$cli" env --worktree "$PWD" --preset "$PRESET_MODE" --install "$CUBRID")" || workenv_status=$?
+    eval "$shell_code" || workenv_status=$?
+    [[ "$workenv_status" == 0 && "${CUBRID_RUNTIME_READY:-0}" == 1 ]] || return 1
+    if [[ "$required_state" == idle ]]; then
+      local processes
+      processes="$(find_active_install_processes)"
+      if [[ -n "$processes" ]]; then
+        report_runtime_busy "$processes"
+        return "$EX_TEMPFAIL"
+      fi
+    fi
+    return 0
+  fi
+
   guard="$(runtime_guard_command)"
   if report="$("$guard" validate --worktree "$PWD" --preset "$PRESET_MODE" \
       "${validation_arguments[@]}" --json)"; then
@@ -215,6 +233,14 @@ require_selected_database()
   local selected
   local selector="${MY_CUBRID:-$HOME/my-cubrid}/bin/my-cubrid-pwddb-getname"
 
+  if [[ -e "$PWD/.cub-workenv" ]]; then
+    if awk -v name="$expected" '$1 == name { found=1 } END { exit !found }' "$CUBRID_DATABASES/databases.txt"; then
+      return 0
+    fi
+    printf 'Database %s is not registered in this work environment; use cub-workenv create-db explicitly.\n' "$expected" >&2
+    return 1
+  fi
+
   selected="$("$selector")"
   if [[ "$selected" != "$expected" ]]; then
     printf 'Refusing fixed database command for %s: manifest-selected database is %s.\n' \
@@ -223,12 +249,11 @@ require_selected_database()
   fi
 }
 
-initialize_guarded_runtime()
+initialization_guidance()
 {
-  local guard
-
-  guard="$(runtime_guard_command)"
-  "$guard" init --worktree "$PWD" --preset "$PRESET_MODE"
+  printf 'Build-only installation is ready. Initialize explicitly when needed:\n'
+  printf '  cub-workenv init --worktree %q --install %q --preset %q\n' "$PWD" "$CUBRID" "$PRESET_MODE"
+  printf 'Existing work environments are preserved; use cub-workenv doctor after rebuilding.\n'
 }
 
 compile_unlocked()
@@ -311,7 +336,7 @@ case "$action" in
     compile_unlocked
     acquire_idle_runtime_lock "$runtime_timeout"
     install_unlocked
-    initialize_guarded_runtime
+    initialization_guidance
     ;;
   install)
     [[ $# -le 1 ]] || die_usage "install accepts at most one timeout"
@@ -319,7 +344,7 @@ case "$action" in
     acquire_build_lock
     acquire_idle_runtime_lock "$runtime_timeout"
     install_unlocked
-    initialize_guarded_runtime
+    initialization_guidance
     ;;
   install-target)
     [[ $# -ge 1 && $# -le 2 ]] || die_usage "install-target requires a target and optional timeout"
@@ -329,7 +354,7 @@ case "$action" in
     acquire_idle_runtime_lock "$runtime_timeout"
     cmake --build --preset "$PRESET_MODE" --target "$target"
     ;;
-  runtime)
+  runtime|installation-use)
     if [[ "${1:-}" == "--" ]]; then
       runtime_timeout="$DEFAULT_RUNTIME_LOCK_TIMEOUT"
     else
@@ -345,7 +370,7 @@ case "$action" in
     [[ "${1:-}" == "--" ]] && shift
     [[ $# -gt 0 ]] || die_usage "runtime requires a command"
     acquire_runtime_lock "$runtime_timeout"
-    validate_runtime_ready
+    if [[ "$action" == runtime ]]; then validate_runtime_ready; fi
     [[ -z "$expected_database" ]] || require_selected_database "$expected_database"
     # Keep the lock in this supervisor, not in the command or its daemon children.
     (
@@ -396,7 +421,7 @@ case "$action" in
     stop_current_runtime
     wait_for_runtime_to_stop
     install_unlocked
-    initialize_guarded_runtime
+    initialization_guidance
     ;;
   *)
     die_usage "unknown action: $action"

@@ -67,7 +67,7 @@ compile: core::compile
 # Install an already-compiled tree when its runtime is idle.
 install: core::install
 
-# Compile, install, ensure the worktree database exists, and capture the complete log.
+# Compile, install, and capture the complete log; initialize databases explicitly.
 build: core::build
 
 configure-build: core::configure core::build

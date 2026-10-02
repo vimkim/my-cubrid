@@ -62,3 +62,10 @@ The private testcase repository is available locally and may be used when the ta
 - For focused personal reproduction, use `cubrid-test-sql-run`, `cubrid-test-medium-run`, or `cubrid-test-shell-run` from `my-cubrid-skills`. These workflows explicitly select the suite's native `cubrid-testkit` runner under containment and prove verdict-bearing artifacts; CTP may supply assets but is not an implicit runner fallback.
 - Keep full QA/organization regressions on the live project or CI workflow appropriate to that suite. A focused shell run does not establish whole-corpus shell equivalence.
 - Use the legacy CTP runner only when the user explicitly requests a separate CTP run or comparison.
+
+## Host work environment selection
+
+For source-worktree initialization, direnv loading, preset/install selection, host
+DB tests, or environment diagnosis, read [host work environments](docs/host-workenv.md).
+It defines the explicit build/install → `cub-workenv init` boundary, ordinary
+`cubrid`/`csql` execution, and the independent container workflow.

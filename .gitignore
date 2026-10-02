@@ -1,3 +1,6 @@
 .ropeproject
 .omc
 /bin/__pycache__/
+
+# Bytecode produced by personal tooling verification.
+/tests/__pycache__/

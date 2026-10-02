@@ -6,6 +6,7 @@ from contextlib import contextmanager
 import fcntl
 import importlib.machinery
 import importlib.util
+import json
 import os
 from pathlib import Path
 import stat
@@ -224,6 +225,33 @@ def lifecycle(
     print(f"Created database: {name}")
 
 
+def workenv_database(arguments, name_only):
+    """Recognize the new selection without imposing legacy single-DB lifecycle."""
+    worktree = next((p for p in (Path.cwd(), *Path.cwd().parents)
+                     if (p / ".cub-workenv").exists()), None)
+    if worktree is None:
+        return False
+    state = json.loads((worktree / ".cub-workenv/state.json").read_text())
+    registry = worktree / ".cub-workenv/databases/databases.txt"
+    if (not isinstance(state, dict) or state.get("schema") != 1 or state.get("status") != "ready" or state.get("worktree") != str(worktree)
+            or state.get("preset") != os.environ.get("PRESET_MODE")
+            or state.get("install") != os.environ.get("CUBRID")
+            or str(registry.parent) != os.environ.get("CUBRID_DATABASES")):
+        raise ValueError("Load this worktree's selected environment; use cub-workenv doctor for incomplete or mismatched state.")
+    if name_only:
+        # New work environments have a conventional default, not an exclusive DB.
+        print("testdb")
+    elif arguments.action == "list":
+        names = dict.fromkeys(line.split()[0] for line in registry.read_text().splitlines()
+                              if line.strip() and not line.lstrip().startswith("#"))
+        print("\n".join(names), end="\n" if names else "")
+    else:
+        raise ValueError("Legacy database lifecycle is not applied to cub-workenv storage. "
+                         "Use cub-workenv create-db for creation; inspect the selected registry and use "
+                         "ordinary cubrid utilities for explicit deletion or manual recreation. Existing files are preserved.")
+    return True
+
+
 def main(*, name_only: bool = False) -> int:
     parser = argparse.ArgumentParser(description="Use the ready worktree manifest's database name and storage.")
     if not name_only:
@@ -232,6 +260,8 @@ def main(*, name_only: bool = False) -> int:
         parser.add_argument("--expected-name")
     arguments = parser.parse_args()
     try:
+        if workenv_database(arguments, name_only):
+            return 0
         if not name_only and arguments.action not in ("ensure", "create", "recreate") and arguments.load:
             raise ValueError("--load is only valid for ensure/create/recreate")
         if not name_only and arguments.expected_name and arguments.action != "delete":

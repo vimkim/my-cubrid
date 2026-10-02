@@ -167,8 +167,9 @@ recipe, native creation/deletion/loading and multi-instance use. The original
 failing recipe was reproduced in `cwe-migration-n1alzfit` without creating a DB.
 Intermediate attempts are retained as failed harness runs, not claimed passes.
 
-Final evidence and review results are recorded in the accompanying verification
-section once the candidate checks and two-axis review have completed.
+Final evidence is recorded below. The [two-axis review](complete-workenv-review.md)
+found one prerequisite-order defect, now fixed and independently rechecked; no
+findings remain.
 
 ## Limits
 
@@ -186,8 +187,8 @@ has that limitation; no protection was silently replaced by a DB lock.
 
 ## Candidate verification
 
-- CLI public suite: **37 passed**. Personal tooling: **39 passed** (15 lock,
-  15 environment/container regression, 7 lifecycle, 1 cross-repo, 1 retirement).
+- CLI public suite: **37 passed**. Personal tooling: **40 passed** (15 lock,
+  15 environment/container regression, 8 lifecycle, 1 cross-repo, 1 retirement).
   Selected-config editor: **17 passed**. Raw outputs are in
   [unit evidence](../tests/evidence/complete-workenv/cli-tests.txt) and sibling logs.
 - [Actual recipe/native flow](../tests/evidence/complete-workenv/native/results.json):
@@ -220,7 +221,8 @@ has that limitation; no protection was silently replaced by a DB lock.
 The initial Podman harness used this host's private TMPDIR, which rootless nomap
 could not traverse. Using `/tmp` and creating the fixture's ordinary log/tmp/var
 mount directories resolved setup without changing global permissions. Earlier
-failed harness attempts remain outside the passing evidence, including corrected
+failed harness attempts are archived separately in
+[trial evidence](../tests/evidence/complete-workenv/trial-evidence.json), including corrected
 INI-spacing/tab-registry assumptions and one trial that edited a running Bash
 supervisor. The native harness now freezes its tooling scripts before execution.
 
@@ -228,3 +230,31 @@ Doctor correctly reported an owned stale `sp_demodb.sock` after standalone work.
 Its read-only artifact comparison passed; exact fixture-only cleanup verified
 no matching process and no binding before unlinking that socket, then doctor
 passed. Production doctor remains read-only, and no user socket was removed.
+
+The review fix is covered by eight lifecycle tests and a
+[native-file preservation probe](../tests/evidence/complete-workenv/native/recreate-preflight.json):
+both demodb recreation recipes refuse before deletion when either required sample
+file is missing; all internal DB file hashes, receipts and registration bytes are
+unchanged. Readability is also checked before deletion.
+
+[Fixture cleanup](../tests/evidence/complete-workenv/cleanup.json) removed only this
+task's nine native fixture roots, three container fixture roots and fifteen recorded
+short-temp directories (about 13.3 GB of disposable copies). Their evidence was
+archived first. No matching accessible native process or Unix binding remained;
+all three named containers were absent. The two unreadable same-user process
+environments belonged to pre-existing sd-pam/SSH processes. No global process or
+IPC cleanup was used. Source/user worktrees, DBs and legacy migration artifacts
+were preserved.
+
+## Local application pending
+
+All three changes must be applied together: `cubrid-workenv` supplies provenance,
+`my-cubrid` supplies the migrated recipes/helpers, and `cubrid-ini-fzf` respects the
+selected config. Candidate code: CLI `ff01097`, tooling `7e2cce4` + review fix
+`fb021d4`, editor `4340da2`. A final evidence commit follows those code commits.
+
+The three main worktrees remain clean at their original bases. Under the user's
+AGENTS.md step 5, one final confirmation is required to rebase these topics onto
+their current local main branches and fast-forward merge them. Shared recipe,
+CLI and editor symlinks will then immediately use these changes. Remote publication
+is a separate operation. Task branches/worktrees remain available until approval.

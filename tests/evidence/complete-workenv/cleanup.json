@@ -1,0 +1,254 @@
+{
+  "owned_processes": [],
+  "inaccessible_same_uid_processes": [
+    "2970",
+    "3369584"
+  ],
+  "unix_bindings": [],
+  "containers_absent": true,
+  "environments": [
+    {
+      "worktree": "/home/vimkim/tmp/cwe-migration-n1alzfit/source",
+      "install": "/home/vimkim/tmp/cwe-migration-n1alzfit/install",
+      "tmp": "/tmp/cwe-1000/8915a8536dc1"
+    },
+    {
+      "worktree": "/home/vimkim/tmp/cwe-migration-9ozs0qbj/source",
+      "install": "/home/vimkim/tmp/cwe-migration-9ozs0qbj/install",
+      "tmp": "/tmp/cwe-1000/bf3ebf3f55b7"
+    },
+    {
+      "worktree": "/home/vimkim/tmp/cwe-migration-nqg9e136/source",
+      "install": "/home/vimkim/tmp/cwe-migration-nqg9e136/install",
+      "tmp": "/tmp/cwe-1000/51fb29d70bc6"
+    },
+    {
+      "worktree": "/home/vimkim/tmp/cwe-migration-lh3vr34w/a",
+      "install": "/home/vimkim/tmp/cwe-migration-lh3vr34w/a-install",
+      "tmp": "/tmp/cwe-1000/99698389342d"
+    },
+    {
+      "worktree": "/home/vimkim/tmp/cwe-migration-lh3vr34w/b",
+      "install": "/home/vimkim/tmp/cwe-migration-lh3vr34w/b-install",
+      "tmp": "/tmp/cwe-1000/24d8745c4560"
+    },
+    {
+      "worktree": "/home/vimkim/tmp/cwe-migration-s3aclmpr/a",
+      "install": "/home/vimkim/tmp/cwe-migration-s3aclmpr/a-install",
+      "tmp": "/tmp/cwe-1000/fb50aed11796"
+    },
+    {
+      "worktree": "/home/vimkim/tmp/cwe-migration-s3aclmpr/b",
+      "install": "/home/vimkim/tmp/cwe-migration-s3aclmpr/b-install",
+      "tmp": "/tmp/cwe-1000/bca70da4d966"
+    },
+    {
+      "worktree": "/home/vimkim/tmp/cwe-migration-hg9k9iq1/a",
+      "install": "/home/vimkim/tmp/cwe-migration-hg9k9iq1/a-install",
+      "tmp": "/tmp/cwe-1000/6c44f6a183f7"
+    },
+    {
+      "worktree": "/home/vimkim/tmp/cwe-migration-hg9k9iq1/b",
+      "install": "/home/vimkim/tmp/cwe-migration-hg9k9iq1/b-install",
+      "tmp": "/tmp/cwe-1000/aa4a4f7f7be6"
+    },
+    {
+      "worktree": "/home/vimkim/tmp/cwe-migration-20m2tq4g/a",
+      "install": "/home/vimkim/tmp/cwe-migration-20m2tq4g/a-install",
+      "tmp": "/tmp/cwe-1000/8167b9281584"
+    },
+    {
+      "worktree": "/home/vimkim/tmp/cwe-migration-20m2tq4g/b",
+      "install": "/home/vimkim/tmp/cwe-migration-20m2tq4g/b-install",
+      "tmp": "/tmp/cwe-1000/cfee92b40439"
+    },
+    {
+      "worktree": "/home/vimkim/tmp/cwe-migration-sgh0qehi/a",
+      "install": "/home/vimkim/tmp/cwe-migration-sgh0qehi/a-install",
+      "tmp": "/tmp/cwe-1000/42670c1b4197"
+    },
+    {
+      "worktree": "/home/vimkim/tmp/cwe-migration-sgh0qehi/b",
+      "install": "/home/vimkim/tmp/cwe-migration-sgh0qehi/b-install",
+      "tmp": "/tmp/cwe-1000/5a2cf661e550"
+    },
+    {
+      "worktree": "/home/vimkim/tmp/cwe-migration-1nvtheys/a",
+      "install": "/home/vimkim/tmp/cwe-migration-1nvtheys/a-install",
+      "tmp": "/tmp/cwe-1000/1aaa92de6646"
+    },
+    {
+      "worktree": "/home/vimkim/tmp/cwe-migration-1nvtheys/b",
+      "install": "/home/vimkim/tmp/cwe-migration-1nvtheys/b-install",
+      "tmp": "/tmp/cwe-1000/5f68138b1e6f"
+    }
+  ],
+  "removed": [
+    {
+      "root": "/home/vimkim/tmp/cwe-migration-n1alzfit",
+      "entries": 172,
+      "regular_file_bytes": 369988704,
+      "inventory_sha256": "d8f62fc00cff39ba63794aaea84f4206fd98edb5627d7b6c3c6f548a5d06ecf3"
+    },
+    {
+      "root": "/home/vimkim/tmp/cwe-migration-9ozs0qbj",
+      "entries": 201,
+      "regular_file_bytes": 638449287,
+      "inventory_sha256": "148db0adde423b6e4eb0a6093a97b7b4c2a04348ceafe2a15ee9d1c3958c5d3a"
+    },
+    {
+      "root": "/home/vimkim/tmp/cwe-migration-nqg9e136",
+      "entries": 201,
+      "regular_file_bytes": 638449567,
+      "inventory_sha256": "148db0adde423b6e4eb0a6093a97b7b4c2a04348ceafe2a15ee9d1c3958c5d3a"
+    },
+    {
+      "root": "/home/vimkim/tmp/cwe-migration-lh3vr34w",
+      "entries": 485,
+      "regular_file_bytes": 2082321713,
+      "inventory_sha256": "eba998fc6b7a161d03d045e086809c4be381caba657b194ce2af6779a1d90bc3"
+    },
+    {
+      "root": "/home/vimkim/tmp/cwe-migration-s3aclmpr",
+      "entries": 583,
+      "regular_file_bytes": 2082758072,
+      "inventory_sha256": "74e503d8fb203aab9ce433366d24c457b41a36484b010ff4acaffc3ad0e3be6b"
+    },
+    {
+      "root": "/home/vimkim/tmp/cwe-migration-hg9k9iq1",
+      "entries": 584,
+      "regular_file_bytes": 2082761045,
+      "inventory_sha256": "a6809956214913d710fdfcd205ab9c559dca985c506f3cf064ae3455575520d7"
+    },
+    {
+      "root": "/home/vimkim/tmp/cwe-migration-20m2tq4g",
+      "entries": 576,
+      "regular_file_bytes": 1814330800,
+      "inventory_sha256": "cff86606d0e243e6075892191cb276c1a3927294da8b333a8c48feccab4fe6d1"
+    },
+    {
+      "root": "/home/vimkim/tmp/cwe-migration-sgh0qehi",
+      "entries": 581,
+      "regular_file_bytes": 1814427613,
+      "inventory_sha256": "197c13776d7ead01d50aaf25e16dc1d51260b1d4a1aa7414fa934722d151b24f"
+    },
+    {
+      "root": "/home/vimkim/tmp/cwe-migration-1nvtheys",
+      "entries": 625,
+      "regular_file_bytes": 1814636759,
+      "inventory_sha256": "87bbe19f3d88684e4f559b80092236c3a98241dce9becdaca9222bfcd96b6b10"
+    },
+    {
+      "root": "/home/vimkim/tmp/cwe-container-yjl_f86y",
+      "entries": 10,
+      "regular_file_bytes": 56533,
+      "inventory_sha256": "de7350acc58eaa58e394b33eb469e03e934bd846e7fc6628a020aa0232a2bd45"
+    },
+    {
+      "root": "/tmp/cwe-container-0pr6iokq",
+      "entries": 10,
+      "regular_file_bytes": 56502,
+      "inventory_sha256": "de7350acc58eaa58e394b33eb469e03e934bd846e7fc6628a020aa0232a2bd45"
+    },
+    {
+      "root": "/tmp/cwe-container-cj_98kb0",
+      "entries": 16,
+      "regular_file_bytes": 57667,
+      "inventory_sha256": "06dc410465fcfe255e681a019c36494455be16add45a21bf1e5ee18c6b3e0a6d"
+    },
+    {
+      "root": "/tmp/cwe-1000/8915a8536dc1",
+      "entries": 0,
+      "regular_file_bytes": 0,
+      "inventory_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "root": "/tmp/cwe-1000/bf3ebf3f55b7",
+      "entries": 1,
+      "regular_file_bytes": 0,
+      "inventory_sha256": "4ab0200ac360f38435168c0a0518aaa9ff4dbe42a7333c164e47d05a8571389b"
+    },
+    {
+      "root": "/tmp/cwe-1000/51fb29d70bc6",
+      "entries": 1,
+      "regular_file_bytes": 0,
+      "inventory_sha256": "4ab0200ac360f38435168c0a0518aaa9ff4dbe42a7333c164e47d05a8571389b"
+    },
+    {
+      "root": "/tmp/cwe-1000/99698389342d",
+      "entries": 2,
+      "regular_file_bytes": 0,
+      "inventory_sha256": "bb7a68d761396247f402cf70f0ccd513ddc272c317537cee89725e18188df1fe"
+    },
+    {
+      "root": "/tmp/cwe-1000/24d8745c4560",
+      "entries": 1,
+      "regular_file_bytes": 0,
+      "inventory_sha256": "4ab0200ac360f38435168c0a0518aaa9ff4dbe42a7333c164e47d05a8571389b"
+    },
+    {
+      "root": "/tmp/cwe-1000/fb50aed11796",
+      "entries": 2,
+      "regular_file_bytes": 0,
+      "inventory_sha256": "bb7a68d761396247f402cf70f0ccd513ddc272c317537cee89725e18188df1fe"
+    },
+    {
+      "root": "/tmp/cwe-1000/bca70da4d966",
+      "entries": 1,
+      "regular_file_bytes": 0,
+      "inventory_sha256": "4ab0200ac360f38435168c0a0518aaa9ff4dbe42a7333c164e47d05a8571389b"
+    },
+    {
+      "root": "/tmp/cwe-1000/6c44f6a183f7",
+      "entries": 2,
+      "regular_file_bytes": 0,
+      "inventory_sha256": "bb7a68d761396247f402cf70f0ccd513ddc272c317537cee89725e18188df1fe"
+    },
+    {
+      "root": "/tmp/cwe-1000/aa4a4f7f7be6",
+      "entries": 1,
+      "regular_file_bytes": 0,
+      "inventory_sha256": "4ab0200ac360f38435168c0a0518aaa9ff4dbe42a7333c164e47d05a8571389b"
+    },
+    {
+      "root": "/tmp/cwe-1000/8167b9281584",
+      "entries": 1,
+      "regular_file_bytes": 0,
+      "inventory_sha256": "4ab0200ac360f38435168c0a0518aaa9ff4dbe42a7333c164e47d05a8571389b"
+    },
+    {
+      "root": "/tmp/cwe-1000/cfee92b40439",
+      "entries": 1,
+      "regular_file_bytes": 0,
+      "inventory_sha256": "4ab0200ac360f38435168c0a0518aaa9ff4dbe42a7333c164e47d05a8571389b"
+    },
+    {
+      "root": "/tmp/cwe-1000/42670c1b4197",
+      "entries": 1,
+      "regular_file_bytes": 0,
+      "inventory_sha256": "4ab0200ac360f38435168c0a0518aaa9ff4dbe42a7333c164e47d05a8571389b"
+    },
+    {
+      "root": "/tmp/cwe-1000/5a2cf661e550",
+      "entries": 1,
+      "regular_file_bytes": 0,
+      "inventory_sha256": "4ab0200ac360f38435168c0a0518aaa9ff4dbe42a7333c164e47d05a8571389b"
+    },
+    {
+      "root": "/tmp/cwe-1000/1aaa92de6646",
+      "entries": 1,
+      "regular_file_bytes": 0,
+      "inventory_sha256": "4ab0200ac360f38435168c0a0518aaa9ff4dbe42a7333c164e47d05a8571389b"
+    },
+    {
+      "root": "/tmp/cwe-1000/5f68138b1e6f",
+      "entries": 1,
+      "regular_file_bytes": 0,
+      "inventory_sha256": "4ab0200ac360f38435168c0a0518aaa9ff4dbe42a7333c164e47d05a8571389b"
+    }
+  ],
+  "remaining": [],
+  "evidence_archive": "trial-evidence.json",
+  "inaccessible_process_explanation": "PID 2970 is sd-pam started 2026-09-17; PID 3369584 is the SSH session started 2026-10-02 13:08:38, before these fixtures. Neither is a task native runtime.",
+  "inaccessible_process_ps": "    PID                  STARTED COMMAND         COMMAND\n   2970 Thu Sep 17 15:19:10 2026 (sd-pam)        (sd-pam)\n3369584 Fri Oct  2 13:08:38 2026 sshd            sshd: vimkim@pts/0\n"
+}

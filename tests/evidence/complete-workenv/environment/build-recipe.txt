@@ -1,0 +1,12 @@
+# Compile, install, and capture the complete log; initialize databases explicitly.
+[working-directory(justfile_directory())]
+build: ensure-build-jdk
+    #!/usr/bin/env bash
+    set -euo pipefail
+    build_dir="$(direnv exec . bash -c 'echo "${CUBRID_BUILD_DIR:?set PRESET_MODE / allow direnv first}"')"
+    mkdir -p "$build_dir"
+    log_file="$build_dir/build.log"
+    echo "Logging build output to: $log_file"
+    {
+      direnv exec . "${MY_CUBRID:-$HOME/my-cubrid}/bin/cubrid-build-coordinator.sh" build 0
+    } 2>&1 | tee "$log_file"

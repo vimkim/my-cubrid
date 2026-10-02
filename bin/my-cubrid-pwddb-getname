@@ -1,5 +1,3 @@
-#!/usr/bin/env python3
-"""Print the ready worktree manifest's database name."""
-from _cubrid_database import main
-
-raise SystemExit(main(name_only=True))
+#!/usr/bin/env bash
+# Compatibility spelling for the conventional default, never a legacy manifest.
+exec "$(dirname -- "$0")/cubrid-workenv-db" name "$@"

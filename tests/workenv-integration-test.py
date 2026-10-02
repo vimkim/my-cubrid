@@ -47,6 +47,12 @@ class WorkenvIntegration(unittest.TestCase):
                                        cwd=root, env=env, capture_output=True, text=True)
                 self.assertEqual(named.returncode, 0, named.stderr)
                 self.assertEqual(named.stdout, 'testdb\n')
+                switched = subprocess.run(['bash', '-c',
+                    'source "$1" -w "$2" -p debug && printf "%s|%s" "$PRESET_MODE" "$CUBRID_DATABASES"',
+                    'bash', str(REPO / 'bin/cub-env.sh'), str(root)], cwd=root,
+                    env=dict(env, PRESET_MODE='previous-preset'), capture_output=True, text=True)
+                self.assertEqual(switched.returncode, 0, switched.stderr)
+                self.assertEqual(switched.stdout, 'debug|' + str(registry.parent))
                 commands = root / 'commands'
                 commands.mkdir()
                 log = root / 'build-stop.log'
@@ -59,12 +65,12 @@ class WorkenvIntegration(unittest.TestCase):
                 self.assertEqual(rebuilt.returncode, 0, rebuilt.stderr)
                 self.assertEqual((root / '.cub-workenv/state.json').read_bytes(), before)
                 self.assertEqual(log.read_text().splitlines(), ['cmake --build --preset debug',
-                    'cubrid service stop', 'cubrid broker stop', f'cmake --install {root / "build"} --prefix {install}'])
+                    'cubrid server status', 'cubrid service stop', 'cubrid broker stop', f'cmake --install {root / "build"} --prefix {install}'])
 
                 refused = subprocess.run([str(REPO / 'bin/my-cubrid-pwddb'), 'delete'],
                                          cwd=root, env=env, capture_output=True, text=True)
                 self.assertNotEqual(refused.returncode, 0)
-                self.assertIn('Existing files are preserved', refused.stderr)
+                self.assertIn('No creation receipt', refused.stderr)
                 self.assertTrue(registry.exists())
                 # Public just recipes must edit/read the selected configuration,
                 # leaving the installation's default configuration untouched.

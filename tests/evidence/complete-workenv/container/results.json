@@ -1,0 +1,38 @@
+{
+  "root": "/tmp/cwe-container-cj_98kb0",
+  "container": "cwe-migration-cj_98kb0",
+  "steps": [
+    {
+      "label": "install-blocked-after-test",
+      "command": [
+        "/home/vimkim/my-cubrid-complete-workenv/bin/cubrid-build-coordinator.sh",
+        "install",
+        "0"
+      ],
+      "returncode": 75
+    },
+    {
+      "label": "delete-blocked-after-test",
+      "command": [
+        "/home/vimkim/my-cubrid-complete-workenv/bin/cubrid-build-coordinator.sh",
+        "installation-delete",
+        "0"
+      ],
+      "returncode": 75
+    },
+    {
+      "label": "lock-released-after-cleanup",
+      "command": [
+        "/home/vimkim/my-cubrid-complete-workenv/bin/cubrid-build-coordinator.sh",
+        "installation-use",
+        "0",
+        "--",
+        "true"
+      ],
+      "returncode": 0
+    }
+  ],
+  "signalled_supervisor": 3961396,
+  "recipe_exit_after_signal": 130,
+  "verdict": "pass"
+}

@@ -18,7 +18,7 @@ server-interactive:
     #!/usr/bin/env bash
     set -euo pipefail
     exec "${MY_CUBRID:-$HOME/my-cubrid}/bin/cubrid-build-coordinator.sh" runtime 300 --database testdb -- bash -euc '
-      pid="$($HOME/my-cubrid/bin/my-cubrid-process-select server --interactive)"
+      pid="$(${MY_CUBRID:-$HOME/my-cubrid}/bin/my-cubrid-process-select server --interactive)"
       exec cgdb -p "$pid" "$CUBRID_BUILD_DIR/bin/cub_server"
     '
 
@@ -28,7 +28,7 @@ server:
     #!/usr/bin/env bash
     set -euo pipefail
     exec "${MY_CUBRID:-$HOME/my-cubrid}/bin/cubrid-build-coordinator.sh" runtime 300 --database testdb -- bash -euc '
-      pid="$($HOME/my-cubrid/bin/my-cubrid-process-select server)"
+      pid="$(${MY_CUBRID:-$HOME/my-cubrid}/bin/my-cubrid-process-select server)"
       exec cgdb -p "$pid" "$CUBRID_BUILD_DIR/bin/cub_server"
     '
 
@@ -61,7 +61,7 @@ attach-unloaddb:
     #!/usr/bin/env bash
     set -euo pipefail
     exec "${MY_CUBRID:-$HOME/my-cubrid}/bin/cubrid-build-coordinator.sh" runtime 300 --database testdb -- bash -euc '
-      pid="$($HOME/my-cubrid/bin/my-cubrid-process-select unloaddb --interactive)"
+      pid="$(${MY_CUBRID:-$HOME/my-cubrid}/bin/my-cubrid-process-select unloaddb --interactive)"
       exec cgdb -p "$pid" "$CUBRID_BUILD_DIR/bin/cubrid"
     '
 

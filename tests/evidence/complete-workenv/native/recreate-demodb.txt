@@ -1,0 +1,12 @@
+"${MY_CUBRID:-$HOME/my-cubrid}/bin/cubrid-workenv-db" recreate demodb --load demodb
+Created database demodb.
+
+Start schema loading.
+Total       63 statements executed.
+Schema loading from /home/vimkim/tmp/cwe-migration-1nvtheys/a-install/demo/demodb_schema finished.
+Statistics for Catalog classes have been updated.
+
+
+Start object loading.
+Total 19202 object(s) inserted, 0 object(s) failed.
+Deleted demodb; any remaining files are preserved at /home/vimkim/tmp/cwe-migration-1nvtheys/a/.cub-workenv/db/demodb

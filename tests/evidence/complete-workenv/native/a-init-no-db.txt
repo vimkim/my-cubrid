@@ -1,0 +1,2 @@
+Initialized /home/vimkim/tmp/cwe-migration-1nvtheys/a with /home/vimkim/tmp/cwe-migration-1nvtheys/a-install (preset debug_gcc).
+Source /home/vimkim/tmp/cwe-migration-1nvtheys/a/.cub-workenv/env.sh in bash; use ordinary cubrid and csql commands.

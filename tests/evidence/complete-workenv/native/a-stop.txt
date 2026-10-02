@@ -1,0 +1,6 @@
+"${MY_CUBRID:-$HOME/my-cubrid}/bin/cubrid-build-coordinator.sh" runtime 300 --database testdb -- cubrid server stop testdb
+@ cubrid server stop: testdb
+
+Server testdb notified of shutdown.
+This may take several minutes. Please wait.
+++ cubrid server stop: success

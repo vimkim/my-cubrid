@@ -1,67 +1,44 @@
 # Personal CUBRID tooling vocabulary
 
-See [ADR-0001](docs/adr/0001-enforce-runtime-guard-in-managed-workflow.md) for the
-explicit-initialization scope revision. Manifest-specific terms below describe
-the retained legacy guard; [host work environments](docs/host-workenv.md) describes
-the new selection and execution boundary.
+Host preparation and selection follow [host work environments](docs/host-workenv.md)
+and [ADR-0002](docs/adr/0002-workenv-authority.md). Legacy terms in dated evidence
+refer to the retired runtime engine.
 
 ## Language
 
 **Managed CUBRID workflow**:
-The supported paths for building, installing, and operating a CUBRID worktree.
-Host database use follows explicit environment initialization; build/install and
-container preparation have independent readiness boundaries. Ordinary native
-commands in a selected prepared host environment are supported.
-_Avoid_: Fully enforced runtime, impossible-to-bypass runtime
+The supported build, installation and native-operation paths for a source worktree.
 
-**Managed runtime action**:
-A coordinated host action that uses the selected database environment, storage,
-or live CUBRID processes. Its environment selection is checked before execution.
-Container use of an installation is coordinated independently of host database
-readiness. Work on offline artifacts such as core files and traces is outside
-this runtime boundary.
-
-**Persistent managed test harness**:
-A test harness that continues using the selected installation after its test
-finishes, such as an inspection container. Its coordinator invocation remains
-foregrounded and holds the runtime lock until the harness is stopped.
+**Work environment**:
+The host databases and runtime settings associated with one source worktree and
+one selected installation/preset.
 
 **Build-only worktree**:
-A worktree with the environment needed to build and install CUBRID, but without
-a prepared host database connection environment. Installing binaries alone does
-not initialize that host environment. A container may use the installation with
-its own independently prepared database environment.
+A worktree prepared for compilation/installation whose host database environment
+has not been explicitly initialized.
 
-**Review worktree**:
-A disposable local checkout dedicated to inspecting one pull request. Multiple review worktrees may coexist for the same ticket when they belong to different pull requests.
+**Persistent managed test harness**:
+A harness that retains use of an installation after the test finishes, until
+explicit owned cleanup completes.
 
-**Review-request picker**:
-An interactive choice among pull requests that directly request review from the configured reviewer and belong to the normal tracked pull-request population.
-
-**Preset takeover**:
-The transition of a worktree runtime to another preset installation while retaining its stable identity and database selection. It is permitted only when the previous preset has no live or unknown runtime resources.
-
-**Fresh runtime database**:
-A newly created private database selected for a worktree runtime without adopting preexisting database storage into it.
-_Avoid_: Migrated database, adopted database
-
-**Binary-independent database deletion**:
-Removal of the manifest-selected database when its selected CUBRID executable
-is unavailable. It applies only to fresh guard-created storage, is permitted
-only when ownership and an idle runtime are proven, and never substitutes for
-a CUBRID utility that was available but failed.
-
-**Stale runtime socket**:
-An owner-controlled Unix socket pathname inside a private runtime directory with no live kernel endpoint. Complete observation treats it as idle retained filesystem state, not as live ownership.
+**Creation provenance**:
+Evidence that a particular physical database was newly created by the selected
+work environment, rather than reused or adopted from existing storage.
 
 **pwddb**:
-The database selected by the current worktree runtime's ready manifest. Its name and private storage remain independent of the invocation directory and branch.
-
-**Database adoption**:
-The explicit association of an existing private database with a worktree runtime after exclusive registry and storage ownership has been proven. Adoption preserves its name and locations.
+A compatibility name for the conventional `testdb` default. It does not restrict
+other registered database names.
 
 **demodb template**:
-The sample dataset explicitly selected to populate the manifest-selected database. Selecting the template does not change the database name.
+The sample dataset explicitly selected for loading into a newly created database.
+
+**Review worktree**:
+A disposable local checkout dedicated to inspecting one pull request. Multiple
+review worktrees may coexist for the same ticket when their PRs differ.
+
+**Review-request picker**:
+An interactive choice among pull requests directly requesting the configured
+reviewer and belonging to the normal tracked pull-request population.
 
 **PR testcase branch**:
 The published `tc/pr-N` branch associated with CUBRID pull request N in each

@@ -1,0 +1,8 @@
+
+=== <Result of SELECT Command in Line 1> ===
+
+           id
+=============
+          263
+
+1 row selected. (0.002454 sec) Committed. (0.000007 sec)

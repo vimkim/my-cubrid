@@ -1,0 +1,548 @@
+{
+  "root": "/home/vimkim/tmp/cwe-migration-1nvtheys",
+  "source_install": "/home/vimkim/.cub/install/CBRD-27443-fd-clean/debug_gcc",
+  "steps": [
+    {
+      "label": "a-init-no-db",
+      "command": [
+        "/home/vimkim/gh/cubrid-workenv-complete-workenv/bin/cub-workenv",
+        "init",
+        "--no-db",
+        "--worktree",
+        "/home/vimkim/tmp/cwe-migration-1nvtheys/a",
+        "--install",
+        "/home/vimkim/tmp/cwe-migration-1nvtheys/a-install",
+        "--preset",
+        "debug_gcc",
+        "--state-home",
+        "/home/vimkim/tmp/cwe-migration-1nvtheys/host",
+        "--port-start",
+        "51000",
+        "--port-end",
+        "51999",
+        "--java-home",
+        "/home/vimkim/.local/share/mise/installs/java/temurin-8.0.462+8"
+      ],
+      "returncode": 0,
+      "seconds": 0.11415654211305082
+    },
+    {
+      "label": "create-testdb",
+      "command": [
+        "just",
+        "db::create-testdb"
+      ],
+      "returncode": 0,
+      "seconds": 3.321351896971464
+    },
+    {
+      "label": "duplicate-create",
+      "command": [
+        "just",
+        "db::create-testdb"
+      ],
+      "returncode": 1,
+      "seconds": 0.31560754985548556
+    },
+    {
+      "label": "standalone-sql",
+      "command": [
+        "csql",
+        "-S",
+        "-u",
+        "dba",
+        "-c",
+        "create table marker (id integer); insert into marker values (262); commit;",
+        "testdb"
+      ],
+      "returncode": 0,
+      "seconds": 2.2184922921005636
+    },
+    {
+      "label": "create-extra",
+      "command": [
+        "/home/vimkim/gh/cubrid-workenv-complete-workenv/bin/cub-workenv",
+        "create-db",
+        "extra"
+      ],
+      "returncode": 0,
+      "seconds": 3.7215451530646533
+    },
+    {
+      "label": "create-external",
+      "command": [
+        "/home/vimkim/gh/cubrid-workenv-complete-workenv/bin/cub-workenv",
+        "create-db",
+        "outside",
+        "--path",
+        "/home/vimkim/tmp/cwe-migration-1nvtheys/external-db"
+      ],
+      "returncode": 0,
+      "seconds": 3.170752900885418
+    },
+    {
+      "label": "reject-external-delete",
+      "command": [
+        "just",
+        "db::delete",
+        "outside"
+      ],
+      "returncode": 1,
+      "seconds": 0.2153572898823768
+    },
+    {
+      "label": "reject-mixed-volumes",
+      "command": [
+        "just",
+        "db::delete-testdb"
+      ],
+      "returncode": 1,
+      "seconds": 0.2654801900498569
+    },
+    {
+      "label": "start-testdb",
+      "command": [
+        "just",
+        "db::start-testdb"
+      ],
+      "returncode": 0,
+      "seconds": 3.2715588349383324
+    },
+    {
+      "label": "reject-running-delete",
+      "command": [
+        "just",
+        "db::delete-testdb"
+      ],
+      "returncode": 1,
+      "seconds": 0.36628225701861084
+    },
+    {
+      "label": "health-after-refused-delete",
+      "command": [
+        "csql",
+        "-C",
+        "-u",
+        "dba",
+        "-c",
+        "select id from marker;",
+        "testdb"
+      ],
+      "returncode": 0,
+      "seconds": 0.06453944183886051
+    },
+    {
+      "label": "busy-install",
+      "command": [
+        "/home/vimkim/tmp/cwe-migration-1nvtheys/tooling/bin/cubrid-build-coordinator.sh",
+        "install",
+        "0"
+      ],
+      "returncode": 75,
+      "seconds": 0.2146393279545009
+    },
+    {
+      "label": "select-server",
+      "command": [
+        "/home/vimkim/tmp/cwe-migration-1nvtheys/tooling/bin/my-cubrid-process-select",
+        "server"
+      ],
+      "returncode": 0,
+      "seconds": 0.16439843806438148
+    },
+    {
+      "label": "b-init-no-db",
+      "command": [
+        "/home/vimkim/gh/cubrid-workenv-complete-workenv/bin/cub-workenv",
+        "init",
+        "--no-db",
+        "--worktree",
+        "/home/vimkim/tmp/cwe-migration-1nvtheys/b",
+        "--install",
+        "/home/vimkim/tmp/cwe-migration-1nvtheys/b-install",
+        "--preset",
+        "debug_gcc",
+        "--state-home",
+        "/home/vimkim/tmp/cwe-migration-1nvtheys/host",
+        "--port-start",
+        "51000",
+        "--port-end",
+        "51999",
+        "--java-home",
+        "/home/vimkim/.local/share/mise/installs/java/temurin-8.0.462+8"
+      ],
+      "returncode": 0,
+      "seconds": 0.11435759300366044
+    },
+    {
+      "label": "b-create",
+      "command": [
+        "just",
+        "db::create-testdb"
+      ],
+      "returncode": 0,
+      "seconds": 4.374235766939819
+    },
+    {
+      "label": "b-start",
+      "command": [
+        "just",
+        "db::start-testdb"
+      ],
+      "returncode": 0,
+      "seconds": 3.2709158160723746
+    },
+    {
+      "label": "b-sql",
+      "command": [
+        "csql",
+        "-C",
+        "-u",
+        "dba",
+        "-c",
+        "create table marker (id integer); insert into marker values (263); commit;",
+        "testdb"
+      ],
+      "returncode": 0,
+      "seconds": 0.469014008063823
+    },
+    {
+      "label": "a-stop",
+      "command": [
+        "just",
+        "db::stop-testdb"
+      ],
+      "returncode": 0,
+      "seconds": 1.2172054601833224
+    },
+    {
+      "label": "b-unaffected",
+      "command": [
+        "csql",
+        "-C",
+        "-u",
+        "dba",
+        "-c",
+        "select id from marker;",
+        "testdb"
+      ],
+      "returncode": 0,
+      "seconds": 0.03203038894571364
+    },
+    {
+      "label": "create-demodb",
+      "command": [
+        "just",
+        "db::create-demodb"
+      ],
+      "returncode": 0,
+      "seconds": 11.589639405952767
+    },
+    {
+      "label": "demodb-loaded",
+      "command": [
+        "csql",
+        "-S",
+        "-u",
+        "dba",
+        "-c",
+        "select count(*) from athlete;",
+        "demodb"
+      ],
+      "returncode": 0,
+      "seconds": 2.2188636909704655
+    },
+    {
+      "label": "recreate-demodb",
+      "command": [
+        "just",
+        "db::recreate-demodb"
+      ],
+      "returncode": 0,
+      "seconds": 10.136588427005336
+    },
+    {
+      "label": "demodb-reloaded",
+      "command": [
+        "csql",
+        "-S",
+        "-u",
+        "dba",
+        "-c",
+        "select count(*) from athlete;",
+        "demodb"
+      ],
+      "returncode": 0,
+      "seconds": 1.2671872349455953
+    },
+    {
+      "label": "a-restart",
+      "command": [
+        "just",
+        "db::start-testdb"
+      ],
+      "returncode": 0,
+      "seconds": 2.2697469228878617
+    },
+    {
+      "label": "stop-recreate-start",
+      "command": [
+        "just",
+        "db::stop-recreate-start-testdb"
+      ],
+      "returncode": 0,
+      "seconds": 8.32938436511904
+    },
+    {
+      "label": "fresh-recreated",
+      "command": [
+        "csql",
+        "-C",
+        "-u",
+        "dba",
+        "-c",
+        "create table marker (id integer); insert into marker values (264); commit;",
+        "testdb"
+      ],
+      "returncode": 0,
+      "seconds": 0.17422669799998403
+    },
+    {
+      "label": "b-unaffected-after-recreate",
+      "command": [
+        "csql",
+        "-C",
+        "-u",
+        "dba",
+        "-c",
+        "select id from marker;",
+        "testdb"
+      ],
+      "returncode": 0,
+      "seconds": 0.1170838950201869
+    },
+    {
+      "label": "reentry-0",
+      "command": [
+        "bash",
+        "-c",
+        "eval \"$(\"$CUB_WORKENV_CLI\" env --worktree \"$PWD\" --preset \"$PRESET_MODE\" --install \"$CUBRID\")\" && csql -C -u dba -c \"select id from marker;\" testdb"
+      ],
+      "returncode": 0,
+      "seconds": 0.2731023591477424
+    },
+    {
+      "label": "reentry-1",
+      "command": [
+        "bash",
+        "-c",
+        "eval \"$(\"$CUB_WORKENV_CLI\" env --worktree \"$PWD\" --preset \"$PRESET_MODE\" --install \"$CUBRID\")\" && csql -C -u dba -c \"select id from marker;\" testdb"
+      ],
+      "returncode": 0,
+      "seconds": 0.27183465799316764
+    },
+    {
+      "label": "reentry-2",
+      "command": [
+        "bash",
+        "-c",
+        "eval \"$(\"$CUB_WORKENV_CLI\" env --worktree \"$PWD\" --preset \"$PRESET_MODE\" --install \"$CUBRID\")\" && csql -C -u dba -c \"select id from marker;\" testdb"
+      ],
+      "returncode": 0,
+      "seconds": 0.37229726603254676
+    },
+    {
+      "label": "a-to-b",
+      "command": [
+        "bash",
+        "-c",
+        "source \"$1/.cub-workenv/env.sh\" && csql -C -u dba -c \"select id from marker;\" testdb; source \"$2/.cub-workenv/env.sh\" && csql -C -u dba -c \"select id from marker;\" testdb",
+        "bash",
+        "/home/vimkim/tmp/cwe-migration-1nvtheys/a",
+        "/home/vimkim/tmp/cwe-migration-1nvtheys/b"
+      ],
+      "returncode": 0,
+      "seconds": 0.33411227306351066
+    },
+    {
+      "label": "restore-allocated-port",
+      "command": [
+        "just",
+        "db::set-port"
+      ],
+      "returncode": 0,
+      "seconds": 0.7480871800798923
+    },
+    {
+      "label": "doctor-live",
+      "command": [
+        "/home/vimkim/gh/cubrid-workenv-complete-workenv/bin/cub-workenv",
+        "doctor",
+        "--worktree",
+        "/home/vimkim/tmp/cwe-migration-1nvtheys/a"
+      ],
+      "returncode": 1,
+      "seconds": 0.38909393385984004
+    },
+    {
+      "label": "doctor-after-owned-socket-cleanup",
+      "command": [
+        "/home/vimkim/gh/cubrid-workenv-complete-workenv/bin/cub-workenv",
+        "doctor",
+        "--worktree",
+        "/home/vimkim/tmp/cwe-migration-1nvtheys/a"
+      ],
+      "returncode": 0,
+      "seconds": 0.31615823693573475
+    },
+    {
+      "label": "delete-cli-created-extra",
+      "command": [
+        "just",
+        "db::delete",
+        "extra"
+      ],
+      "returncode": 0,
+      "seconds": 0.737081510014832
+    },
+    {
+      "label": "configure-build-fixture",
+      "command": [
+        "/home/vimkim/tmp/cwe-migration-1nvtheys/tooling/bin/cubrid-build-coordinator.sh",
+        "configure"
+      ],
+      "returncode": 0,
+      "seconds": 0.4735477468930185
+    },
+    {
+      "label": "explicit-stop-and-build",
+      "command": [
+        "/home/vimkim/tmp/cwe-migration-1nvtheys/tooling/bin/cubrid-build-coordinator.sh",
+        "stop-and-build"
+      ],
+      "returncode": 0,
+      "seconds": 2.252076730132103
+    },
+    {
+      "label": "restart-after-build",
+      "command": [
+        "just",
+        "db::start-testdb"
+      ],
+      "returncode": 0,
+      "seconds": 3.523828796809539
+    },
+    {
+      "label": "data-preserved-after-stop-build",
+      "command": [
+        "csql",
+        "-C",
+        "-u",
+        "dba",
+        "-c",
+        "select id from marker;",
+        "testdb"
+      ],
+      "returncode": 0,
+      "seconds": 0.12511801905930042
+    },
+    {
+      "label": "b-unaffected-after-stop-build",
+      "command": [
+        "csql",
+        "-C",
+        "-u",
+        "dba",
+        "-c",
+        "select id from marker;",
+        "testdb"
+      ],
+      "returncode": 0,
+      "seconds": 0.17501790705136955
+    }
+  ],
+  "tooling_head": "74a13cf2508e1da8c528b0c0f1723566ab8a853d",
+  "source_binary_sha256": "dad34727e8d22ba16b245e39a53c041c2236b9d72e8230c1247793e63ad09cf4",
+  "tooling_files_sha256": {
+    "bin/check-server-for-rdbms.sh": "7f333d84a56e14f38b76717c9c50cd890191d64a2d094b4b9dbe7cb2273b931c",
+    "bin/cleanup-gone-worktrees.sh": "05def0054a470fa9883132a369609df53c45b30dc08a0fdc9c362f314d414ee7",
+    "bin/count-open-files-per-container.sh": "8aa1d525a7c2ce2577b2e69a6a2f39a9237e5b45708c323bfe340c2fc1cd4238",
+    "bin/csql.sh": "734b6e66544100ae8e12fc87fc3ca4703ce3ea9bba00c8114607242cbfd2f648",
+    "bin/ctp-prepare.sh": "695aa6f96c1f91c52fc69ffa00ae893e501f07139e21c46f215282d25a3bca0a",
+    "bin/cub-auto": "4a6f81d5294649963cf176ff6edd987b9a2f8f95e843af901ff8bfce923a65eb",
+    "bin/cub-env.nu": "fafa8b6da239d5a743344348a8ed9cbc7f88e0c6e885b9e90d4b373b2ed6ebc1",
+    "bin/cub-env.sh": "ac04faebac31dd67d67326080a6263c5d712337743f6b4119a50518ed0d74e39",
+    "bin/cub.sh": "21b9f542a62019d16b620ca1a49ae443493ca7f009f21fea7a1dd00e320e6276",
+    "bin/cubrid-binary-source-dir": "bd426c777b68de2bc8bf45159fde365d1a710758efe1d5a17c70a6828ddb3b0b",
+    "bin/cubrid-build-coordinator.sh": "612d3c5646c5592c46445b8911d01cac5eb4b41dbb6c7e3e78cafb9f44da1fe8",
+    "bin/cubrid-dev2-add-reviewers.py": "0461d8302ad3a72327896e3b500c8690458d8dc45dc2091fa3c90d1ead02ddff",
+    "bin/cubrid-dir-picker.sh": "937f59cea2a5fe746314e5eeaa50bffd6c49b06c08bbaf6b3828c4eb6abaa046",
+    "bin/cubrid-feature-tc-sync-check": "c6596ac280893b3cc9b285c99f2db736f14363ef91bfde41e253ae53951b4470",
+    "bin/cubrid-feature-tc-sync-check-oos": "7af9c276157460ce9bb762fc6b5cd6b4e6cfbbb343357e903c5d8ef5f70b6e3a",
+    "bin/cubrid-format-codestyle-stdin.sh": "aa88572fb76b1a6b5ea7071c700e0b2c8a363e121ad157836d1e38044072e420",
+    "bin/cubrid-format-codestyle.sh": "51b67987006d3172dd2ca79766da27f8386b480f7a19247bf4238909ead3addc",
+    "bin/cubrid-format-diff.sh": "b1066ef26b886cfe7b557dd48491c1c0d2dac97c43b95a0cc447792198205def",
+    "bin/cubrid-format-gitchanged.sh": "6b70b9a022b1728123758ce2d5f9cb445b364aaad1e1cb0c16e44f8041d1c7c5",
+    "bin/cubrid-format-pr-diff.sh": "bfa3f549e2b3bcf708209c15c11c804690b1627d22b82f991527b85f0580bc91",
+    "bin/cubrid-oos-isolation-test.sh": "32b903a521a316e2f2871e1e586e6d4804a5c9e25b42d6707b137e3007b925be",
+    "bin/cubrid-podman-test.sh": "328e3115e43db93574aa7c6016ac8c36fc43ee59b4997028dbe98504263d1bbb",
+    "bin/cubrid-pr-latest-ci-run": "bb460d5b6ad06f5bedf30049e238358507be272c2adc24fc9095351f5e07c6e8",
+    "bin/cubrid-pr-review-worktree": "fbc2710ceedb3c465687bdd7152afc21aa2efd4888ec3e587506e78b15842e69",
+    "bin/cubrid-pr-status": "fc5b7f011befc6858a5c22e170b3a26ef6882b014388fa4adb8e050a86dca247",
+    "bin/cubrid-pr-status.json": "7a95c9b45c3733aea3854963dc26e94cc4c39472a5a77b0be210e337509d3ed9",
+    "bin/cubrid-pr-tc-base-check": "adb4eb51231b478f534411bdbd84f8a94005ff3dcef9720c5ce9648ba83e6391",
+    "bin/cubrid-pr-tc-base-check-oos": "deecc87e7e705643b2bf08611c143c3bc5f859ca4607118ff455000b2b255298",
+    "bin/cubrid-pr-tc-sync-check": "3a312b554b6feb6c87cf734627cce19f2c64dc8d5e862a5c147567afdb9d1a2d",
+    "bin/cubrid-shell-debug.sh": "96c3e3f207160a41f75cd32efcb1addc33a77f4f46ec36bf537131c36266f312",
+    "bin/cubrid-start.sh": "8bfb3d16a403ea06db7c328213fbc16892b9a1d409eef4eb409005924b5a7e6f",
+    "bin/cubrid-tc-branch-create.sh": "804629ecf12c4af465a100f1af45cb2a7d19e80403abc90ad2323f348ef6bf4b",
+    "bin/cubrid-tc-sync.sh": "166dd44a38695dd54193065f66636779755a71570fe2e7dbe3490e94283f14b3",
+    "bin/cubrid-test-socket-preflight.sh": "4b9f2c641567a4162c0bbc2954581a42b05e0e8568fbe55b1ac3f8e6c7908ddb",
+    "bin/cubrid-toolcheck.sh": "db8f9e9375e3d7b3a1bdf8e5d3441d8afdc35f1f4f7169c7832b116dc13aea0f",
+    "bin/cubrid-worktree-add.sh": "43d7e99cac46454433feb142a9dd6ded8e7c5f5d8489ba29ae26d37513222e09",
+    "bin/install-bison-3.0.5.sh": "4c68cacd1b355f59191282b80b359db81dd3d2f44bb05b6940abed9998e6bd1e",
+    "bin/jira-to-md.sh": "08fadf8323813ed28981a8a9a95d13abb4d4e145019894876ae64954e439e311",
+    "bin/jira_md_upload.py": "eeb6264aa5085bdb8ba3d86c0ff962ef5c6bba21b5f7cf8904a8246488dc2787",
+    "bin/just-remote.sh": "f755a8e2c6fc1e42f9c12b78618fb031573aa0785cb3dc99c40100dcb72d06af",
+    "bin/md-to-jira.sh": "7f0c194b62caac7736ecbb58165a8d87b8a29d465d7dce38b718aea826fa3609",
+    "bin/my-cubrid-dir": "b68bac4c3810380b5d7b98c676744db137e861c67b7b6d8705231208cb18669e",
+    "bin/my-cubrid-init.sh": "afde3ed9b612ac612881d09e1a3dfbf072e7ada1b5ef0232bbbbaee2301a5646",
+    "bin/my-cubrid-process-select": "6f2229e12495879bb043a697ec9727a021a0df6724d88e3bf894d82358c27cfc",
+    "bin/my-cubrid-pwddb": "746fccbbba0580f0f547e2bee048c8d6949c51dafe4cc6926d665d91b186b83c",
+    "bin/my-cubrid-pwddb-getname": "99069bcc4d544af35708c314f4550363397b10a34e79105ecff500d6309b3f3d",
+    "bin/my-cubrid-runtime": "f72c0f2dbfc060719c41dced2dfa873aad511eefb751d74871fa3a5c9b4ec702",
+    "bin/my-cubrid-ticket-get": "87583188d1c254c1abeb0d6287897bb483547d24854b1fb28331595333388583",
+    "bin/print_env.sh": "b2ae43ac678d1f46aadf52232ee246048e0d932eaae4c9d00b716a8743bdb621",
+    "bin/setup-systemd-oomd.sh": "aed8808520bbd3eeb03fd41dce549306c599da1972f2d54e1d776201d5da954c",
+    "bin/trace_processor": "5270ac0afdae623fdd565cf75f70ca103088054a2952dd61a756190d963b1c57",
+    "bin/cubrid-workenv-db": "091260e9521ef38d249b4d0420f0b4e8932ce0c2fc475ab9c692c367f6e18c86",
+    "bin/_cubrid_workenv_db.py": "21a3a391093e01960624fbac33ab09f6bc462b6dd240220be5c366cdb9ba71a4",
+    "stow/cubrid/.clangd": "98f65756a65753a7291e6f9b1555ae1d54e08f1dcc28c71862b0ed6b13ffc785",
+    "stow/cubrid/.envrc": "c8a30a2809e1077d80657e07044a1ad07497bedf9eca5b0143e29d918b04e168",
+    "stow/cubrid/.nvim.lua": "48f11a6698447ca73e5ab74e4f15b2ad2bacfa7402e75879d7ebed94b270a1d3",
+    "stow/cubrid/AGENTS.override.md": "fbf6d3494ca9326c43c990e9f51736eb3a8656c578559d15b53610f3394e756d",
+    "stow/cubrid/CMakeUserPresets.json": "f0e490f5c4e36c00cac08b5e0feae8c25351ee0477fd68b1151d8992945dd327",
+    "stow/cubrid/cub_server.gdb": "26335f50045681049b5b6ba75bd66061aad0f7657475abe374666e768ddcbf65",
+    "stow/cubrid/justfile": "efdb1ebc902e2f3a9762831a3d2a02f38140656ffcc86b30431702149398d275",
+    "stow/cubrid/lefthook.yml": "4bb3f4cf3203dc60099bdf8f35e370b4d565b7d004f0c4af4bd0b8558a6d4f74",
+    "stow/gdb/i.gdb": "a5a9936c6f043196f549a824e88a1df4abd7be103cbfbc723bcba18b815ca093",
+    "stow/cubrid/.just/README.md": "d12d47341c6eb7471a3837524132b0d614d71b01595976670ab5f8ff581a2712",
+    "stow/cubrid/.just/compat.just": "d8d1dba4fdd18357ee732288c72541be46a7140e40b71a3bbf2c603b08d447e1",
+    "stow/cubrid/.just/core.just": "19437fd419fdff12065f6636be40fa5d87598ede2f6ccad56770e10e3da1c28d",
+    "stow/cubrid/.just/ctp.just": "70ac6c97046a0131a7af12a2dd0fcc45c7934053d6578824d48af327a1c09d3c",
+    "stow/cubrid/.just/db.just": "10fa4bb2b99efa7cc37720ddb946243b52e8d7429065ce93e4231689ff5d1986",
+    "stow/cubrid/.just/debug.just": "fea0ee9e7abda32df8671718bf4874ecbfedc38450222e6d4403beb6e86a2627",
+    "stow/cubrid/.just/github.just": "901a28f2a442e94f654f30b8cb6406c2ef0f4b5c9a31e1f835cdc56aff52c31a",
+    "stow/cubrid/.just/maint.just": "2ccaa22da44ce52497df201a2f6349c7b52b73d6f0d48584c125681a6643151a",
+    "stow/cubrid/.just/oos.just": "2425c83d73c4cca32bfbc00a8abf63357c34aa8244c40063bb3b82fdc941c118",
+    "stow/cubrid/.just/profile.just": "fd4702308c1f7f54511bef515ac6a59f235ded3547d0042b8f9dd6babd173e39",
+    "stow/cubrid/.vscode/launch.json": "ea6b8317d2d1d0b6ac6795d029a9cd75566956d2d0cec2cd4786989e1971f97a",
+    "stow/cubrid/.just/include/termio.h": "921af760eca7c9e4bdae91322fb2f2b21639a793aba4be9a3858292ac2fcca5a"
+  },
+  "owned_stale_socket_cleanup": "/tmp/cwe-1000/1aaa92de6646/sp_demodb.sock",
+  "verdict": "pass",
+  "remaining_owned_processes": {
+    "/home/vimkim/tmp/cwe-migration-1nvtheys/a": [],
+    "/home/vimkim/tmp/cwe-migration-1nvtheys/b": []
+  }
+}

@@ -1,0 +1,8 @@
+"${MY_CUBRID:-$HOME/my-cubrid}/bin/cubrid-build-coordinator.sh" runtime 300 --database testdb -- cubrid server start testdb
+@ cubrid server start: testdb
+
+This may take a long time depending on the amount of recovery works to do.
+
+CUBRID 11.5.0 (11.5.0.2640) (64 debug build)
+
+++ cubrid server start: success

@@ -21,6 +21,29 @@ PROCESS_SELECTOR = REPOSITORY / "bin" / "my-cubrid-process-select"
 
 
 class RuntimeEnvironmentTest(unittest.TestCase):
+    def test_sql_helpers_preserve_explicit_modes(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            commands = root / 'commands'; commands.mkdir()
+            for name, body in {
+                'cubrid': 'if [ "$1" = server ]; then printf "%s\\n" "$SERVER_STATUS"; else printf "%s\\n" "$*"; fi',
+                'csql': 'printf "ARGS=%s\\n" "$*"',
+                'cubrid_rel': 'echo CUBRID',
+            }.items():
+                binary = commands / name; binary.write_text('#!/bin/sh\n' + body + '\n'); binary.chmod(0o755)
+            for flag, status in [('-S', 'Server testdb (pid 123)'), ('-C', '')]:
+                env = dict(os.environ, PATH=str(commands) + ':' + os.environ['PATH'],
+                           SERVER_STATUS=status, CUBRID_DATABASES=str(root))
+                result = subprocess.run([str(REPOSITORY / 'bin/csql.sh'), 'testdb', flag],
+                                        cwd=root, env=env, capture_output=True, text=True)
+                self.assertEqual(result.returncode, 0, result.stderr)
+                args = result.stdout.split('ARGS=', 1)[1].split()
+                self.assertEqual([a for a in args if a in ('-S', '-C')], [flag])
+                result = subprocess.run([str(REPOSITORY / 'bin/cub-auto'), 'paramdump', 'testdb', flag],
+                                        cwd=root, env=env, capture_output=True, text=True)
+                self.assertEqual(result.returncode, 0, result.stderr)
+                self.assertEqual(result.stdout.strip(), 'paramdump testdb ' + flag)
+
     def run_loader(self, status=0, preset="debug_gcc"):
         temporary = tempfile.TemporaryDirectory()
         self.addCleanup(temporary.cleanup)
@@ -115,116 +138,21 @@ exit "$status"
             )
             self.assertEqual(environment_file.stat().st_mode & 0o777, 0o640)
 
-    def test_fixed_database_recipes_refuse_non_selected_database(self):
+    def test_runtime_recipes_refuse_uninitialized_selection(self):
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)
-            home = root / "home"
-            helper_bin = home / "my-cubrid" / "bin"
-            command_bin = root / "commands"
-            helper_bin.mkdir(parents=True)
-            command_bin.mkdir()
             (root / "justfile").symlink_to(SHARED_JUSTFILE)
-            (root / ".just").symlink_to(SHARED_JUST_MODULES, target_is_directory=True)
-            selected_database = helper_bin / "my-cubrid-pwddb-getname"
-            selected_database.write_text("#!/usr/bin/env bash\nprintf '%s\\n' develop\n")
-            selected_database.chmod(0o755)
-            command_marker = root / "runtime-command-ran"
-            coordinator = helper_bin / "cubrid-build-coordinator.sh"
-            coordinator.symlink_to(BUILD_COORDINATOR)
-            guard = helper_bin / "my-cubrid-runtime"
-            guard.write_text(
-                "#!/usr/bin/env bash\nprintf '%s\\n' '{\"outcome\":\"ready\"}'\n"
-            )
-            guard.chmod(0o755)
-            for name in ("cubrid", "cgdb"):
-                command = command_bin / name
-                command.write_text(
-                    "#!/usr/bin/env bash\n"
-                    f"touch {shlex.quote(str(command_marker))}\n"
-                )
-                command.chmod(0o755)
-            environment = dict(
-                os.environ,
-                HOME=str(home),
-                MY_CUBRID=str(home / "my-cubrid"),
-                XDG_RUNTIME_DIR=str(root),
-                CUBRID=str(root / "install"),
-                CUBRID_BUILD_DIR=str(root / "build"),
-                CUBRID_DATABASES=str(root / "databases"),
-                PRESET_MODE="debug",
-                PATH=f"{command_bin}:{os.environ['PATH']}",
-            )
-            environment.pop("CUBRID_RUNTIME_LOCK_HELD", None)
-
-            for recipe in ("start-testdb", "start-demodb"):
-                with self.subTest(recipe=recipe):
-                    result = subprocess.run(
-                        ["just", "--justfile", str(root / "justfile"), f"db::{recipe}"],
-                        cwd=root,
-                        env=environment,
-                        capture_output=True,
-                        text=True,
-                        timeout=10,
-                    )
-
-                    self.assertNotEqual(result.returncode, 0)
-                    self.assertFalse(command_marker.exists())
-                    self.assertIn("develop", result.stderr)
-
-            for database in ("testdb", "demodb"):
-                with self.subTest(recipe=f"create-{database}"):
-                    database_directory = root / "databases" / database
-                    result = subprocess.run(
-                        [
-                            "just",
-                            "--justfile",
-                            str(root / "justfile"),
-                            f"db::create-{database}",
-                        ],
-                        cwd=root,
-                        env=environment,
-                        capture_output=True,
-                        text=True,
-                        timeout=10,
-                    )
-
-                    self.assertNotEqual(result.returncode, 0)
-                    self.assertFalse(database_directory.exists())
-                    self.assertIn("develop", result.stderr)
-
-            debug_result = subprocess.run(
-                ["just", "--justfile", str(root / "justfile"), "debug::csql-cs"],
-                cwd=root,
-                env=environment,
-                capture_output=True,
-                text=True,
-                timeout=10,
-            )
-            self.assertNotEqual(debug_result.returncode, 0)
-            self.assertIn("develop", debug_result.stderr)
-
-            for database in ("testdb", "demodb"):
-                with self.subTest(selected_database=database):
-                    selected_database.write_text(
-                        f"#!/usr/bin/env bash\nprintf '%s\\n' {shlex.quote(database)}\n"
-                    )
-                    command_marker.unlink(missing_ok=True)
-                    result = subprocess.run(
-                        [
-                            "just",
-                            "--justfile",
-                            str(root / "justfile"),
-                            f"db::start-{database}",
-                        ],
-                        cwd=root,
-                        env=environment,
-                        capture_output=True,
-                        text=True,
-                        timeout=10,
-                    )
-
-                    self.assertEqual(result.returncode, 0, result.stderr)
-                    self.assertTrue(command_marker.exists())
+            (root / ".just").symlink_to(SHARED_JUST_MODULES)
+            cli = root / 'cub-workenv'
+            cli.write_text("#!/bin/sh\nprintf '%s\\n' 'export CUBRID_RUNTIME_READY=0'\n")
+            cli.chmod(0o755)
+            env = dict(os.environ, MY_CUBRID=str(REPOSITORY), CUB_WORKENV_CLI=str(cli),
+                       CUBRID=str(root / 'install'), CUBRID_BUILD_DIR=str(root / 'build'),
+                       PRESET_MODE='debug', XDG_RUNTIME_DIR=str(root))
+            for recipe in ('db::start-testdb', 'db::create-testdb', 'db::delete-demodb', 'debug::csql-cs'):
+                result = subprocess.run(['just', recipe], cwd=root, env=env, text=True, capture_output=True)
+                self.assertNotEqual(result.returncode, 0)
+                self.assertIn('Initialize this worktree explicitly', result.stderr)
 
     def test_database_sql_and_debug_recipes_use_coordinator(self):
         with tempfile.TemporaryDirectory() as temporary:
@@ -248,6 +176,11 @@ exit "$status"
                 "case \" $* \" in *' cub-auto '*) printf '%s\\n' buffer ;; esac\n"
             )
             coordinator.chmod(0o755)
+            helper = helper_bin / "cubrid-workenv-db"
+            helper.write_text("#!/bin/sh\n" +
+                f"printf 'db %s\\n' \"$*\" >> {shlex.quote(str(coordinator_log))}\n" +
+                'if [ "$1" = list ]; then printf "testdb\\n"; fi\n')
+            helper.chmod(0o755)
             for name in ("cub-auto", "csql.sh", "cubrid", "cgdb"):
                 command = command_bin / name
                 command.write_text(
@@ -265,27 +198,27 @@ exit "$status"
             cases = (
                 (
                     "db::pwddb-delete",
-                    "database-delete 300",
+                    "db delete",
                 ),
                 (
                     "db::delete-testdb",
-                    "database-delete 300 --database testdb",
+                    "db delete testdb",
                 ),
                 (
                     "db::delete-demodb",
-                    "database-delete 300 --database demodb",
+                    "db delete demodb",
                 ),
                 (
                     "db::create-testdb",
-                    f"runtime 300 --database testdb -- {helper_bin / 'my-cubrid-pwddb'} create",
+                    "db create testdb",
                 ),
                 (
                     "db::create-demodb",
-                    f"runtime 300 --database demodb -- {helper_bin / 'my-cubrid-pwddb'} create --load demodb",
+                    "db create demodb --load demodb",
                 ),
                 (
                     "db::recreate-demodb",
-                    f"runtime 300 --database demodb -- {helper_bin / 'my-cubrid-pwddb'} recreate --load demodb",
+                    "db recreate demodb --load demodb",
                 ),
                 (
                     "db::paramdump-testdb",
@@ -293,7 +226,7 @@ exit "$status"
                 ),
                 (
                     "db::csql-sa",
-                    "runtime 300 --database testdb -- csql.sh",
+                    "runtime 300 --database testdb -- csql -S -u dba testdb",
                 ),
                 (
                     "db::unloaddb-sa",
@@ -372,6 +305,11 @@ exit "$status"
                 "fi\n"
             )
             coordinator.chmod(0o755)
+            helper = helper_bin / "cubrid-workenv-db"
+            helper.write_text("#!/bin/sh\n" +
+                f"printf 'db %s\\n' \"$*\" >> {shlex.quote(str(coordinator_log))}\n" +
+                'if [ "$1" = list ]; then printf "testdb\\n"; fi\n')
+            helper.chmod(0o755)
 
             def direct_command(path: Path, name: str, body: str = "") -> None:
                 path.write_text(
@@ -411,6 +349,7 @@ exit "$status"
                 MY_CUBRID=str(home / "my-cubrid"),
                 CUBRID=str(root / "install"),
                 CUBRID_DATABASES=str(database_root),
+                CUBRID_CUBRID_PORT_ID="51000",
                 PATH=f"{command_bin}:{os.environ['PATH']}",
             )
             cases = (
@@ -476,7 +415,7 @@ exit "$status"
             )
             self.assertEqual(result.returncode, 0, result.stderr)
             calls = coordinator_log.read_text().splitlines()
-            self.assertIn("my-cubrid-pwddb list", calls[0])
+            self.assertIn("db list", calls[0])
             self.assertIn("--database testdb", calls[-1])
 
     def test_live_pid_recipes_filter_for_the_selected_runtime(self):
@@ -504,7 +443,7 @@ exit "$status"
         selector = PROCESS_SELECTOR.read_text()
         self.assertIn('Path("/proc")', selector)
         self.assertIn('process / "exe"', selector)
-        self.assertIn('process / "cwd"', selector)
+        self.assertIn("process / 'environ'", selector)
         self.assertIn('process / "cmdline"', selector)
         self.assertIn('process / "stat"', selector)
 

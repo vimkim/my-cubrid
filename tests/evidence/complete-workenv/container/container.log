@@ -1,0 +1,2 @@
+"${MY_CUBRID:-$HOME/my-cubrid}/bin/cubrid-build-coordinator.sh" installation-use 300 -- "$MY_CUBRID/bin/cubrid-podman-test.sh" run --name "cwe-migration-cj_98kb0" --cubrid-root "$CUBRID" --wait-for-stop --server --db-name "probe" "/tmp/cwe-container-cj_98kb0/test.sh"
+error: recipe `podman-test-new` failed on line 31 with exit code 130

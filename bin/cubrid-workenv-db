@@ -1,0 +1,5 @@
+#!/usr/bin/env bash
+# Personal DB conveniences hold only the installation-use lock. No DB lease.
+set -euo pipefail
+here="$(cd -- "$(dirname -- "$0")" && pwd)"
+exec "$here/cubrid-build-coordinator.sh" runtime 300 -- python3 "$here/_cubrid_workenv_db.py" "$@"

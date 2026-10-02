@@ -1,0 +1,2 @@
+"${MY_CUBRID:-$HOME/my-cubrid}/bin/cubrid-workenv-db" create testdb
+Created database testdb.

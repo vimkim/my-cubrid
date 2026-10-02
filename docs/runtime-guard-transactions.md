@@ -1,3 +1,6 @@
+> Historical evidence for the retired runtime engine. Current operation follows
+> [host work environments](host-workenv.md). Do not execute the old lifecycle procedure.
+
 # Runtime guard transaction recovery
 
 `init` and `adopt` record an owner-only, versioned `transaction.json` beside the worktree

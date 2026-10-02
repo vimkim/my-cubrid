@@ -1,3 +1,6 @@
+> Historical evidence for the retired runtime engine. Current operation follows
+> [host work environments](host-workenv.md). Do not execute the old lifecycle procedure.
+
 # CUBRID direnv latency investigation
 
 Entering `feature-oos-merge` takes 7–8 seconds because the shared `.envrc`

@@ -1,0 +1,17 @@
+cub-workenv: Unix socket path /tmp/cwe-1000/1aaa92de6646/sp_demodb.sock: stale or unconfirmed filesystem entry; inspect its owner manually before any removal
+Inspect and correct manually; no changes performed.
+Worktree: /home/vimkim/tmp/cwe-migration-1nvtheys/a
+State: ready
+Selected installation: /home/vimkim/tmp/cwe-migration-1nvtheys/a-install (preset debug_gcc)
+DB extra: data=/home/vimkim/tmp/cwe-migration-1nvtheys/a/.cub-workenv/db/extra/data log=/home/vimkim/tmp/cwe-migration-1nvtheys/a/.cub-workenv/db/extra/log LOB=/home/vimkim/tmp/cwe-migration-1nvtheys/a/.cub-workenv/db/extra/lob (registration inspection only)
+DB outside: data=/home/vimkim/tmp/cwe-migration-1nvtheys/external-db/data log=/home/vimkim/tmp/cwe-migration-1nvtheys/external-db/log LOB=/home/vimkim/tmp/cwe-migration-1nvtheys/external-db/lob (registration inspection only)
+DB demodb: data=/home/vimkim/tmp/cwe-migration-1nvtheys/a/.cub-workenv/db/demodb-7dc8e0e929c743ff9ee983509e6ce4dc/data log=/home/vimkim/tmp/cwe-migration-1nvtheys/a/.cub-workenv/db/demodb-7dc8e0e929c743ff9ee983509e6ce4dc/log LOB=/home/vimkim/tmp/cwe-migration-1nvtheys/a/.cub-workenv/db/demodb-7dc8e0e929c743ff9ee983509e6ce4dc/lob (registration inspection only)
+DB testdb: data=/home/vimkim/tmp/cwe-migration-1nvtheys/a/.cub-workenv/db/testdb-df5d1c54e390468d9cb5e22b4f9e5a65/data log=/home/vimkim/tmp/cwe-migration-1nvtheys/a/.cub-workenv/db/testdb-df5d1c54e390468d9cb5e22b4f9e5a65/log LOB=/home/vimkim/tmp/cwe-migration-1nvtheys/a/.cub-workenv/db/testdb-df5d1c54e390468d9cb5e22b4f9e5a65/lob (registration inspection only)
+Process inspection: 2407 inaccessible PIDs; absent owner evidence is not proof of inactivity
+TCP 51000: occupied; PID 3957394 worktree=/home/vimkim/tmp/cwe-migration-1nvtheys/a
+Unix socket /tmp/cwe-1000/1aaa92de6646/CUBRID51000: occupied; PID 3957394 worktree=/home/vimkim/tmp/cwe-migration-1nvtheys/a
+Unix socket /tmp/cwe-1000/1aaa92de6646/sp_testdb.sock: occupied; PID 4001740 worktree=/home/vimkim/tmp/cwe-migration-1nvtheys/a
+Unix socket /tmp/cwe-1000/1aaa92de6646/sp_testdb.sock: occupied; PID 4001740 worktree=/home/vimkim/tmp/cwe-migration-1nvtheys/a
+Unix socket /tmp/cwe-1000/1aaa92de6646/sp_testdb.sock: occupied; PID 4001740 worktree=/home/vimkim/tmp/cwe-migration-1nvtheys/a
+Unix socket /tmp/cwe-1000/1aaa92de6646/cubrid_tcp_setup_server4001723: occupied; PID 4001723 worktree=/home/vimkim/tmp/cwe-migration-1nvtheys/a
+DB testdb: native active-log lock PID 4001723, worktree=/home/vimkim/tmp/cwe-migration-1nvtheys/a, path=/home/vimkim/tmp/cwe-migration-1nvtheys/a/.cub-workenv/db/testdb-df5d1c54e390468d9cb5e22b4f9e5a65/log/testdb_lgat; another independent opener must wait for normal release

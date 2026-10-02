@@ -1,0 +1,4 @@
+"${MY_CUBRID:-$HOME/my-cubrid}/bin/cubrid-workenv-db" delete testdb
+Unable to mount disk volume "/home/vimkim/tmp/cwe-migration-1nvtheys/a/.cub-workenv/db/testdb/log/testdb_lgat". The database "/home/vimkim/tmp/cwe-migration-1nvtheys/a/.cub-workenv/db/testdb/data/testdb", to which the disk volume belongs, is in use by user vimkim on process 3957860 of host dev2 since Fri Oct  2 21:14:04 2026.
+Error: Command '['/home/vimkim/tmp/cwe-migration-1nvtheys/a-install/bin/cubrid', 'deletedb', 'testdb']' returned non-zero exit status 1.
+error: recipe `delete-testdb` failed on line 138 with exit code 1

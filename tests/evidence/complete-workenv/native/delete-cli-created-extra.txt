@@ -1,0 +1,2 @@
+"${MY_CUBRID:-$HOME/my-cubrid}/bin/cubrid-workenv-db" delete "$database"
+Deleted extra; any remaining files are preserved at /home/vimkim/tmp/cwe-migration-1nvtheys/a/.cub-workenv/db/extra

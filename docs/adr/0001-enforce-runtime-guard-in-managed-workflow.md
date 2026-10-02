@@ -1,8 +1,11 @@
 ---
-status: accepted
+status: superseded by ADR-0002
 ---
 
 # Enforce the runtime guard at the managed-workflow seam
+
+Historical decision, superseded by [ADR-0002](0002-workenv-authority.md). The
+legacy engine described below is retired; retained metadata is not active authority.
 
 The original decision centralized legacy runtime validation in the shared environment and coordinator instead of scattering checks across recipes or adding OS-level isolation. The accepted scope is now narrowed: the legacy guard remains available for existing legacy environments, while the explicit host-workenv contract below supersedes automatic initialization after installation and universal runtime-readiness requirements.
 

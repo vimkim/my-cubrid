@@ -1,0 +1,30 @@
+Available recipes:
+    build                            # Compile, install, and capture the complete log; initialize databases explicitly.
+    build-test                       # Build, then run the currently configured test suite.
+    build-wait timeout='300'         # Wait up to `timeout` seconds for an idle runtime, then build.
+    compile                          # Compile without installing.
+    configure                        # Configure the selected CMake preset.
+    configure-build
+    ctest                            # Run configured ctest tests while holding the runtime lock.
+    cubrid-pr-status
+    dwb-get
+    dwb-off
+    install                          # Install an already-compiled tree when its runtime is idle.
+    install-wait timeout='300'       # Wait up to `timeout` seconds for an idle runtime, then install.
+    prepare                          # Prepare this worktree's personal build environment.
+    prepare-debug-gcc                # Prepare this worktree with the default GCC debug preset.
+    preset mode                      # Set any valid CMake configure preset for this worktree.
+    preset-debug-gcc                 # Select the commonly used GCC debug preset.
+    preset-release-gcc               # Select the commonly used GCC release preset.
+    stop-and-build                   # Stop active CUBRID processes and build after explicit confirmation.
+    test                             # Run the currently configured test suite. This is intentionally ctest-only.
+    worktree name                    # Create a sibling worktree and same-named branch from the current HEAD.
+    worktree-as name new_branch base # Create a sibling worktree with a separately named branch based on an existing ref.
+    core ...                         # Preset-aware configure, build, install, and ctest workflows.
+    ctp ...                          # CTP shell-test workflows.
+    db ...                           # Local database lifecycle, server control, csql, and cubrid.conf workflows.
+    debug ...                        # Interactive debugger and core workflows.
+    github ...                       # GitHub
+    maint ...                        # Formatting and build-tree maintenance workflows.
+    oos ...                          # Shared Out-of-row Overflow Storage workflows.
+    profile ...                      # Profiling and tracing workflows.

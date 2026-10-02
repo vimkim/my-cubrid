@@ -1,3 +1,6 @@
+> Historical evidence for the retired runtime engine. Current operation follows
+> [host work environments](../host-workenv.md). Do not execute the old lifecycle procedure.
+
 # Runtime guard code review — 2026-09-22
 
 ## Review scope

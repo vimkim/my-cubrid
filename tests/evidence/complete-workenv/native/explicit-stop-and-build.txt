@@ -1,0 +1,19 @@
+[1/2] Building C object CMakeFiles/probe.dir/probe.c.o
+[2/2] Linking C executable probe
+@ cubrid server stop: testdb
+
+Server testdb notified of shutdown.
+This may take several minutes. Please wait.
+++ cubrid server stop: success
+@ cubrid broker stop
+++ cubrid broker is not running.
+@ cubrid master stop
+++ cubrid master stop: success
+@ cubrid broker stop
+++ cubrid broker is not running.
+-- Install configuration: ""
+-- Installing: /home/vimkim/tmp/cwe-migration-1nvtheys/a-install/bin/probe
+Build and install completed successfully!
+Build-only installation is ready. Initialize explicitly when needed:
+  cub-workenv init --worktree /home/vimkim/tmp/cwe-migration-1nvtheys/a --install /home/vimkim/tmp/cwe-migration-1nvtheys/a-install --preset debug_gcc
+Existing work environments are preserved; use cub-workenv doctor after rebuilding.

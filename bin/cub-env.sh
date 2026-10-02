@@ -1,47 +1,23 @@
-# cub-env.sh
-# Usage:
-#   source cub-env.sh -b <branch_name> -p <preset_mode>
-
-cubenv_usage() {
-  echo "Usage: source cub-env.sh -b <branch_name> -p <preset_mode>"
-  return 1
+# Source cub-env.sh -b WORKTREE_NAME -p PRESET to load a prepared environment.
+# Directory selection is explicit; missing/partial state never initializes it.
+cubenv_load()
+{
+  local branch="" preset="" worktree="" option OPTIND=1 selection status=0
+  while getopts ':b:p:w:' option; do
+    case "$option" in
+      b) branch="$OPTARG" ;;
+      w) worktree="$OPTARG" ;;
+      p) preset="$OPTARG" ;;
+      *) printf 'Usage: source cub-env.sh -b WORKTREE_NAME -p PRESET\n' >&2; return 64 ;;
+    esac
+  done
+  [[ ( -n "$branch" || -n "$worktree" ) && -n "$preset" ]] || { printf 'Worktree and preset are required.\n' >&2; return 64; }
+  worktree="${worktree:-${CUB_WORKENV_WORKTREE_ROOT:-$HOME/gh/cb}/$branch}"
+  selection="$("${CUB_WORKENV_CLI:-cub-workenv}" env --worktree "$worktree" --preset "$preset")" || status=$?
+  export PRESET_MODE="$preset"
+  eval "$selection" || status=$?
+  [[ "$status" == 0 && "${CUBRID_RUNTIME_READY:-0}" == 1 ]] || return 1
+  export PRESET_MODE="$preset"
+  export CUBRID_BUILD_DIR="$worktree/build_preset_$preset"
 }
-
-# When sourced, $0 may not be the script name, so use $BASH_SOURCE
-SCRIPT_NAME="${BASH_SOURCE[0]}"
-
-# Parse options
-while getopts ":b:p:" opt; do
-  case "$opt" in
-    b) BRANCH_NAME="$OPTARG" ;;
-    p) PRESET_MODE="$OPTARG" ;;
-    *) cubenv_usage; return 1 ;;
-  esac
-done
-
-# Validate required options
-if [[ -z "$BRANCH_NAME" || -z "$PRESET_MODE" ]]; then
-  echo "Error: -b and -p are required."
-  cubenv_usage
-  return 1
-fi
-
-###############################################################################
-# Environment setup
-###############################################################################
-
-export CUBRID="/home/vimkim/.cub/install/$BRANCH_NAME/$PRESET_MODE"
-export CUBRID_BUILD_DIR="/home/vimkim/gh/cb/$BRANCH_NAME/build_preset_$PRESET_MODE"
-export CUBRID_DATABASES="/home/vimkim/.cub/db/$BRANCH_NAME/commondb"
-
-# Prepend to PATH only if not already present
-case ":$PATH:" in
-  *":$CUBRID/bin:"*) ;;
-  *) export PATH="$CUBRID/bin:$PATH" ;;
-esac
-
-echo "CUBRID environment configured:"
-echo "  BRANCH_NAME=$BRANCH_NAME"
-echo "  PRESET_MODE=$PRESET_MODE"
-echo "  CUBRID=$CUBRID"
-
+cubenv_load "$@"

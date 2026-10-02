@@ -1,4 +1,5 @@
-export-env { $env.MY_CUBRID = $"($env.HOME)/my-cubrid" }
+export-env { $env.MY_CUBRID = ($env.MY_CUBRID? | default ($env.HOME | path join "my-cubrid")) }
+use bin/cub-env.nu cubenv
 alias cs = csql.sh
 alias cuali = nvim ~/my-cubrid/aliases.nu
 def --env nr [] {
@@ -38,17 +39,7 @@ def --env cc [] {
 
 alias ooslog = do { nvim $"($env.CUBRID)/log/oos.log" }
 
-# ──────────────────────────────────────────────────────────────────────
-# CUBRID env switcher — pure nu, mirrors stow/cubrid/.envrc
-#
-#   cubrid-use release_gcc                          # use cwd as source dir
-#   cubrid-use debug_clang --dir ~/gh/cb/feat-oos   # explicit source dir
-#   cubrid-use --env-file .env                      # read PRESET_MODE / SOURCE_DIR from a .env
-#
-# Re-running in the same session switches cleanly: the first call snapshots
-# PATH / LD_LIBRARY_PATH so subsequent calls rebuild from that pristine baseline
-# instead of accumulating stale entries from a previous CUBRID install.
-# ──────────────────────────────────────────────────────────────────────
+# Select a prepared host workenv; use direnv for build-only preparation.
 def --env cubrid-use [
   preset_mode?: string         # e.g. release_gcc, debug_clang
   --dir: path                  # source dir (default: $env.PWD)
@@ -75,75 +66,19 @@ def --env cubrid-use [
     error make {msg: "PRESET_MODE not provided (pass as positional arg or via --env-file)"}
   }
 
-  let current_dir       = ($src | path basename)
-  let cubrid            = $"($env.HOME)/.cub/install/($current_dir)/($preset)"
-  let cubrid_databases  = $"($env.HOME)/.cub/db/($current_dir)/commondb"
-  let cubrid_build_dir  = $"($src)/build_preset_($preset)"
-  let bison_path        = $"($env.HOME)/temp/bison-install"
-  let ctp_home          = $"($env.HOME)/gh/ctp/run-sql/CTP"
-
-  # First call ever: snapshot pristine PATH / LD_LIBRARY_PATH. Subsequent calls
-  # always rebuild from this baseline so switching CUBRIDs doesn't leak.
-  if ($env | get --optional CUBRID_BASELINE_PATH) == null {
-    $env.CUBRID_BASELINE_PATH = $env.PATH
-    $env.CUBRID_BASELINE_LD_LIBRARY_PATH = ($env | get --optional LD_LIBRARY_PATH | default "")
-  }
-
-  let baseline_path = $env.CUBRID_BASELINE_PATH
-  let base_path = (
-    if ($baseline_path | describe | str starts-with "list") { $baseline_path }
-    else { $baseline_path | split row (char esep) }
-  )
-  let base_ld = ($env.CUBRID_BASELINE_LD_LIBRARY_PATH | split row ":" | where {|x| $x != "" })
-
-  $env.PRESET_MODE      = $preset
-  $env.CURRENT_DIR      = $current_dir
-  $env.CUBRID           = $cubrid
-  $env.CUBRID_DATABASES = $cubrid_databases
-  $env.CUBRID_BUILD_DIR = $cubrid_build_dir
-  $env.BISON_PATH       = $bison_path
-  $env.CTP_HOME         = $ctp_home
-  $env.init_path        = $"($ctp_home)/shell/init_path"
-  $env.ASAN_OPTIONS     = "halt_on_error=0:log_path=./asan.log"
-  $env.LSAN_OPTIONS     = "halt_on_error=0:log_path=./lsan.log"
-
-  $env.PATH = ([
-    $"($bison_path)/bin"
-    $"($cubrid)/bin"
-    $"($ctp_home)/common/script"
-    $"($ctp_home)/bin"
-  ] ++ $base_path | uniq)
-
-  $env.LD_LIBRARY_PATH = ([
-    $"($bison_path)/lib"
-    $"($cubrid)/cci/lib"
-    $"($cubrid)/lib"
-    $"($env.HOME)/CUB3LIB/lib"
-    "/usr/local/lib"
-  ] ++ $base_ld | uniq | str join ":")
-
-  # mirror .envrc: refresh the compile_commands.json symlink when the build dir exists
-  if ($cubrid_build_dir | path exists) {
-    ^ln -sf $"build_preset_($preset)/compile_commands.json" $"($src)/compile_commands.json"
-  }
-
-  print $"Preset Mode: ($preset)"
-  print $"Source Dir:  ($src)"
-  print $"Install Dir: ($cubrid)"
-  print $"DB Dir:      ($cubrid_databases)"
-  print $"Build Dir:   ($cubrid_build_dir)"
+  cubenv --worktree $src --preset $preset
 }
 
-# Restore PATH / LD_LIBRARY_PATH to the snapshot taken at the first cubrid-use call.
-# Note: CUBRID/PRESET_MODE/etc. vars are left in place — `hide-env` does not
-# propagate across a `def --env` boundary in nushell. They get overwritten on
-# the next `cubrid-use` call, or you can start a fresh shell.
+# Clear the selected native environment and its PATH/library entries.
 def --env cubrid-reset [] {
-  if ($env | get --optional CUBRID_BASELINE_PATH) == null {
-    print "no baseline captured; nothing to reset"
-    return
+  let selected = ($env.CUBRID? | default '')
+  if $selected != '' {
+    $env.PATH = ($env.PATH | where {|p| $p != ($selected | path join 'bin')})
+    $env.LD_LIBRARY_PATH = ($env.LD_LIBRARY_PATH? | default '' | split row ':' | where {|p| $p not-in [($selected | path join 'lib'), ($selected | path join 'cci/lib')]} | str join ':')
   }
-  $env.PATH            = $env.CUBRID_BASELINE_PATH
-  $env.LD_LIBRARY_PATH = $env.CUBRID_BASELINE_LD_LIBRARY_PATH
-  print "PATH / LD_LIBRARY_PATH restored to baseline"
+  for key in ($env | columns | where {|key| $key | str starts-with 'CUBRID'}) {
+    hide-env $key
+  }
+  hide-env --ignore-errors LD_PRELOAD
+  hide-env --ignore-errors PRESET_MODE
 }

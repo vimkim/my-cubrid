@@ -1,0 +1,29 @@
+[0mdirenv: loading /tmp/cwe-env07-xuas2v7v/a/.envrc
+cub-workenv: build-only; build and install, then run cub-workenv init explicitly.
+Preset Mode: debug_gcc
+Install Dir: /tmp/cwe-env07-xuas2v7v/install-a
+Runtime: build-only
+Build Dir: /tmp/cwe-env07-xuas2v7v/a/build_preset_debug_gcc
+bash "${MY_CUBRID:-$HOME/my-cubrid}/bin/cubrid-test-socket-preflight.sh"
+"${MY_CUBRID:-$HOME/my-cubrid}/bin/cubrid-build-coordinator.sh" installation-use 300 -- ctest --test-dir "$CUBRID_BUILD_DIR" --output-on-failure --verbose
+Internal ctest changing into directory: /tmp/cwe-env07-xuas2v7v/a/build_preset_debug_gcc
+UpdateCTestConfiguration  from :/tmp/cwe-env07-xuas2v7v/a/build_preset_debug_gcc/DartConfiguration.tcl
+UpdateCTestConfiguration  from :/tmp/cwe-env07-xuas2v7v/a/build_preset_debug_gcc/DartConfiguration.tcl
+Test project /tmp/cwe-env07-xuas2v7v/a/build_preset_debug_gcc
+Constructing a list of tests
+Done constructing a list of tests
+Updating test list for fixtures
+Added 0 tests to meet fixture requirements
+Checking test dependency graph...
+Checking test dependency graph end
+test 1
+    Start 1: probe
+
+1: Test command: /tmp/cwe-env07-xuas2v7v/a/build_preset_debug_gcc/probe
+1: Working Directory: /tmp/cwe-env07-xuas2v7v/a/build_preset_debug_gcc
+1: Test timeout computed to be: 10000000
+1/1 Test #1: probe ............................   Passed    0.00 sec
+
+100% tests passed, 0 tests failed out of 1
+
+Total Test time (real) =   0.00 sec

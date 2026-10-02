@@ -1,0 +1,8 @@
+[0mdirenv: loading /tmp/cwe-env07-xuas2v7v/b/.envrc
+Preset Mode: debug_gcc
+Install Dir: /tmp/cwe-env07-xuas2v7v/install-b
+DB Dir: /tmp/cwe-env07-xuas2v7v/b/.cub-workenv/databases
+Build Dir: /tmp/cwe-env07-xuas2v7v/b/build_preset_debug_gcc
+Execute OK. (0.012511 sec) Committed. (0.000583 sec)
+1 row affected. (0.002613 sec) Committed. (0.000342 sec)
+Execute OK. (0.000111 sec)

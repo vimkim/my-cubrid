@@ -1,0 +1,36 @@
+{
+  "steps": [
+    {
+      "command": [
+        "cubrid",
+        "--version"
+      ],
+      "returncode": 0
+    },
+    {
+      "command": [
+        "/home/vimkim/my-cubrid-complete-workenv/bin/cubrid-workenv-db",
+        "create",
+        "finalcheck"
+      ],
+      "returncode": 0
+    },
+    {
+      "command": [
+        "/home/vimkim/my-cubrid-complete-workenv/bin/cubrid-workenv-db",
+        "delete",
+        "finalcheck"
+      ],
+      "returncode": 0
+    },
+    {
+      "command": [
+        "cubrid",
+        "service",
+        "stop"
+      ],
+      "returncode": 1
+    }
+  ],
+  "registry_preserved": true
+}

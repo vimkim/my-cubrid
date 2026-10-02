@@ -1,0 +1,3 @@
+"${MY_CUBRID:-$HOME/my-cubrid}/bin/cubrid-build-coordinator.sh" runtime 300 --database testdb -- "${MY_CUBRID:-$HOME/my-cubrid}/bin/my-cubrid-pwddb" create
+Database testdb is not registered in this work environment; use cub-workenv create-db explicitly.
+error: recipe `create-testdb` failed on line 133 with exit code 1

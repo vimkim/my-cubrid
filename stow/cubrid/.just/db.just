@@ -4,13 +4,13 @@ set shell := ["sh", "-cu"]
 
 # List all registered database names, including stopped databases.
 list-all:
-    @"${MY_CUBRID:-$HOME/my-cubrid}/bin/cubrid-build-coordinator.sh" runtime 300 -- "${MY_CUBRID:-$HOME/my-cubrid}/bin/my-cubrid-pwddb" list
+    @"${MY_CUBRID:-$HOME/my-cubrid}/bin/cubrid-workenv-db" list
 
 # Select a registered database with fzf and start its server.
 start-interactive:
     #!/usr/bin/env bash
     set -euo pipefail
-    databases=$("${MY_CUBRID:-$HOME/my-cubrid}/bin/cubrid-build-coordinator.sh" runtime 300 -- "${MY_CUBRID:-$HOME/my-cubrid}/bin/my-cubrid-pwddb" list)
+    databases=$("${MY_CUBRID:-$HOME/my-cubrid}/bin/cubrid-workenv-db" list)
     if [[ -z $databases ]]; then
       echo 'No registered databases.'
       exit 0
@@ -43,29 +43,29 @@ stop-interactive:
     fi
     "${MY_CUBRID:-$HOME/my-cubrid}/bin/cubrid-build-coordinator.sh" runtime 0 --database "$database" -- cubrid server stop "$database"
 
-# Create the ready manifest's database, initially empty.
+# Create the default testdb, initially empty.
 pwddb-create:
-    "${MY_CUBRID:-$HOME/my-cubrid}/bin/cubrid-build-coordinator.sh" runtime 300 -- "${MY_CUBRID:-$HOME/my-cubrid}/bin/my-cubrid-pwddb" create
+    "${MY_CUBRID:-$HOME/my-cubrid}/bin/cubrid-workenv-db" create
 
 # Replace only the resolved database with an empty database.
 pwddb-recreate:
-    "${MY_CUBRID:-$HOME/my-cubrid}/bin/cubrid-build-coordinator.sh" runtime 300 -- "${MY_CUBRID:-$HOME/my-cubrid}/bin/my-cubrid-pwddb" recreate
+    "${MY_CUBRID:-$HOME/my-cubrid}/bin/cubrid-workenv-db" recreate
 
 # Delete only the resolved database.
 pwddb-delete:
-    "${MY_CUBRID:-$HOME/my-cubrid}/bin/cubrid-build-coordinator.sh" database-delete 300
+    "${MY_CUBRID:-$HOME/my-cubrid}/bin/cubrid-workenv-db" delete
 
-# Populate the ready manifest's database with demodb sample data.
+# Populate the default testdb with demodb sample data.
 pwddb-create-demodb:
-    "${MY_CUBRID:-$HOME/my-cubrid}/bin/cubrid-build-coordinator.sh" runtime 300 -- "${MY_CUBRID:-$HOME/my-cubrid}/bin/my-cubrid-pwddb" create --load demodb
+    "${MY_CUBRID:-$HOME/my-cubrid}/bin/cubrid-workenv-db" create --load demodb
 
-# Replace the manifest's database and load demodb sample data.
+# Replace the default testdb and load demodb sample data.
 pwddb-recreate-demodb:
-    "${MY_CUBRID:-$HOME/my-cubrid}/bin/cubrid-build-coordinator.sh" runtime 300 -- "${MY_CUBRID:-$HOME/my-cubrid}/bin/my-cubrid-pwddb" recreate --load demodb
+    "${MY_CUBRID:-$HOME/my-cubrid}/bin/cubrid-workenv-db" recreate --load demodb
 
-# Delete the manifest's database; template selection never changes its name.
+# Delete the default testdb; template selection never changes its name.
 pwddb-delete-demodb:
-    "${MY_CUBRID:-$HOME/my-cubrid}/bin/cubrid-build-coordinator.sh" database-delete 300
+    "${MY_CUBRID:-$HOME/my-cubrid}/bin/cubrid-workenv-db" delete
 
 # Start testdb while holding the runtime lock.
 [working-directory(justfile_directory())]
@@ -109,13 +109,13 @@ paramdump-testdb:
 
 # Open csql against testdb.
 [working-directory(justfile_directory())]
-csql: paramdump-testdb
-    "${MY_CUBRID:-$HOME/my-cubrid}/bin/cubrid-build-coordinator.sh" runtime 300 --database testdb -- csql.sh
+csql:
+    "${MY_CUBRID:-$HOME/my-cubrid}/bin/cubrid-build-coordinator.sh" runtime 300 --database testdb -- csql -C -u dba testdb
 
 # Open csql against testdb in standalone mode.
 [working-directory(justfile_directory())]
 csql-sa:
-    "${MY_CUBRID:-$HOME/my-cubrid}/bin/cubrid-build-coordinator.sh" runtime 300 --database testdb -- csql.sh
+    "${MY_CUBRID:-$HOME/my-cubrid}/bin/cubrid-build-coordinator.sh" runtime 300 --database testdb -- csql -S -u dba testdb
 
 # Unload testdb in standalone mode.
 [working-directory(justfile_directory())]
@@ -130,17 +130,17 @@ unloaddb-cs:
 # Create testdb.
 [working-directory(justfile_directory())]
 create-testdb:
-    "${MY_CUBRID:-$HOME/my-cubrid}/bin/cubrid-build-coordinator.sh" runtime 300 --database testdb -- "${MY_CUBRID:-$HOME/my-cubrid}/bin/my-cubrid-pwddb" create
+    "${MY_CUBRID:-$HOME/my-cubrid}/bin/cubrid-workenv-db" create testdb
 
-# Delete the manifest-selected testdb.
+# Delete the testdb.
 [working-directory(justfile_directory())]
 delete-testdb:
-    "${MY_CUBRID:-$HOME/my-cubrid}/bin/cubrid-build-coordinator.sh" database-delete 300 --database testdb
+    "${MY_CUBRID:-$HOME/my-cubrid}/bin/cubrid-workenv-db" delete testdb
 
-# Recreate the manifest-selected testdb.
+# Recreate the testdb.
 [working-directory(justfile_directory())]
 recreate-testdb:
-    "${MY_CUBRID:-$HOME/my-cubrid}/bin/cubrid-build-coordinator.sh" runtime 300 --database testdb -- "${MY_CUBRID:-$HOME/my-cubrid}/bin/my-cubrid-pwddb" recreate
+    "${MY_CUBRID:-$HOME/my-cubrid}/bin/cubrid-workenv-db" recreate testdb
 
 # Stop, recreate, and start testdb.
 [working-directory(justfile_directory())]
@@ -149,17 +149,17 @@ stop-recreate-start-testdb: stop-testdb recreate-testdb start-testdb
 # Create and load demodb.
 [working-directory(justfile_directory())]
 create-demodb:
-    "${MY_CUBRID:-$HOME/my-cubrid}/bin/cubrid-build-coordinator.sh" runtime 300 --database demodb -- "${MY_CUBRID:-$HOME/my-cubrid}/bin/my-cubrid-pwddb" create --load demodb
+    "${MY_CUBRID:-$HOME/my-cubrid}/bin/cubrid-workenv-db" create demodb --load demodb
 
 # Delete demodb.
 [working-directory(justfile_directory())]
 delete-demodb:
-    "${MY_CUBRID:-$HOME/my-cubrid}/bin/cubrid-build-coordinator.sh" database-delete 300 --database demodb
+    "${MY_CUBRID:-$HOME/my-cubrid}/bin/cubrid-workenv-db" delete demodb
 
 # Recreate demodb.
 [working-directory(justfile_directory())]
 recreate-demodb:
-    "${MY_CUBRID:-$HOME/my-cubrid}/bin/cubrid-build-coordinator.sh" runtime 300 --database demodb -- "${MY_CUBRID:-$HOME/my-cubrid}/bin/my-cubrid-pwddb" recreate --load demodb
+    "${MY_CUBRID:-$HOME/my-cubrid}/bin/cubrid-workenv-db" recreate demodb --load demodb
 
 # Interactively update a CUBRID system parameter in the active runtime.
 [working-directory(justfile_directory())]
@@ -247,10 +247,10 @@ set-unfill-factor:
 get-port:
     "${MY_CUBRID:-$HOME/my-cubrid}/bin/cubrid-build-coordinator.sh" runtime 300 -- crudini --get "${CUBRID_CONF_FILE:-$CUBRID/conf/cubrid.conf}" common cubrid_port_id
 
-# Set cubrid_port_id to the personal test port.
+# Restore cubrid_port_id to this workenv's allocated master port.
 [working-directory(justfile_directory())]
 set-port: get-port
-    "${MY_CUBRID:-$HOME/my-cubrid}/bin/cubrid-build-coordinator.sh" runtime 300 -- crudini --set "${CUBRID_CONF_FILE:-$CUBRID/conf/cubrid.conf}" common cubrid_port_id 12345
+    "${MY_CUBRID:-$HOME/my-cubrid}/bin/cubrid-build-coordinator.sh" runtime 300 -- crudini --set "${CUBRID_CONF_FILE:-$CUBRID/conf/cubrid.conf}" common cubrid_port_id "$CUBRID_CUBRID_PORT_ID"
 
 # Show data_buffer_size.
 [working-directory(justfile_directory())]
@@ -279,3 +279,23 @@ set-data-buffer-512m: get-data-buffer-size
 [working-directory(justfile_directory())]
 edit-config:
     "${MY_CUBRID:-$HOME/my-cubrid}/bin/cubrid-build-coordinator.sh" runtime 300 -- nvim "${CUBRID_CONF_FILE:-$CUBRID/conf/cubrid.conf}"
+
+# Create an explicitly named internal database.
+create $database:
+    "${MY_CUBRID:-$HOME/my-cubrid}/bin/cubrid-workenv-db" create "$database"
+
+# Delete a known internal database; a running owner is never stopped implicitly.
+delete $database:
+    "${MY_CUBRID:-$HOME/my-cubrid}/bin/cubrid-workenv-db" delete "$database"
+
+# Recreate a known internal database; preserve external storage and leftovers.
+recreate $database:
+    "${MY_CUBRID:-$HOME/my-cubrid}/bin/cubrid-workenv-db" recreate "$database"
+
+# Start an explicitly selected registered database.
+start $database='testdb':
+    "${MY_CUBRID:-$HOME/my-cubrid}/bin/cubrid-build-coordinator.sh" runtime 300 --database "$database" -- cubrid server start "$database"
+
+# Stop an explicitly selected registered database.
+stop $database='testdb':
+    "${MY_CUBRID:-$HOME/my-cubrid}/bin/cubrid-build-coordinator.sh" runtime 300 --database "$database" -- cubrid server stop "$database"

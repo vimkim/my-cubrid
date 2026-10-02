@@ -1,3 +1,6 @@
+> Historical evidence for the retired runtime engine. Current operation follows
+> [host work environments](host-workenv.md). Do not execute the old lifecycle procedure.
+
 # pwddb design interview
 
 The 2026-09-15 interview below records the original naming design. The accepted

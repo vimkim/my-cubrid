@@ -1,0 +1,11 @@
+@ cubrid server stop: testdb
+
+Server testdb notified of shutdown.
+This may take several minutes. Please wait.
+++ cubrid server stop: success
+@ cubrid broker stop
+++ cubrid broker is not running.
+@ cubrid broker stop
+++ cubrid broker is not running.
+@ cubrid master stop
+++ cubrid master stop: success

@@ -1,0 +1,4 @@
+"${MY_CUBRID:-$HOME/my-cubrid}/bin/cubrid-workenv-db" create testdb
+cub-workenv: Database testdb is already registered; existing storage preserved
+Error: Command '['/home/vimkim/gh/cubrid-workenv-complete-workenv/bin/cub-workenv', 'create-db', 'testdb', '--worktree', '/home/vimkim/tmp/cwe-migration-1nvtheys/a']' returned non-zero exit status 1.
+error: recipe `create-testdb` failed on line 133 with exit code 1

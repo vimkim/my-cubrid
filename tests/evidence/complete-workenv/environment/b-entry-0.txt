@@ -1,0 +1,12 @@
+[0mdirenv: loading /tmp/cwe-env07-xuas2v7v/b/.envrc
+Preset Mode: debug_gcc
+Install Dir: /tmp/cwe-env07-xuas2v7v/install-b
+DB Dir: /tmp/cwe-env07-xuas2v7v/b/.cub-workenv/databases
+Build Dir: /tmp/cwe-env07-xuas2v7v/b/build_preset_debug_gcc
+/tmp/cwe-env07-xuas2v7v/install-b/bin/cubrid
+/tmp/cwe-env07-xuas2v7v/install-b
+/tmp/cwe-1000/2869b0373ff6
+/tmp/cwe-env07-xuas2v7v/b/.cub-workenv/databases
+46002
+/tmp/cwe-env07-xuas2v7v/b/.cub-workenv/conf/cubrid_broker.conf
+/home/vimkim/.local/share/mise/installs/java/temurin-8.0.462+8

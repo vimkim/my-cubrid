@@ -1,0 +1,17 @@
+
+=== <Result of SELECT Command in Line 1> ===
+
+           id
+=============
+          701
+
+1 row selected. (0.003552 sec) Committed. (0.000012 sec)
+
+=== <Result of SELECT Command in Line 1> ===
+
+           id
+=============
+          702
+
+1 row selected. (0.002844 sec) Committed. (0.000010 sec)
+SELECTED=/tmp/cwe-env07-xuas2v7v/install-b|/tmp/cwe-1000/2869b0373ff6|/tmp/cwe-env07-xuas2v7v/b/.cub-workenv/databases|46002

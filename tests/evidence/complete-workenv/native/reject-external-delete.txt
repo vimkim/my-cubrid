@@ -1,0 +1,3 @@
+"${MY_CUBRID:-$HOME/my-cubrid}/bin/cubrid-workenv-db" delete "$database"
+Error: External, changed or mixed registration for outside. Storage preserved. Automatic deletion requires known, wholly internal storage; see docs/host-workenv.md#manual-database-lifecycle for manual review.
+error: recipe `delete` failed on line 289 with exit code 1

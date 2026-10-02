@@ -1,31 +1,20 @@
-# cub-env.nu
-# Usage:
-#   overlay use cub-env.nu
-#   cubenv -b develop -p release_gcc8
-
-export def --env cubenv [
-  --branch (-b): string
-  --preset (-p): string
-] {
-  if ($branch | is-empty) or ($preset | is-empty) {
-    error make { msg: "branch (-b) and preset (-p) are required" }
+# overlay use cub-env.nu; cubenv -b develop -p debug_gcc
+export def --env cubenv [--branch (-b): string, --preset (-p): string, --worktree (-w): path] {
+  if (($branch | is-empty) and ($worktree | is-empty)) or ($preset | is-empty) {
+    error make {msg: "worktree (-b) and preset (-p) are required"}
   }
-
-  let cubrid    = $"/home/vimkim/.cub/install/($branch)/($preset)"
-  let build_dir = $"/home/vimkim/gh/cb/($branch)/build_preset_($preset)"
-  let db_dir    = $"/home/vimkim/.cub/db/($branch)/commondb"
-
-  # Modify caller environment
-  $env.CUBRID = $cubrid
-  $env.CUBRID_BUILD_DIR = $build_dir
-  $env.CUBRID_DATABASES = $db_dir
-
-  if not ($env.PATH | any { |it| $it == $"($cubrid)/bin" }) {
-    $env.PATH = [$"($cubrid)/bin"] ++ $env.PATH
+  let helper = ($env.MY_CUBRID? | default ($env.HOME | path join 'my-cubrid') | path join 'bin/cub-env.sh')
+  let target = if ($worktree | is-not-empty) { $worktree | path expand } else { ($env.CUB_WORKENV_WORKTREE_ROOT? | default ($env.HOME | path join 'gh/cb')) | path join $branch }
+  let result = (^bash -c 'source "$1" -w "$2" -p "$3"; status=$?; python3 -c "import json,os; print(json.dumps(dict(os.environ)))"; exit "$status"' bash $helper $target $preset | complete)
+  let selected = ($result.stdout | from json)
+  for key in ($env | columns | where {|key| $key | str starts-with 'CUBRID'}) {
+    hide-env $key
   }
-
-  print $"CUBRID environment configured:"
-  print $"  BRANCH_NAME=($branch)"
-  print $"  PRESET_MODE=($preset)"
-  print $"  CUBRID=($cubrid)"
+  hide-env --ignore-errors LD_PRELOAD
+  $env.PATH = ($selected.PATH | split row ':')
+  $env.LD_LIBRARY_PATH = ($selected.LD_LIBRARY_PATH? | default '')
+  if $result.exit_code != 0 {
+    error make {msg: $"cub-workenv selection failed: ($result.stderr)"}
+  }
+  load-env ($selected | transpose key value | where {|row| ($row.key | str starts-with 'CUBRID') or $row.key == 'PRESET_MODE'} | transpose --header-row --as-record)
 }

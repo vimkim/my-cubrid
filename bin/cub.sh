@@ -1,52 +1,16 @@
-#!/bin/bash
-# cub.sh — CUBRID wrapper with required options
-
-set -e
-
-usage() {
-  echo "Usage: $0 -b <branch_name> -p <preset_mode> <cubrid_command> [args...]"
-  echo
-  echo "Example:"
-  echo "  $0 -b scope-exit -p release_gcc8 broker start"
-  echo "  $0 -b scope-exit -p release_gcc8 server start testdb"
-  exit 1
-}
-
-# Parse required options
-while getopts ":b:p:" opt; do
-  case "$opt" in
-    b) BRANCH_NAME="$OPTARG" ;;
-    p) PRESET_MODE="$OPTARG" ;;
-    *) usage ;;
+#!/usr/bin/env bash
+# Compatibility shortcut: choose a worktree, load cub-workenv, run native cubrid.
+set -euo pipefail
+branch="" preset=""
+while getopts ':b:p:' option; do
+  case "$option" in
+    b) branch="$OPTARG" ;;
+    p) preset="$OPTARG" ;;
+    *) printf 'Usage: cub.sh -b WORKTREE_NAME -p PRESET COMMAND [ARGS...]\n' >&2; exit 64 ;;
   esac
 done
-
 shift $((OPTIND - 1))
-
-# Validate required options
-if [[ -z "$BRANCH_NAME" || -z "$PRESET_MODE" ]]; then
-  echo "Error: branch name (-b) and preset mode (-p) are required."
-  usage
-fi
-
-# Validate that a cubrid subcommand is provided
-if [[ $# -lt 1 ]]; then
-  echo "Error: cubrid command is required."
-  usage
-fi
-
-###############################################################################
-# Do not modify
-###############################################################################
-
-export CUBRID="/home/vimkim/.cub/install/$BRANCH_NAME/$PRESET_MODE"
-export CUBRID_BUILD_DIR="/home/vimkim/gh/cb/$BRANCH_NAME/build_preset_$PRESET_MODE"
-export CUBRID_DATABASES="/home/vimkim/.cub/db/$BRANCH_NAME/commondb"
-export PATH="$CUBRID/bin:$PATH"
-
-###############################################################################
-# Forward remaining arguments to cubrid
-###############################################################################
-
-exec cubrid "$@"
-
+[[ -n "$branch" && -n "$preset" && $# -gt 0 ]] || exit 64
+source "$(dirname -- "$0")/cub-env.sh" -b "$branch" -p "$preset"
+cd -- "${CUB_WORKENV_WORKTREE_ROOT:-$HOME/gh/cb}/$branch"
+exec "$CUBRID/bin/cubrid" "$@"

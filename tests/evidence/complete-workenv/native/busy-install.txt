@@ -1,0 +1,10 @@
+
+Installation deferred: the target CUBRID environment is busy.
+Environment: /home/vimkim/tmp/cwe-migration-1nvtheys/a-install
+Active processes:
+  PID 3957393  cub_console          /home/vimkim/tmp/cwe-migration-1nvtheys/a-install/bin/cub_console
+  PID 3957394  cub_master           /home/vimkim/tmp/cwe-migration-1nvtheys/a-install/bin/cub_master
+  PID 3957859  cub_console          /home/vimkim/tmp/cwe-migration-1nvtheys/a-install/bin/cub_console
+  PID 3957860  cub_server           /home/vimkim/tmp/cwe-migration-1nvtheys/a-install/bin/cub_server
+  PID 3957940  cub_pl               /home/vimkim/tmp/cwe-migration-1nvtheys/a-install/bin/cub_pl
+No process was stopped. Retry with: just install

@@ -19,12 +19,12 @@ Usage: cubrid-build-coordinator.sh ACTION [ARGUMENTS]
 Actions:
   configure
   compile
+  target <target>
   build [runtime-wait-seconds]
   install [runtime-wait-seconds]
   install-target <target> [runtime-wait-seconds]
   runtime [lock-wait-seconds] -- command [args...]
   installation-use [lock-wait-seconds] -- command [args...]
-  database-delete [lock-wait-seconds] [--database name]
   installation-delete [lock-wait-seconds]
   stop-and-build
 
@@ -170,83 +170,28 @@ acquire_runtime_lock()
   fi
 }
 
-runtime_guard_command()
-{
-  printf '%s/bin/my-cubrid-runtime' "${MY_CUBRID:-$HOME/my-cubrid}"
-}
-
-validate_runtime()
-{
-  local required_state="${1:-ready}"
-  local report
-  local status
-  local guard
-  local -a validation_arguments=()
-
-  if [[ "$required_state" == idle ]]; then
-    validation_arguments+=(--require-idle)
-  elif [[ "$required_state" != ready ]]; then
-    die_usage "unknown runtime validation requirement: $required_state"
-  fi
-
-  if [[ -e "$PWD/.cub-workenv" ]]; then
-    local shell_code workenv_status=0
-    local cli="${CUB_WORKENV_CLI:-cub-workenv}"
-    shell_code="$("$cli" env --worktree "$PWD" --preset "$PRESET_MODE" --install "$CUBRID")" || workenv_status=$?
-    eval "$shell_code" || workenv_status=$?
-    [[ "$workenv_status" == 0 && "${CUBRID_RUNTIME_READY:-0}" == 1 ]] || return 1
-    if [[ "$required_state" == idle ]]; then
-      local processes
-      processes="$(find_active_install_processes)"
-      if [[ -n "$processes" ]]; then
-        report_runtime_busy "$processes"
-        return "$EX_TEMPFAIL"
-      fi
-    fi
-    return 0
-  fi
-
-  guard="$(runtime_guard_command)"
-  if report="$("$guard" validate --worktree "$PWD" --preset "$PRESET_MODE" \
-      "${validation_arguments[@]}" --json)"; then
-    return 0
-  else
-    status=$?
-  fi
-  printf '%s\n' "$report" >&2
-  return "$status"
-}
-
+# Host selection is owned solely by cub-workenv. This is not full diagnosis.
 validate_runtime_ready()
 {
-  validate_runtime ready
-}
-
-validate_runtime_idle()
-{
-  validate_runtime idle
+  local shell_code status=0
+  local cli="${CUB_WORKENV_CLI:-cub-workenv}"
+  shell_code="$("$cli" env --worktree "$PWD" --preset "$PRESET_MODE" --install "$CUBRID")" || status=$?
+  eval "$shell_code" || status=$?
+  [[ "$status" == 0 ]] || return "$status"
+  if [[ "${CUBRID_RUNTIME_READY:-0}" != 1 ]]; then
+    printf 'Initialize this worktree explicitly with cub-workenv init before host DB use.\n' >&2
+    return 1
+  fi
 }
 
 require_selected_database()
 {
   local expected="$1"
-  local selected
-  local selector="${MY_CUBRID:-$HOME/my-cubrid}/bin/my-cubrid-pwddb-getname"
-
-  if [[ -e "$PWD/.cub-workenv" ]]; then
-    if awk -v name="$expected" '$1 == name { found=1 } END { exit !found }' "$CUBRID_DATABASES/databases.txt"; then
-      return 0
-    fi
-    printf 'Database %s is not registered in this work environment; use cub-workenv create-db explicitly.\n' "$expected" >&2
-    return 1
+  if awk -v name="$expected" '$1 == name { found=1 } END { exit !found }' "$CUBRID_DATABASES/databases.txt"; then
+    return 0
   fi
-
-  selected="$("$selector")"
-  if [[ "$selected" != "$expected" ]]; then
-    printf 'Refusing fixed database command for %s: manifest-selected database is %s.\n' \
-      "$expected" "$selected" >&2
-    return 1
-  fi
+  printf 'Database %s is not registered; use cub-workenv create-db explicitly.\n' "$expected" >&2
+  return 1
 }
 
 initialization_guidance()
@@ -258,7 +203,31 @@ initialization_guidance()
 
 compile_unlocked()
 {
-  cmake --build --preset "$PRESET_MODE"
+  run_locked cmake --build --preset "$PRESET_MODE"
+}
+
+# Keep both locks in the supervisor, including while a signalled persistent
+# harness cleans up. Daemon descendants must never inherit these descriptors.
+run_locked()
+{
+  local child status=0
+  (
+    if [[ -n "${BUILD_LOCK_FD:-}" ]]; then exec {BUILD_LOCK_FD}>&-; fi
+    if [[ -n "${RUNTIME_LOCK_FD:-}" ]]; then exec {RUNTIME_LOCK_FD}>&-; fi
+    # Bash async children inherit ignored SIGINT. Restore native terminal
+    # behavior before exec, and explicitly preserve the caller's stdin below.
+    exec python3 -c 'import os,signal,sys; signal.signal(signal.SIGINT, signal.SIG_DFL); signal.signal(signal.SIGQUIT, signal.SIG_DFL); os.execvp(sys.argv[1], sys.argv[1:])' "$@"
+  ) <&0 &
+  child=$!
+  trap 'kill -TERM "$child" 2>/dev/null || true' TERM
+  trap 'kill -INT "$child" 2>/dev/null || true' INT
+  trap 'kill -HUP "$child" 2>/dev/null || true' HUP
+  while true; do
+    wait "$child" && status=0 || status=$?
+    kill -0 "$child" 2>/dev/null || break
+  done
+  trap - TERM INT HUP
+  return "$status"
 }
 
 prepare_jdk_install_destination()
@@ -278,7 +247,7 @@ prepare_jdk_install_destination()
 install_unlocked()
 {
   prepare_jdk_install_destination
-  cmake --install "$CUBRID_BUILD_DIR" --prefix "$CUBRID"
+  run_locked cmake --install "$CUBRID_BUILD_DIR" --prefix "$CUBRID"
   printf 'Build and install completed successfully!\n'
 }
 
@@ -290,6 +259,13 @@ stop_current_runtime()
     return 0
   fi
 
+  local server_status database
+  server_status="$("$cubrid_command" server status)"
+  while read -r database; do
+    [[ -n "$database" ]] || continue
+    require_selected_database "$database"
+    "$cubrid_command" server stop "$database"
+  done < <(awk '($1 == "Server" || $1 == "HA-Server") {print $2}' <<<"$server_status")
   "$cubrid_command" service stop || true
   "$cubrid_command" broker stop || true
 }
@@ -322,12 +298,19 @@ case "$action" in
   configure)
     [[ $# -eq 0 ]] || die_usage "configure takes no arguments"
     acquire_build_lock
-    cmake --preset "$PRESET_MODE"
+    run_locked cmake --preset "$PRESET_MODE"
     ;;
   compile)
     [[ $# -eq 0 ]] || die_usage "compile takes no arguments"
     acquire_build_lock
     compile_unlocked
+    ;;
+  target)
+    [[ $# -eq 1 ]] || die_usage "target requires exactly one CMake target"
+    acquire_build_lock
+    # Arbitrary targets may install: protect the prefix conservatively.
+    acquire_idle_runtime_lock 0
+    run_locked cmake --build --preset "$PRESET_MODE" --target "$1"
     ;;
   build)
     [[ $# -le 1 ]] || die_usage "build accepts at most one timeout"
@@ -352,7 +335,7 @@ case "$action" in
     runtime_timeout="${2:-0}"
     acquire_build_lock
     acquire_idle_runtime_lock "$runtime_timeout"
-    cmake --build --preset "$PRESET_MODE" --target "$target"
+    run_locked cmake --build --preset "$PRESET_MODE" --target "$target"
     ;;
   runtime|installation-use)
     if [[ "${1:-}" == "--" ]]; then
@@ -372,44 +355,23 @@ case "$action" in
     acquire_runtime_lock "$runtime_timeout"
     if [[ "$action" == runtime ]]; then validate_runtime_ready; fi
     [[ -z "$expected_database" ]] || require_selected_database "$expected_database"
-    # Keep the lock in this supervisor, not in the command or its daemon children.
-    (
-      exec {RUNTIME_LOCK_FD}>&-
-      exec "$@"
-    )
-    ;;
-  database-delete)
-    if [[ $# -eq 0 || "${1:-}" == "--database" ]]; then
-      runtime_timeout="$DEFAULT_RUNTIME_LOCK_TIMEOUT"
-    else
-      runtime_timeout="$1"
-      shift
-    fi
-    expected_database=""
-    if [[ "${1:-}" == "--database" ]]; then
-      [[ $# -eq 2 ]] || die_usage "database-delete --database requires exactly one database name"
-      expected_database="$2"
-      shift 2
-    fi
-    [[ $# -eq 0 ]] || die_usage "database-delete accepts only a timeout and optional database name"
-    acquire_runtime_lock "$runtime_timeout"
-    database_helper="${MY_CUBRID:-$HOME/my-cubrid}/bin/my-cubrid-pwddb"
-    database_arguments=(delete)
-    if [[ -n "$expected_database" ]]; then
-      database_arguments+=(--expected-name "$expected_database")
-    fi
-    (
-      exec {RUNTIME_LOCK_FD}>&-
-      exec "$database_helper" "${database_arguments[@]}"
-    )
+    run_locked "$@"
     ;;
   installation-delete)
     [[ $# -le 1 ]] || die_usage "installation-delete accepts at most one timeout"
     runtime_timeout="${1:-$DEFAULT_RUNTIME_LOCK_TIMEOUT}"
-    acquire_runtime_lock "$runtime_timeout"
-    validate_runtime_idle
-    [[ "$INSTALL_PREFIX" != / && "$INSTALL_PREFIX" != "$HOME" ]] \
+    acquire_build_lock
+    acquire_idle_runtime_lock "$runtime_timeout"
+    [[ "$PWD/" != "$INSTALL_PREFIX/"* && "$HOME/" != "$INSTALL_PREFIX/"* \
+        && "$CUBRID_BUILD_DIR/" != "$INSTALL_PREFIX/"* ]] \
       || die_usage "refusing to remove a broad installation path: $INSTALL_PREFIX"
+    # An installation can contain separately retained data. Do not turn software
+    # retirement into database deletion, even for a stopped instance.
+    if [[ -d "$INSTALL_PREFIX" ]] && find "$INSTALL_PREFIX" -type f \
+        \( -name '*_vinf' -o -name '*_lgat' \) -print -quit | grep -q .; then
+      printf 'Installation contains database storage; preserve it and inspect manually: %s\n' "$INSTALL_PREFIX" >&2
+      exit 1
+    fi
     /bin/rm -rf -- "$INSTALL_PREFIX"
     ;;
   stop-and-build)

@@ -1,0 +1,40 @@
+[0mdirenv: loading /tmp/cwe-env07-xuas2v7v/a/.envrc
+cub-workenv: build-only; build and install, then run cub-workenv init explicitly.
+Preset Mode: debug_gcc
+Install Dir: /tmp/cwe-env07-xuas2v7v/install-a
+Runtime: build-only
+Build Dir: /tmp/cwe-env07-xuas2v7v/a/build_preset_debug_gcc
+[0mdirenv: loading /tmp/cwe-env07-xuas2v7v/a/.envrc
+cub-workenv: build-only; build and install, then run cub-workenv init explicitly.
+Preset Mode: debug_gcc
+Install Dir: /tmp/cwe-env07-xuas2v7v/install-a
+Runtime: build-only
+Build Dir: /tmp/cwe-env07-xuas2v7v/a/build_preset_debug_gcc
+[0mdirenv: loading /tmp/cwe-env07-xuas2v7v/a/.envrc
+cub-workenv: build-only; build and install, then run cub-workenv init explicitly.
+Preset Mode: debug_gcc
+Install Dir: /tmp/cwe-env07-xuas2v7v/install-a
+Runtime: build-only
+Build Dir: /tmp/cwe-env07-xuas2v7v/a/build_preset_debug_gcc
+Using JAVA_HOME JDK: /home/vimkim/.local/share/mise/installs/java/temurin-8.0.462+8
+[0mdirenv: loading /tmp/cwe-env07-xuas2v7v/a/.envrc
+cub-workenv: build-only; build and install, then run cub-workenv init explicitly.
+Preset Mode: debug_gcc
+Install Dir: /tmp/cwe-env07-xuas2v7v/install-a
+Runtime: build-only
+Build Dir: /tmp/cwe-env07-xuas2v7v/a/build_preset_debug_gcc
+Logging build output to: /tmp/cwe-env07-xuas2v7v/a/build_preset_debug_gcc/build.log
+[0mdirenv: loading /tmp/cwe-env07-xuas2v7v/a/.envrc
+cub-workenv: build-only; build and install, then run cub-workenv init explicitly.
+Preset Mode: debug_gcc
+Install Dir: /tmp/cwe-env07-xuas2v7v/install-a
+Runtime: build-only
+Build Dir: /tmp/cwe-env07-xuas2v7v/a/build_preset_debug_gcc
+[1/2] Building C object CMakeFiles/probe.dir/probe.c.o
+[2/2] Linking C executable probe
+-- Install configuration: ""
+-- Installing: /tmp/cwe-env07-xuas2v7v/install-a/bin/probe
+Build and install completed successfully!
+Build-only installation is ready. Initialize explicitly when needed:
+  cub-workenv init --worktree /tmp/cwe-env07-xuas2v7v/a --install /tmp/cwe-env07-xuas2v7v/install-a --preset debug_gcc
+Existing work environments are preserved; use cub-workenv doctor after rebuilding.

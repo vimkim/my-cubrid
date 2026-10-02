@@ -1,0 +1,3 @@
+"${MY_CUBRID:-$HOME/my-cubrid}/bin/cubrid-build-coordinator.sh" runtime 300 -- crudini --get "${CUBRID_CONF_FILE:-$CUBRID/conf/cubrid.conf}" common cubrid_port_id
+51000
+"${MY_CUBRID:-$HOME/my-cubrid}/bin/cubrid-build-coordinator.sh" runtime 300 -- crudini --set "${CUBRID_CONF_FILE:-$CUBRID/conf/cubrid.conf}" common cubrid_port_id "$CUBRID_CUBRID_PORT_ID"

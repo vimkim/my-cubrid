@@ -14,35 +14,39 @@ ROLES = {
 }
 
 
-def role_matches(role: str, command_line: tuple[str, ...]) -> bool:
+def role_matches(role: str, command_line: tuple[str, ...], database: str = "testdb") -> bool:
     if role == "server":
-        return len(command_line) >= 2 and command_line[1] == "testdb"
+        return len(command_line) >= 2 and command_line[1] == database
     if role == "unloaddb":
         return (
             len(command_line) >= 3
             and command_line[1] == "unloaddb"
-            and "testdb" in command_line[2:]
+            and database in command_line[2:]
         )
     return False
 
 
-def process_observation(pid: int, executable: Path, role: str):
+def process_observation(pid: int, executable: Path, role: str, database: str):
     process = Path("/proc") / str(pid)
     try:
         if process.stat().st_uid != os.geteuid():
             return None
         if (process / "exe").resolve(strict=True) != executable:
             return None
-        if (process / "cwd").resolve(strict=True) != Path.cwd().resolve(strict=True):
+        environment = dict(item.split(b'=', 1) for item in
+                           (process / 'environ').read_bytes().split(b'\0') if b'=' in item)
+        keys = ('CUBRID', 'CUBRID_CONF_FILE', 'CUBRID_DATABASES', 'CUBRID_TMP', 'CUBRID_CUBRID_PORT_ID')
+        if any(not os.environ.get(key) or environment.get(key.encode()) != os.environ[key].encode()
+               for key in keys):
             return None
         command_line = (process / "cmdline").read_bytes().split(b"\0")
         decoded = tuple(value.decode(errors="replace") for value in command_line if value)
-        if not role_matches(role, decoded):
+        if not role_matches(role, decoded, database):
             return None
-        fields = (process / "stat").read_text().split()
-        if len(fields) < 22:
+        fields = (process / "stat").read_text().rsplit(')', 1)[1].split()
+        if len(fields) < 20:
             return None
-        return fields[21], decoded
+        return fields[19], decoded
     except (FileNotFoundError, OSError, PermissionError):
         return None
 
@@ -51,6 +55,7 @@ def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("role", choices=tuple(ROLES))
     parser.add_argument("--interactive", action="store_true")
+    parser.add_argument("--database", default="testdb")
     arguments = parser.parse_args()
 
     cubrid = os.environ.get("CUBRID")
@@ -62,7 +67,7 @@ def main() -> int:
     candidates = []
     for process in Path("/proc").glob("[0-9]*"):
         pid = int(process.name)
-        observation = process_observation(pid, executable, arguments.role)
+        observation = process_observation(pid, executable, arguments.role, arguments.database)
         if observation is not None:
             start_time, command_line = observation
             candidates.append((pid, start_time, command_line))
@@ -90,7 +95,7 @@ def main() -> int:
         candidate = candidates[0]
 
     pid, start_time, _command_line = candidate
-    current = process_observation(pid, executable, arguments.role)
+    current = process_observation(pid, executable, arguments.role, arguments.database)
     if current is None or current[0] != start_time:
         print("The selected process identity changed; retry selection.", file=sys.stderr)
         return 1

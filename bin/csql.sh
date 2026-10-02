@@ -7,6 +7,14 @@ if [[ $# -gt 0 && $1 != -* ]]; then
   shift
 fi
 
+REQUESTED_MODE=""
+for argument in "$@"; do
+  case "$argument" in
+    -S|--SA-mode) REQUESTED_MODE=SA ;;
+    -C|--CS-mode) REQUESTED_MODE=CS ;;
+  esac
+done
+
 select_database()
 {
   local prompt=$1
@@ -106,7 +114,7 @@ verify_server_build()
   fi
 }
 
-if "$SERVER_RUNNING"; then
+if "$SERVER_RUNNING" && [[ "$REQUESTED_MODE" != SA ]]; then
   verify_server_build || exit 1
 fi
 
@@ -131,7 +139,9 @@ printf "  ${G}cubrid${N}         : %s\n" "$CUBRID_BIN"
 printf "  ${G}DB location${N}    : %s\n" "${CUBRID_DATABASES}"
 printf "  ${G}DB name${N}        : %s\n" "$DB"
 
-if "$SERVER_RUNNING"; then
+if [[ -n "$REQUESTED_MODE" ]]; then
+  exec "$CSQL_BIN" --no-pager -u dba "$DB" "$@"
+elif "$SERVER_RUNNING"; then
   printf "  ${G}Mode${N}           : ${CYAN}CS MODE\n${N}"
 printf "${Y}=============================${N}\n"
   printf "Running: csql -u dba %s ${MAGENTA}%s${N}\n\n" "$DB" "$*"

@@ -1,0 +1,15 @@
+{
+  "binary_sha256": {
+    "a": {
+      "cubrid": "dad34727e8d22ba16b245e39a53c041c2236b9d72e8230c1247793e63ad09cf4",
+      "csql": "4da15e3e4a32714edb541164bade32f21549f0fc910203456aabd0bd51cd981b",
+      "cub_server": "459082a429405671973b9e329f3aa5638557cf9104db87731bfca3af1f487a27"
+    },
+    "b": {
+      "cubrid": "dad34727e8d22ba16b245e39a53c041c2236b9d72e8230c1247793e63ad09cf4",
+      "csql": "4da15e3e4a32714edb541164bade32f21549f0fc910203456aabd0bd51cd981b",
+      "cub_server": "459082a429405671973b9e329f3aa5638557cf9104db87731bfca3af1f487a27"
+    }
+  },
+  "source_advanced_during_task": "The user source installation advanced from earlier 2638 trials to 2640-d0311e1; final A/B copies match recorded snapshot. No source installation was changed by this task."
+}

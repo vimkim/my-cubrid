@@ -1,0 +1,38 @@
+{
+  "root": "/home/vimkim/tmp/cwe-migration-n1alzfit",
+  "source_install": "/home/vimkim/.cub/install/CBRD-27443-fd-clean/debug_gcc",
+  "steps": [
+    {
+      "label": "init-no-db",
+      "command": [
+        "cub-workenv",
+        "init",
+        "--no-db",
+        "--worktree",
+        "/home/vimkim/tmp/cwe-migration-n1alzfit/source",
+        "--install",
+        "/home/vimkim/tmp/cwe-migration-n1alzfit/install",
+        "--preset",
+        "debug_gcc",
+        "--state-home",
+        "/home/vimkim/tmp/cwe-migration-n1alzfit/host",
+        "--port-start",
+        "51000",
+        "--port-end",
+        "51999",
+        "--java-home",
+        "/home/vimkim/.local/share/mise/installs/java/temurin-8.0.462+8"
+      ],
+      "returncode": 0
+    },
+    {
+      "label": "create-testdb-before",
+      "command": [
+        "just",
+        "db::create-testdb"
+      ],
+      "returncode": 1
+    }
+  ],
+  "verdict": "old recipe defect reproduced; no DB created"
+}

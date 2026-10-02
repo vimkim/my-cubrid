@@ -1,0 +1,17 @@
+"${MY_CUBRID:-$HOME/my-cubrid}/bin/cubrid-build-coordinator.sh" runtime 300 --database testdb -- cubrid server stop testdb
+@ cubrid server stop: testdb
+
+Server testdb notified of shutdown.
+This may take several minutes. Please wait.
+++ cubrid server stop: success
+"${MY_CUBRID:-$HOME/my-cubrid}/bin/cubrid-workenv-db" recreate testdb
+Created database testdb.
+Deleted testdb; any remaining files are preserved at /home/vimkim/tmp/cwe-migration-1nvtheys/a/.cub-workenv/db/testdb
+"${MY_CUBRID:-$HOME/my-cubrid}/bin/cubrid-build-coordinator.sh" runtime 300 --database testdb -- cubrid server start testdb
+@ cubrid server start: testdb
+
+This may take a long time depending on the amount of recovery works to do.
+
+CUBRID 11.5.0 (11.5.0.2640) (64 debug build)
+
+++ cubrid server start: success

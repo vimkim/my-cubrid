@@ -204,7 +204,7 @@ stop-and-build: confirm-no
 [working-directory(justfile_directory())]
 ctest:
     bash "${MY_CUBRID:-$HOME/my-cubrid}/bin/cubrid-test-socket-preflight.sh"
-    "${MY_CUBRID:-$HOME/my-cubrid}/bin/cubrid-build-coordinator.sh" runtime 300 -- ctest --test-dir "$CUBRID_BUILD_DIR" --output-on-failure --verbose
+    "${MY_CUBRID:-$HOME/my-cubrid}/bin/cubrid-build-coordinator.sh" installation-use 300 -- ctest --test-dir "$CUBRID_BUILD_DIR" --output-on-failure --verbose
 
 # Run the currently configured test suite. This is intentionally ctest-only.
 [working-directory(justfile_directory())]
@@ -227,12 +227,12 @@ install-csql-util: install-3rdparty
 # Choose and build one CMake target interactively.
 [working-directory(justfile_directory())]
 target:
-    cmake --build --preset "$PRESET_MODE" --target help | awk -F': ' '{print $1}' | fzf | xargs -r -I {} cmake --build --preset "$PRESET_MODE" --target {}
+    cmake --build --preset "$PRESET_MODE" --target help | awk -F': ' '{print $1}' | fzf | xargs -r -I {} "${MY_CUBRID:-$HOME/my-cubrid}/bin/cubrid-build-coordinator.sh" target {}
 
 # Choose and build one CMake target with the external fuzzy helper.
 [working-directory(justfile_directory())]
 target-fuzzy:
-    cmake-build-target-fuzzy.sh "$CUBRID_BUILD_DIR"
+    just core::target
 
 # Remove CMake's configure cache after explicit confirmation.
 [working-directory(justfile_directory())]

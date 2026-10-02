@@ -26,7 +26,7 @@ class WorkenvIntegration(unittest.TestCase):
             env = dict(os.environ, CUB_WORKENV_CLI=CLI, CUBRID=str(install),
                        CUBRID_BUILD_DIR=str(root / 'build'), PRESET_MODE='debug',
                        XDG_RUNTIME_DIR=str(root), MY_CUBRID=str(REPO))
-            result = subprocess.run([CLI, 'init', '--worktree', str(root), '--install', str(install),
+            result = subprocess.run([CLI, 'init', '--no-db', '--worktree', str(root), '--install', str(install),
                 '--preset', 'debug', '--state-home', str(root / 'host'),
                 '--port-start', '46000', '--port-end', '46999'], text=True, capture_output=True, env=env)
             self.assertEqual(result.returncode, 0, result.stderr)
@@ -66,6 +66,38 @@ class WorkenvIntegration(unittest.TestCase):
                 self.assertNotEqual(refused.returncode, 0)
                 self.assertIn('Existing files are preserved', refused.stderr)
                 self.assertTrue(registry.exists())
+                # Public just recipes must edit/read the selected configuration,
+                # leaving the installation's default configuration untouched.
+                (root / 'justfile').symlink_to(REPO / 'stow/cubrid/justfile')
+                (root / '.just').symlink_to(REPO / 'stow/cubrid/.just')
+                (install / 'conf').mkdir(exist_ok=True)
+                original = install / 'conf/cubrid.conf'
+                original.write_text('[common]\nunfill_factor=0.7\ndouble_write_buffer_size=32M\n')
+                selected = root / '.cub-workenv/conf/cubrid.conf'
+                original_before = original.read_bytes()
+                env['CUBRID_CONF_FILE'] = str(selected)
+                crudini = shutil.which('crudini')
+                self.assertIsNotNone(crudini, 'configuration recipe integration requires crudini')
+                ini = commands / 'ini.sh'
+                ini.write_text('#!/bin/sh\n' +
+                    f'if [ "$#" = 5 ]; then exec {shlex.quote(crudini)} --set "$3" "$2" "$4" "$5"; '
+                    f'else exec {shlex.quote(crudini)} --get "$3" "$2" "$4"; fi\n')
+                ini.chmod(0o755)
+                recipe_env = dict(env, PATH=str(commands) + ':' + env['PATH'])
+                for setter, getter, expected_value in (
+                        ('db::set-unfill-factor', 'db::get-unfill-factor', '0.0'),
+                        ('dwb-off', 'dwb-get', '0')):
+                    updated = subprocess.run(['just', setter], cwd=root, env=recipe_env,
+                                             capture_output=True, text=True)
+                    self.assertEqual(updated.returncode, 0, updated.stderr)
+                    observed = subprocess.run(['just', getter], cwd=root, env=recipe_env,
+                                              capture_output=True, text=True)
+                    self.assertEqual(observed.returncode, 0, observed.stderr)
+                    self.assertEqual(observed.stdout.strip(), expected_value)
+                    self.assertEqual(original.read_bytes(), original_before)
+                self.assertIn('unfill_factor = 0.0', selected.read_text())
+                self.assertIn('double_write_buffer_size = 0', selected.read_text())
+
                 for selected_preset, selected_install, expected in (
                         ('debug', install, 0), ('release', install, 1),
                         ('debug', root / 'wrong-install', 1)):

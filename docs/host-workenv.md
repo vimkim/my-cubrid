@@ -55,7 +55,9 @@ The old `my-cubrid-pwddb` helper supports name/list lookup for a selected new wo
 environment. Its legacy create/ensure/recreate/delete operations refuse new storage
 with guidance. Use `cub-workenv create-db` for new databases and explicit ordinary
 CUBRID utilities after inspecting the selected registry for deletion/recreation.
-Additional registry names are valid; `my-cubrid-pwddb-getname` reports the conventional
+Configuration read/edit recipes use `CUBRID_CONF_FILE` when selected, preserving
+the installation's default configuration; legacy environments retain the installed
+configuration fallback. Additional registry names are valid; `my-cubrid-pwddb-getname` reports the conventional
 `testdb` default. Existing legacy environments retain their old helper path.
 
 For a shared physical DB, ordinary client connections to the running server are

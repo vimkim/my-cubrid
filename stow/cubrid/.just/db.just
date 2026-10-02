@@ -166,16 +166,16 @@ recreate-demodb:
 ini database='testdb' section='common':
     "${MY_CUBRID:-$HOME/my-cubrid}/bin/cubrid-build-coordinator.sh" runtime 300 --database "{{ database }}" -- cubrid-ini-fzf --database "{{ database }}" --section "{{ section }}"
 
-# Show enable_string_compression from the installed config and effective testdb parameters.
+# Show enable_string_compression from the selected config and effective testdb parameters.
 [working-directory(justfile_directory())]
 get-string-compression:
-    "${MY_CUBRID:-$HOME/my-cubrid}/bin/cubrid-build-coordinator.sh" runtime 300 -- crudini --get "$CUBRID/conf/cubrid.conf" common enable_string_compression || true
+    "${MY_CUBRID:-$HOME/my-cubrid}/bin/cubrid-build-coordinator.sh" runtime 300 -- crudini --get "${CUBRID_CONF_FILE:-$CUBRID/conf/cubrid.conf}" common enable_string_compression || true
     just db paramdump-string-compression
 
 # Enable string compression.
 [working-directory(justfile_directory())]
 enable-string-compression: get-string-compression
-    "${MY_CUBRID:-$HOME/my-cubrid}/bin/cubrid-build-coordinator.sh" runtime 300 -- crudini --set "$CUBRID/conf/cubrid.conf" common enable_string_compression yes
+    "${MY_CUBRID:-$HOME/my-cubrid}/bin/cubrid-build-coordinator.sh" runtime 300 -- crudini --set "${CUBRID_CONF_FILE:-$CUBRID/conf/cubrid.conf}" common enable_string_compression yes
     printf '%s\n' "string compression enabled:"
     just db get-string-compression
 
@@ -183,7 +183,7 @@ enable-string-compression: get-string-compression
 [working-directory(justfile_directory())]
 disable-string-compression: get-string-compression
     printf '%s\n' "string compression disabled:"
-    "${MY_CUBRID:-$HOME/my-cubrid}/bin/cubrid-build-coordinator.sh" runtime 300 -- crudini --set "$CUBRID/conf/cubrid.conf" common enable_string_compression no
+    "${MY_CUBRID:-$HOME/my-cubrid}/bin/cubrid-build-coordinator.sh" runtime 300 -- crudini --set "${CUBRID_CONF_FILE:-$CUBRID/conf/cubrid.conf}" common enable_string_compression no
     just db get-string-compression
 
 # Show effective string-compression configuration for testdb.
@@ -191,22 +191,22 @@ disable-string-compression: get-string-compression
 paramdump-string-compression:
     "${MY_CUBRID:-$HOME/my-cubrid}/bin/cubrid-build-coordinator.sh" runtime 300 --database testdb -- cub-auto paramdump testdb | rg enable_string_compression
 
-# Show enable_pgbuf_inspector from the installed config (default: no).
+# Show enable_pgbuf_inspector from the selected config (default: no).
 [working-directory(justfile_directory())]
 get-pgbuf-inspector:
-    "${MY_CUBRID:-$HOME/my-cubrid}/bin/cubrid-build-coordinator.sh" runtime 300 -- crudini --get "$CUBRID/conf/cubrid.conf" common enable_pgbuf_inspector
+    "${MY_CUBRID:-$HOME/my-cubrid}/bin/cubrid-build-coordinator.sh" runtime 300 -- crudini --get "${CUBRID_CONF_FILE:-$CUBRID/conf/cubrid.conf}" common enable_pgbuf_inspector
 
 # Enable the page-buffer inspector at the next database server startup.
 [working-directory(justfile_directory())]
 enable-pgbuf-inspector:
-    "${MY_CUBRID:-$HOME/my-cubrid}/bin/cubrid-build-coordinator.sh" runtime 300 -- crudini --set "$CUBRID/conf/cubrid.conf" common enable_pgbuf_inspector yes
+    "${MY_CUBRID:-$HOME/my-cubrid}/bin/cubrid-build-coordinator.sh" runtime 300 -- crudini --set "${CUBRID_CONF_FILE:-$CUBRID/conf/cubrid.conf}" common enable_pgbuf_inspector yes
     just db get-pgbuf-inspector
     printf '%s\n' "Restart the database server to apply enable_pgbuf_inspector."
 
 # Disable the page-buffer inspector at the next database server startup.
 [working-directory(justfile_directory())]
 disable-pgbuf-inspector:
-    "${MY_CUBRID:-$HOME/my-cubrid}/bin/cubrid-build-coordinator.sh" runtime 300 -- crudini --set "$CUBRID/conf/cubrid.conf" common enable_pgbuf_inspector no
+    "${MY_CUBRID:-$HOME/my-cubrid}/bin/cubrid-build-coordinator.sh" runtime 300 -- crudini --set "${CUBRID_CONF_FILE:-$CUBRID/conf/cubrid.conf}" common enable_pgbuf_inspector no
     just db get-pgbuf-inspector
     printf '%s\n' "Restart the database server to apply enable_pgbuf_inspector."
 
@@ -218,64 +218,64 @@ paramdump-pgbuf-inspector database='testdb':
 # Show use_system_malloc.
 [working-directory(justfile_directory())]
 get-use-system-malloc:
-    "${MY_CUBRID:-$HOME/my-cubrid}/bin/cubrid-build-coordinator.sh" runtime 300 -- crudini --get "$CUBRID/conf/cubrid.conf" common use_system_malloc || true
+    "${MY_CUBRID:-$HOME/my-cubrid}/bin/cubrid-build-coordinator.sh" runtime 300 -- crudini --get "${CUBRID_CONF_FILE:-$CUBRID/conf/cubrid.conf}" common use_system_malloc || true
 
 # Enable system malloc.
 [working-directory(justfile_directory())]
 enable-use-system-malloc: get-use-system-malloc
-    "${MY_CUBRID:-$HOME/my-cubrid}/bin/cubrid-build-coordinator.sh" runtime 300 -- crudini --set "$CUBRID/conf/cubrid.conf" common use_system_malloc yes
+    "${MY_CUBRID:-$HOME/my-cubrid}/bin/cubrid-build-coordinator.sh" runtime 300 -- crudini --set "${CUBRID_CONF_FILE:-$CUBRID/conf/cubrid.conf}" common use_system_malloc yes
     just db get-use-system-malloc
 
 # Disable system malloc.
 [working-directory(justfile_directory())]
 disable-use-system-malloc: get-use-system-malloc
-    "${MY_CUBRID:-$HOME/my-cubrid}/bin/cubrid-build-coordinator.sh" runtime 300 -- crudini --set "$CUBRID/conf/cubrid.conf" common use_system_malloc no
+    "${MY_CUBRID:-$HOME/my-cubrid}/bin/cubrid-build-coordinator.sh" runtime 300 -- crudini --set "${CUBRID_CONF_FILE:-$CUBRID/conf/cubrid.conf}" common use_system_malloc no
     just db get-use-system-malloc
 
 # Show unfill_factor.
 [working-directory(justfile_directory())]
 get-unfill-factor:
-    "${MY_CUBRID:-$HOME/my-cubrid}/bin/cubrid-build-coordinator.sh" runtime 300 -- crudini --get "$CUBRID/conf/cubrid.conf" common unfill_factor || true
+    "${MY_CUBRID:-$HOME/my-cubrid}/bin/cubrid-build-coordinator.sh" runtime 300 -- crudini --get "${CUBRID_CONF_FILE:-$CUBRID/conf/cubrid.conf}" common unfill_factor || true
 
 # Set unfill_factor to zero.
 [working-directory(justfile_directory())]
 set-unfill-factor:
-    "${MY_CUBRID:-$HOME/my-cubrid}/bin/cubrid-build-coordinator.sh" runtime 300 -- crudini --set "$CUBRID/conf/cubrid.conf" common unfill_factor 0.0
+    "${MY_CUBRID:-$HOME/my-cubrid}/bin/cubrid-build-coordinator.sh" runtime 300 -- crudini --set "${CUBRID_CONF_FILE:-$CUBRID/conf/cubrid.conf}" common unfill_factor 0.0
 
 # Show cubrid_port_id.
 [working-directory(justfile_directory())]
 get-port:
-    "${MY_CUBRID:-$HOME/my-cubrid}/bin/cubrid-build-coordinator.sh" runtime 300 -- crudini --get "$CUBRID/conf/cubrid.conf" common cubrid_port_id
+    "${MY_CUBRID:-$HOME/my-cubrid}/bin/cubrid-build-coordinator.sh" runtime 300 -- crudini --get "${CUBRID_CONF_FILE:-$CUBRID/conf/cubrid.conf}" common cubrid_port_id
 
 # Set cubrid_port_id to the personal test port.
 [working-directory(justfile_directory())]
 set-port: get-port
-    "${MY_CUBRID:-$HOME/my-cubrid}/bin/cubrid-build-coordinator.sh" runtime 300 -- crudini --set "$CUBRID/conf/cubrid.conf" common cubrid_port_id 12345
+    "${MY_CUBRID:-$HOME/my-cubrid}/bin/cubrid-build-coordinator.sh" runtime 300 -- crudini --set "${CUBRID_CONF_FILE:-$CUBRID/conf/cubrid.conf}" common cubrid_port_id 12345
 
 # Show data_buffer_size.
 [working-directory(justfile_directory())]
 get-data-buffer-size:
-    "${MY_CUBRID:-$HOME/my-cubrid}/bin/cubrid-build-coordinator.sh" runtime 300 -- crudini --get "$CUBRID/conf/cubrid.conf" common data_buffer_size
+    "${MY_CUBRID:-$HOME/my-cubrid}/bin/cubrid-build-coordinator.sh" runtime 300 -- crudini --get "${CUBRID_CONF_FILE:-$CUBRID/conf/cubrid.conf}" common data_buffer_size
 
 # Set data_buffer_size to 20G.
 [working-directory(justfile_directory())]
 set-data-buffer-20g: get-data-buffer-size
-    "${MY_CUBRID:-$HOME/my-cubrid}/bin/cubrid-build-coordinator.sh" runtime 300 -- crudini --set "$CUBRID/conf/cubrid.conf" common data_buffer_size 20G
+    "${MY_CUBRID:-$HOME/my-cubrid}/bin/cubrid-build-coordinator.sh" runtime 300 -- crudini --set "${CUBRID_CONF_FILE:-$CUBRID/conf/cubrid.conf}" common data_buffer_size 20G
     just db get-data-buffer-size
 
 # Set data_buffer_size to 50G.
 [working-directory(justfile_directory())]
 set-data-buffer-50g: get-data-buffer-size
-    "${MY_CUBRID:-$HOME/my-cubrid}/bin/cubrid-build-coordinator.sh" runtime 300 -- crudini --set "$CUBRID/conf/cubrid.conf" common data_buffer_size 50G
+    "${MY_CUBRID:-$HOME/my-cubrid}/bin/cubrid-build-coordinator.sh" runtime 300 -- crudini --set "${CUBRID_CONF_FILE:-$CUBRID/conf/cubrid.conf}" common data_buffer_size 50G
     just db get-data-buffer-size
 
 # Set data_buffer_size to 512M.
 [working-directory(justfile_directory())]
 set-data-buffer-512m: get-data-buffer-size
-    "${MY_CUBRID:-$HOME/my-cubrid}/bin/cubrid-build-coordinator.sh" runtime 300 -- crudini --set "$CUBRID/conf/cubrid.conf" common data_buffer_size 512m
+    "${MY_CUBRID:-$HOME/my-cubrid}/bin/cubrid-build-coordinator.sh" runtime 300 -- crudini --set "${CUBRID_CONF_FILE:-$CUBRID/conf/cubrid.conf}" common data_buffer_size 512m
     just db get-data-buffer-size
 
 # Edit the installed cubrid.conf.
 [working-directory(justfile_directory())]
 edit-config:
-    "${MY_CUBRID:-$HOME/my-cubrid}/bin/cubrid-build-coordinator.sh" runtime 300 -- nvim "$CUBRID/conf/cubrid.conf"
+    "${MY_CUBRID:-$HOME/my-cubrid}/bin/cubrid-build-coordinator.sh" runtime 300 -- nvim "${CUBRID_CONF_FILE:-$CUBRID/conf/cubrid.conf}"

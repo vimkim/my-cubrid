@@ -27,7 +27,7 @@ uftrace-serve:
 perf-record-server:
     #!/usr/bin/env bash
     set -euo pipefail
-    exec "$HOME/my-cubrid/bin/cubrid-build-coordinator.sh" runtime 300 --database testdb -- bash -euc '
+    exec "${MY_CUBRID:-$HOME/my-cubrid}/bin/cubrid-build-coordinator.sh" runtime 300 --database testdb -- bash -euc '
       pid="$($HOME/my-cubrid/bin/my-cubrid-process-select server --interactive)"
       exec sudo perf record -F max -g -a -p "$pid"
     '
@@ -45,4 +45,4 @@ perf-flamegraph:
 # Check whether the installed cosine metric contains native AVX instructions.
 [working-directory(justfile_directory())]
 check-simd-native:
-    ~/my-cubrid/bin/cubrid-build-coordinator.sh runtime 300 -- objdump -d "$CUBRID/lib/libcubrid.so" | rg metric_cos_gt -A 5 | rg ymm | wc -l
+    "${MY_CUBRID:-$HOME/my-cubrid}/bin/cubrid-build-coordinator.sh" runtime 300 -- objdump -d "$CUBRID/lib/libcubrid.so" | rg metric_cos_gt -A 5 | rg ymm | wc -l

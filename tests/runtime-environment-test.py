@@ -30,7 +30,7 @@ class RuntimeEnvironmentTest(unittest.TestCase):
         cli = root / "cub-workenv"
         cli.write_text("#!/bin/sh\n" + f"exit {status}\n")
         cli.chmod(0o755)
-        environment = dict(os.environ, HOME=str(root), CUB_WORKENV_CLI=str(cli),
+        environment = dict(os.environ, CUB_WORKENV_INSTALL=str(root / "install"), CUB_WORKENV_CLI=str(cli),
             CUBRID="/old/install", CUBRID_TMP="/old/tmp", CUBRID_CUBRID_PORT_ID="12345",
             CUBRID_CONF_FILE="/old/conf", CUBRID_DATABASES="/old/db",
             PATH="/tools/bin:/old/install/bin:/usr/bin:/bin", LD_LIBRARY_PATH="/old/install/lib:/tools/lib")
@@ -54,7 +54,7 @@ exit "$status"
         result, loaded = self.run_loader()
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertEqual(loaded["CUBRID_RUNTIME_READY"], "0")
-        self.assertTrue(loaded["CUBRID"].endswith("/.cub/install/source/debug_gcc"))
+        self.assertTrue(loaded["CUBRID"].endswith("/install"))
         self.assertIn("/tools/bin", loaded["PATH"])
         self.assertIn("/CTP/bin", loaded["PATH"])
         self.assertIn("/tools/lib", loaded["LD_LIBRARY_PATH"])
@@ -259,6 +259,7 @@ exit "$status"
             environment = dict(
                 os.environ,
                 HOME=str(home),
+                MY_CUBRID=str(home / "my-cubrid"),
                 PATH=f"{command_bin}:{os.environ['PATH']}",
             )
             cases = (

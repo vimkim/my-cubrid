@@ -75,7 +75,7 @@ ensure-build-jdk:
 configure: ensure-build-jdk
     #!/usr/bin/env bash
     set -euo pipefail
-    direnv exec . "$HOME/my-cubrid/bin/cubrid-build-coordinator.sh" configure
+    direnv exec . "${MY_CUBRID:-$HOME/my-cubrid}/bin/cubrid-build-coordinator.sh" configure
 
 # Select a preset interactively. Autonomous workflows should use the bootstrap script instead.
 [working-directory(justfile_directory())]
@@ -160,17 +160,17 @@ preset-set $preset:
 # Compile without installing.
 [working-directory(justfile_directory())]
 compile: ensure-build-jdk
-    ~/my-cubrid/bin/cubrid-build-coordinator.sh compile
+    "${MY_CUBRID:-$HOME/my-cubrid}/bin/cubrid-build-coordinator.sh" compile
 
 # Install an already-compiled tree when its runtime is idle.
 [working-directory(justfile_directory())]
 install:
-    ~/my-cubrid/bin/cubrid-build-coordinator.sh install 0
+    "${MY_CUBRID:-$HOME/my-cubrid}/bin/cubrid-build-coordinator.sh" install 0
 
 # Compile and install without build-log capture.
 [working-directory(justfile_directory())]
 build-without-log: ensure-build-jdk
-    ~/my-cubrid/bin/cubrid-build-coordinator.sh build 0
+    "${MY_CUBRID:-$HOME/my-cubrid}/bin/cubrid-build-coordinator.sh" build 0
 
 # Compile, install, and capture the complete log; initialize databases explicitly.
 [working-directory(justfile_directory())]
@@ -182,29 +182,29 @@ build: ensure-build-jdk
     log_file="$build_dir/build.log"
     echo "Logging build output to: $log_file"
     {
-      direnv exec . "$HOME/my-cubrid/bin/cubrid-build-coordinator.sh" build 0
+      direnv exec . "${MY_CUBRID:-$HOME/my-cubrid}/bin/cubrid-build-coordinator.sh" build 0
     } 2>&1 | tee "$log_file"
 
 # Wait up to `timeout` seconds for an idle runtime, then build.
 [working-directory(justfile_directory())]
 build-wait timeout='300': ensure-build-jdk
-    ~/my-cubrid/bin/cubrid-build-coordinator.sh build {{ timeout }}
+    "${MY_CUBRID:-$HOME/my-cubrid}/bin/cubrid-build-coordinator.sh" build {{ timeout }}
 
 # Wait up to `timeout` seconds for an idle runtime, then install.
 [working-directory(justfile_directory())]
 install-wait timeout='300':
-    ~/my-cubrid/bin/cubrid-build-coordinator.sh install {{ timeout }}
+    "${MY_CUBRID:-$HOME/my-cubrid}/bin/cubrid-build-coordinator.sh" install {{ timeout }}
 
 # Stop active CUBRID processes and build after explicit confirmation.
 [working-directory(justfile_directory())]
 stop-and-build: confirm-no
-    ~/my-cubrid/bin/cubrid-build-coordinator.sh stop-and-build
+    "${MY_CUBRID:-$HOME/my-cubrid}/bin/cubrid-build-coordinator.sh" stop-and-build
 
 # Run configured ctest tests while holding the runtime lock.
 [working-directory(justfile_directory())]
 ctest:
-    bash ~/my-cubrid/bin/cubrid-test-socket-preflight.sh
-    ~/my-cubrid/bin/cubrid-build-coordinator.sh runtime 300 -- ctest --test-dir "$CUBRID_BUILD_DIR" --output-on-failure --verbose
+    bash "${MY_CUBRID:-$HOME/my-cubrid}/bin/cubrid-test-socket-preflight.sh"
+    "${MY_CUBRID:-$HOME/my-cubrid}/bin/cubrid-build-coordinator.sh" runtime 300 -- ctest --test-dir "$CUBRID_BUILD_DIR" --output-on-failure --verbose
 
 # Run the currently configured test suite. This is intentionally ctest-only.
 [working-directory(justfile_directory())]
@@ -217,12 +217,12 @@ build-test: build test
 # Install the third-party target.
 [working-directory(justfile_directory())]
 install-3rdparty:
-    ~/my-cubrid/bin/cubrid-build-coordinator.sh install-target 3rdparty/install 0
+    "${MY_CUBRID:-$HOME/my-cubrid}/bin/cubrid-build-coordinator.sh" install-target 3rdparty/install 0
 
 # Install third-party dependencies and csql utilities.
 [working-directory(justfile_directory())]
 install-csql-util: install-3rdparty
-    ~/my-cubrid/bin/cubrid-build-coordinator.sh install-target util/install 0
+    "${MY_CUBRID:-$HOME/my-cubrid}/bin/cubrid-build-coordinator.sh" install-target util/install 0
 
 # Choose and build one CMake target interactively.
 [working-directory(justfile_directory())]
@@ -247,7 +247,7 @@ delete-build: confirm-no
 # Remove the selected install directory after explicit confirmation.
 [working-directory(justfile_directory())]
 delete-install: confirm-no
-    ~/my-cubrid/bin/cubrid-build-coordinator.sh installation-delete 300
+    "${MY_CUBRID:-$HOME/my-cubrid}/bin/cubrid-build-coordinator.sh" installation-delete 300
 
 # Restow shared CUBRID and GDB files into the current worktree.
 [working-directory(justfile_directory())]
@@ -258,7 +258,7 @@ stow-shared:
 # Restow shared files and create the worktree-local just module.
 [working-directory(justfile_directory())]
 stow-create: stow-shared
-    CUBRID_SKIP_SHARED_STOW=1 ~/my-cubrid/stow-create.sh
+    CUBRID_SKIP_SHARED_STOW=1 "${MY_CUBRID:-$HOME/my-cubrid}/stow-create.sh"
 
 # Remove shared stowed CUBRID and GDB files from the current worktree.
 [working-directory(justfile_directory())]

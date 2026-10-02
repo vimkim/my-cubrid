@@ -22,4 +22,4 @@ configure-build-prepare:
 # Run one OOS isolation test or the default OOS isolation suite.
 [working-directory(justfile_directory())]
 test-isolation TARGET='':
-    ~/my-cubrid/bin/cubrid-build-coordinator.sh runtime 300 -- cubrid-oos-isolation-test.sh {{ TARGET }}
+    "${MY_CUBRID:-$HOME/my-cubrid}/bin/cubrid-build-coordinator.sh" runtime 300 -- cubrid-oos-isolation-test.sh {{ TARGET }}

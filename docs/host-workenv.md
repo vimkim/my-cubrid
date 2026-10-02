@@ -12,6 +12,8 @@ Prepare missing stowed build files through the existing preparation recipe, sele
 `direnv exec . just build`. Build and install preserve databases and never initialize
 or ensure one automatically.
 
+Set `MY_CUBRID` to a reviewed personal-tooling checkout to exercise its shared
+build/runtime recipes without restowing globally; the default remains `$HOME/my-cubrid`.
 Install the reviewed `cub-workenv` CLI on your PATH, or export `CUB_WORKENV_CLI`
 with its absolute executable path. The source checkout and its Python package must
 remain together. `CUB_WORKENV_INSTALL` explicitly selects a non-default install

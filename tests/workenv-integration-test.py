@@ -47,6 +47,20 @@ class WorkenvIntegration(unittest.TestCase):
                                        cwd=root, env=env, capture_output=True, text=True)
                 self.assertEqual(named.returncode, 0, named.stderr)
                 self.assertEqual(named.stdout, 'testdb\n')
+                commands = root / 'commands'
+                commands.mkdir()
+                log = root / 'build-stop.log'
+                for command, target in (('cmake', commands / 'cmake'), ('cubrid', install / 'bin/cubrid')):
+                    target.write_text('#!/bin/sh\n' + f'printf "%s\\n" "{command} $*" >> {shlex.quote(str(log))}\n')
+                    target.chmod(0o755)
+                before = (root / '.cub-workenv/state.json').read_bytes()
+                rebuilt = subprocess.run([str(REPO / 'bin/cubrid-build-coordinator.sh'), 'stop-and-build'],
+                    cwd=root, env=dict(env, PATH=str(commands) + ':' + env['PATH']), capture_output=True, text=True)
+                self.assertEqual(rebuilt.returncode, 0, rebuilt.stderr)
+                self.assertEqual((root / '.cub-workenv/state.json').read_bytes(), before)
+                self.assertEqual(log.read_text().splitlines(), ['cmake --build --preset debug',
+                    'cubrid service stop', 'cubrid broker stop', f'cmake --install {root / "build"} --prefix {install}'])
+
                 refused = subprocess.run([str(REPO / 'bin/my-cubrid-pwddb'), 'delete'],
                                          cwd=root, env=env, capture_output=True, text=True)
                 self.assertNotEqual(refused.returncode, 0)

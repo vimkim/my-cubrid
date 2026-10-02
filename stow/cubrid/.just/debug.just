@@ -5,19 +5,19 @@ set shell := ["sh", "-cu"]
 # Debug csql connected to testdb.
 [working-directory(justfile_directory())]
 csql-cs:
-    ~/my-cubrid/bin/cubrid-build-coordinator.sh runtime 300 --database testdb -- cgdb --args csql -udba testdb
+    "${MY_CUBRID:-$HOME/my-cubrid}/bin/cubrid-build-coordinator.sh" runtime 300 --database testdb -- cgdb --args csql -udba testdb
 
 # Debug standalone csql connected to testdb.
 [working-directory(justfile_directory())]
 csql-sa:
-    ~/my-cubrid/bin/cubrid-build-coordinator.sh runtime 300 --database testdb -- cgdb --args csql -udba testdb -S
+    "${MY_CUBRID:-$HOME/my-cubrid}/bin/cubrid-build-coordinator.sh" runtime 300 --database testdb -- cgdb --args csql -udba testdb -S
 
 # Attach to a selected testdb server from this worktree and installation.
 [working-directory(justfile_directory())]
 server-interactive:
     #!/usr/bin/env bash
     set -euo pipefail
-    exec "$HOME/my-cubrid/bin/cubrid-build-coordinator.sh" runtime 300 --database testdb -- bash -euc '
+    exec "${MY_CUBRID:-$HOME/my-cubrid}/bin/cubrid-build-coordinator.sh" runtime 300 --database testdb -- bash -euc '
       pid="$($HOME/my-cubrid/bin/my-cubrid-process-select server --interactive)"
       exec cgdb -p "$pid" "$CUBRID_BUILD_DIR/bin/cub_server"
     '
@@ -27,7 +27,7 @@ server-interactive:
 server:
     #!/usr/bin/env bash
     set -euo pipefail
-    exec "$HOME/my-cubrid/bin/cubrid-build-coordinator.sh" runtime 300 --database testdb -- bash -euc '
+    exec "${MY_CUBRID:-$HOME/my-cubrid}/bin/cubrid-build-coordinator.sh" runtime 300 --database testdb -- bash -euc '
       pid="$($HOME/my-cubrid/bin/my-cubrid-process-select server)"
       exec cgdb -p "$pid" "$CUBRID_BUILD_DIR/bin/cub_server"
     '
@@ -35,19 +35,19 @@ server:
 # Debug client-server unloaddb.
 [working-directory(justfile_directory())]
 unloaddb-cs:
-    ~/my-cubrid/bin/cubrid-build-coordinator.sh runtime 300 --database testdb -- \
+    "${MY_CUBRID:-$HOME/my-cubrid}/bin/cubrid-build-coordinator.sh" runtime 300 --database testdb -- \
         cgdb --args cubrid unloaddb testdb -C -t 0 -v
 
 # Debug standalone unloaddb.
 [working-directory(justfile_directory())]
 unloaddb-sa:
-    ~/my-cubrid/bin/cubrid-build-coordinator.sh runtime 300 --database testdb -- \
+    "${MY_CUBRID:-$HOME/my-cubrid}/bin/cubrid-build-coordinator.sh" runtime 300 --database testdb -- \
         cgdb --args cubrid unloaddb testdb -S -t 0 -v
 
 # Debug client-server loaddb.
 [working-directory(justfile_directory())]
 loaddb-cs:
-    ~/my-cubrid/bin/cubrid-build-coordinator.sh runtime 300 --database testdb -- \
+    "${MY_CUBRID:-$HOME/my-cubrid}/bin/cubrid-build-coordinator.sh" runtime 300 --database testdb -- \
         cgdb --args cubrid loaddb -udba -C -v testdb -d ./testdb_objects
 
 # Open a csql core with cgdb.
@@ -60,7 +60,7 @@ core-csql CORE:
 attach-unloaddb:
     #!/usr/bin/env bash
     set -euo pipefail
-    exec "$HOME/my-cubrid/bin/cubrid-build-coordinator.sh" runtime 300 --database testdb -- bash -euc '
+    exec "${MY_CUBRID:-$HOME/my-cubrid}/bin/cubrid-build-coordinator.sh" runtime 300 --database testdb -- bash -euc '
       pid="$($HOME/my-cubrid/bin/my-cubrid-process-select unloaddb --interactive)"
       exec cgdb -p "$pid" "$CUBRID_BUILD_DIR/bin/cubrid"
     '

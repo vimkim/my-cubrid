@@ -1,17 +1,25 @@
 # Personal CUBRID tooling vocabulary
 
+See [ADR-0001](docs/adr/0001-enforce-runtime-guard-in-managed-workflow.md) for the
+explicit-initialization scope revision. Manifest-specific terms below describe
+the retained legacy guard; [host work environments](docs/host-workenv.md) describes
+the new selection and execution boundary.
+
 ## Language
 
 **Managed CUBRID workflow**:
-The supported path for building or operating a CUBRID worktree, in which runtime readiness is mandatory. Deliberate direct invocation outside this workflow is unmanaged.
+The supported paths for building, installing, and operating a CUBRID worktree.
+Host database use follows explicit environment initialization; build/install and
+container preparation have independent readiness boundaries. Ordinary native
+commands in a selected prepared host environment are supported.
 _Avoid_: Fully enforced runtime, impossible-to-bypass runtime
 
 **Managed runtime action**:
-An action in the Managed CUBRID workflow that uses an installed CUBRID runtime,
-its selected database registry or storage, a live CUBRID process, or a test
-harness against that installation. Managed runtime actions pass through the
-runtime coordinator. Work on offline artifacts such as core files and traces is
-not a Managed runtime action.
+A coordinated host action that uses the selected database environment, storage,
+or live CUBRID processes. Its environment selection is checked before execution.
+Container use of an installation is coordinated independently of host database
+readiness. Work on offline artifacts such as core files and traces is outside
+this runtime boundary.
 
 **Persistent managed test harness**:
 A test harness that continues using the selected installation after its test
@@ -19,7 +27,10 @@ finishes, such as an inspection container. Its coordinator invocation remains
 foregrounded and holds the runtime lock until the harness is stopped.
 
 **Build-only worktree**:
-A worktree that has enough environment to build and install CUBRID but exposes no runnable CUBRID environment because its worktree runtime is not ready.
+A worktree with the environment needed to build and install CUBRID, but without
+a prepared host database connection environment. Installing binaries alone does
+not initialize that host environment. A container may use the installation with
+its own independently prepared database environment.
 
 **Review worktree**:
 A disposable local checkout dedicated to inspecting one pull request. Multiple review worktrees may coexist for the same ticket when they belong to different pull requests.

@@ -4,9 +4,37 @@ status: accepted
 
 # Enforce the runtime guard at the managed-workflow seam
 
-Managed CUBRID worktree operations fail closed through the shared environment and runtime coordinator: an unready worktree remains build-only, full installation establishes guarded runtime state, and coordinated runtime commands revalidate it. This central seam was chosen over scattered per-recipe checks and OS-level isolation because it keeps the personal workflow simple and consistent while accepting that deliberate direct binary invocation remains unmanaged.
+The original decision centralized legacy runtime validation in the shared environment and coordinator instead of scattering checks across recipes or adding OS-level isolation. The accepted scope is now narrowed: the legacy guard remains available for existing legacy environments, while the explicit host-workenv contract below supersedes automatic initialization after installation and universal runtime-readiness requirements.
 
-## Consequences
+## Scope revision: explicit host initialization (2026-10-02)
+
+The [host work environment integration](../host-workenv.md) separates preparation
+from loading and use so that entering a directory or finishing a build does not
+create databases or migrate existing state.
+
+- Build and installation leave initialization explicit. This supersedes the
+  original rule that full installation establishes guarded runtime state,
+  including the build coordinator and shared build recipe.
+- A prepared host work environment loads its completed selection with cheap
+  metadata checks. Full diagnosis is an explicit operation. Existing legacy
+  runtime actions retain their legacy validation path; that path is not the
+  readiness contract for new workenv environments.
+- Ordinary `cubrid` and `csql` use in the selected host environment is supported.
+  Neither a coordinator prefix nor `cub-workenv run` is mandatory for every test.
+- Containers prepare their own database environment independently of host
+  initialization. `installation-use` retains the installation lock for a
+  bind-mounted installation without requiring a ready host runtime. Persistent
+  container ownership and cleanup protections remain in force.
+- Coordinated host actions retain the installation lock and check the selected
+  environment before execution. `stop-and-build` checks it before stopping
+  services, then installs without reinitializing. These checks do not establish
+  a sandbox or continuous protection against external interference.
+
+The legacy manifest, database-lifecycle, and ownership rules below are retained
+for the legacy guard path. They do not authorize automatic migration or apply
+legacy single-database assumptions to new workenv storage.
+
+## Retained legacy guard consequences
 
 - A new runtime defaults its database name to the sanitized worktree directory name, truncated to CUBRID's 17-character limit. The stable runtime identity and private registry/storage provide isolation, so the database name needs no identity suffix.
 - Runtime ownership is proven from actual CUBRID executable identity plus correlated listeners, Unix endpoints, System V resources, or private database-storage descriptors. Merely inheriting `CUBRID` environment variables does not make a build daemon a live CUBRID process.

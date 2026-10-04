@@ -1,0 +1,19 @@
+1..17
+ok 1 - selected workenv config preserves installed config
+ok 2 - help works without runtime dependencies
+ok 3 - ini.sh is checked before other dependencies run
+ok 4 - other missing dependencies and environment fail clearly
+ok 5 - missing configuration and registry files fail early
+ok 6 - default stopped testdb update uses common and SA mode
+ok 7 - running testdb uses normal paramdump and warns
+ok 8 - similarly named running database does not match testdb
+ok 9 - database and section overrides reach cubrid and ini.sh
+ok 10 - invalid and unregistered arguments fail early
+ok 11 - all tags parse and duplicate C/S records collapse
+ok 12 - picker, empty-value, and confirmation cancellation do not write
+ok 13 - Ctrl-C at value and confirmation prompts exits 130 without a write
+ok 14 - status and paramdump failures do not write
+ok 15 - malformed paramdump fails safely
+ok 16 - literal empty and spaced values reach ini.sh unchanged
+ok 17 - ini.sh failures retain a backup
+# all 17 tests passed

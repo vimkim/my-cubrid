@@ -246,15 +246,28 @@ environments belonged to pre-existing sd-pam/SSH processes. No global process or
 IPC cleanup was used. Source/user worktrees, DBs and legacy migration artifacts
 were preserved.
 
-## Local application pending
+## Local application completed (2026-10-04)
 
-All three changes must be applied together: `cubrid-workenv` supplies provenance,
-`my-cubrid` supplies the migrated recipes/helpers, and `cubrid-ini-fzf` respects the
-selected config. Candidate code: CLI `ff01097`, tooling `7e2cce4` + review fix
-`fb021d4`, editor `4340da2`. A final evidence commit follows those code commits.
+After the user's explicit approval, all three topic branches were rebased onto
+current local `main` and fast-forward merged without conflicts. The destination
+branches had not advanced since review. Applied commits: CLI `ff01097`, tooling
+`3b9590a` (including review fix `fb021d4`), editor `4340da2`. This completion
+record is a documentation-only follow-up.
 
-The three main worktrees remain clean at their original bases. Under the user's
-AGENTS.md step 5, one final confirmation is required to rebase these topics onto
-their current local main branches and fast-forward merge them. Shared recipe,
-CLI and editor symlinks will then immediately use these changes. Remote publication
-is a separate operation. Task branches/worktrees remain available until approval.
+Installed `~/.local/bin/cub-workenv` and `cubrid-ini-fzf` resolve to their main
+checkouts. The originally reported source worktree's shared DB recipe resolves to
+`/home/vimkim/my-cubrid/stow/cubrid/.just/db.just`, so it receives the new behavior.
+No initialization or DB mutation was performed in that user worktree.
+
+Post-merge checks against the installed CLI and main tooling passed:
+[cross-repository integration](../tests/evidence/complete-workenv/merged-integration.txt)
+(1), [DB lifecycle](../tests/evidence/complete-workenv/merged-lifecycle.txt) (8),
+and [selected-config editor](../tests/evidence/complete-workenv/merged-editor.txt)
+(17). These are focused installation checks in addition to the earlier 94 tests
+and real native/build/container evidence; no engine rebuild was required for the
+unchanged rebased code.
+
+The user's approval also covers non-force removal of the three merged task
+worktrees and local branches after preserving meaningful artifacts. Only Python
+bytecode caches were found among ignored task files. Other worktrees and user DBs
+remain outside this cleanup. No remote push was performed.

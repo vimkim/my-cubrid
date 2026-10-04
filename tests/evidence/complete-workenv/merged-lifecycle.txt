@@ -1,0 +1,13 @@
+test_delete_and_recreate_preserve_other_rows_comments_and_leftovers (__main__.WorkenvDatabaseTest.test_delete_and_recreate_preserve_other_rows_comments_and_leftovers) ... ok
+test_demodb_recreation_checks_samples_before_deleting_existing_database (__main__.WorkenvDatabaseTest.test_demodb_recreation_checks_samples_before_deleting_existing_database) ... ok
+test_disabled_native_locking_refuses_deletion (__main__.WorkenvDatabaseTest.test_disabled_native_locking_refuses_deletion) ... ok
+test_empty_registry_real_recipe_create_and_duplicate_preservation (__main__.WorkenvDatabaseTest.test_empty_registry_real_recipe_create_and_duplicate_preservation) ... ok
+test_external_mixed_symlink_and_unknown_provenance_refuse_without_writes (__main__.WorkenvDatabaseTest.test_external_mixed_symlink_and_unknown_provenance_refuse_without_writes) ... ok
+test_load_failure_retains_created_database_and_missing_template_creates_nothing (__main__.WorkenvDatabaseTest.test_load_failure_retains_created_database_and_missing_template_creates_nothing) ... ok
+test_names_listing_compatibility_and_ensure_preserve_arbitrary_entries (__main__.WorkenvDatabaseTest.test_names_listing_compatibility_and_ensure_preserve_arbitrary_entries) ... ok
+test_native_failure_preserves_registration_and_receipt_without_fallback (__main__.WorkenvDatabaseTest.test_native_failure_preserves_registration_and_receipt_without_fallback) ... ok
+
+----------------------------------------------------------------------
+Ran 8 tests in 7.195s
+
+OK

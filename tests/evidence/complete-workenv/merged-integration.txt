@@ -1,0 +1,6 @@
+test_new_environment_supports_coordinator_runtime_without_legacy_manifest (__main__.WorkenvIntegration.test_new_environment_supports_coordinator_runtime_without_legacy_manifest) ... ok
+
+----------------------------------------------------------------------
+Ran 1 test in 2.025s
+
+OK

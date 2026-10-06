@@ -35,6 +35,35 @@ class Reports(unittest.TestCase):
             self.assertIn('different', report.snapshot(root)['error'])
             self.assertEqual(report.shm(1644167168), '0x62000000 (1644167168)')
 
+    def test_isolation_reports_named_environment_settings_and_storage(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            folder = root / '.cub-workenv'
+            (folder / 'conf').mkdir(parents=True)
+            (folder / 'databases').mkdir()
+            (folder / 'conf/cubrid.conf').write_text('[common]\ncubrid_port_id=41000\nstored_procedure_uds=yes\nha_mode=off\n')
+            (folder / 'conf/cubrid_broker.conf').write_text('[broker]\nMASTER_SHM_ID=0x62000000\n[%workenv]\nBROKER_PORT=41001\nAPPL_SERVER_SHM_ID=0x62000001\n')
+            (folder / 'databases/databases.txt').write_text('testdb /data localhost /log file:/lob\n')
+            state = dict(schema=1, status='ready', worktree=str(root), install='/install',
+                         allocation={'tmp': '/tmp/instance', 'master_port': 41000})
+            (folder / 'state.json').write_text(json.dumps(state))
+            record = report.snapshot(root)
+            self.assertIsNone(record['error'])
+            info = record['isolation']
+            self.assertEqual(info['expected_environment']['CUBRID_TMP'], '/tmp/instance')
+            self.assertEqual(info['expected_environment']['CUBRID_CUBRID_PORT_ID'], '41000')
+            self.assertEqual(info['master_socket'], '/tmp/instance/CUBRID41000')
+            self.assertEqual(info['databases'][0]['pl_socket'], '/tmp/instance/sp_testdb.sock')
+            self.assertEqual(info['databases'][0]['pl_info'], '/install/var/pl/pl_testdb.info')
+            self.assertEqual(info['databases'][0]['lob'], 'file:/lob')
+            self.assertEqual(info['disk_settings']['CUBRID_BROKER_CONF_FILE']['%workenv']['broker_port'], '41001')
+            state.update(status='reset', allocation={'tmp': '/tmp/instance', 'status': 'reset'})
+            (folder / 'state.json').write_text(json.dumps(state))
+            info = report.snapshot(root)['isolation']
+            self.assertIsNone(info['master_socket'])
+            self.assertEqual(info['expected_environment']['CUBRID_TMP'], '/tmp/instance')
+            self.assertIsNone(info['expected_environment']['CUBRID_CUBRID_PORT_ID'])
+
     def test_all_keeps_errors_and_uninitialized_worktrees(self):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)

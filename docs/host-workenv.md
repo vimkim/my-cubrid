@@ -74,6 +74,24 @@ executable identity, DB/utility role and the full instance environment, then
 rechecks process generation. `my-cubrid-process-select --database NAME` also
 supports non-default DBs. Startup cwd alone is not instance identity.
 
+## Isolation reports and numeric reset
+
+`just workenv::status` reports the named isolation environment, saved numeric
+allocations, current configuration values and DB storage/socket/info paths.
+`just workenv::all-details` reports the same for all Git worktrees; `all-json`
+exports the complete reports. These are expected settings, not observed process
+environments. Use `doctor` for live evidence.
+
+`just workenv::reset` previews release of this worktree's numeric assignments;
+`reset-apply` applies after inactivity checks. `reset-all` and `reset-all-apply`
+operate on the default host allocation namespace, across repositories. A custom
+namespace can be selected through `cub-workenv reset-all --state-home PATH`.
+Only ports and broker SHM assignments are released. TMP/install/configuration
+paths, databases, logs, registry entries and non-resource tuning remain. Kernel
+IPC is not force-removed and owners are not killed. Explicit init with the same
+recorded selection is required afterward; reload old shells. See the CLI's
+`docs/reset.md` for prerequisites, interruption recovery and reinitialization.
+
 ## Internal database deletion and recreation
 
 The user chose automatic lifecycle only for known, wholly internal storage.

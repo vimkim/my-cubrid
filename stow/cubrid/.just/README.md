@@ -62,7 +62,8 @@ Run these from a prepared CUBRID worktree (or any directory below it):
 
 | Command | Output |
 | --- | --- |
-| `just workenv::status` | Saved state/stage, preset, installation, allocated ports, SHM keys in hex and decimal, and configuration/registry/socket paths |
+| `just workenv::status` | Complete expected isolation environment, saved allocations, disk settings, socket/info paths, and database storage registrations |
+| `just workenv::all-details` | The same complete isolation reports for every Git worktree |
 | `just workenv::all` | Allocation table for all Git worktrees of the current repository |
 | `just workenv::json` | Current worktree's full saved state in a JSON report |
 | `just workenv::all-json` | Full JSON reports for all Git worktrees, suitable for saving or processing with `jq` |
@@ -76,7 +77,11 @@ Run these from a prepared CUBRID worktree (or any directory below it):
 remain healthy. SHM values are allocated keys, not kernel segment IDs or memory
 sizes. Use `config` to inspect edited settings and `doctor` for live resource
 evidence. Reports never initialize environments, allocate resources, start/stop
-servers, or source generated shell code.
+servers, or source generated shell code. Isolation details cover the managed
+host master/server/broker/PL setup, including the explicit `CUBRID_TMP`,
+`CUBRID_DATABASES`, configuration variables and binary/library prefixes. They
+are expected values, not measurements of a running process. Disk settings are
+reported separately; HA, Manager and containers require their own configuration.
 
 All-worktree commands include uninitialized worktrees and registered paths that
 are now missing; they cover the current Git repository, not unrelated clones.
@@ -84,9 +89,36 @@ Malformed/unsupported state or missing worktrees produce error entries and a
 nonzero exit after reporting the remaining rows. An ordinary uninitialized
 worktree is not a reporting error. `doctor-all` returns nonzero if any doctor
 invocation fails. JSON reports contain `worktree`, `state` (or null), and `error`
-(or null), and retain the complete saved state for initialized worktrees.
+(or null). Initialized worktrees also include `isolation`: expected environment,
+current disk settings, database registrations, socket/info paths and inspection
+errors. Reports retain the complete saved state.
 
 Helpers honor `MY_CUBRID` for candidate tooling; CLI wrappers honor
 `CUB_WORKENV_CLI`. After adding this module, run `just core::stow-shared` in
 existing worktrees whose `.just` directory was individually stowed, so the new
 module link exists. New worktrees receive it through `just prepare`.
+
+
+## Release numeric allocations
+
+| Command | Action |
+| --- | --- |
+| `just workenv::reset` | Preview release for this worktree, using its recorded namespace |
+| `just workenv::reset-apply` | Release this idle worktree's ports and SHM assignments |
+| `just workenv::reset-all` | Preview release for the default host allocation namespace |
+| `just workenv::reset-all-apply` | Release all idle numeric assignments in that namespace |
+
+These delegate to `cub-workenv reset` / `cub-workenv reset-all` and require the companion CLI's
+reset support. For a custom namespace use the CLI's `--state-home PATH`.
+Unlike `all` reports, `reset-all` follows the allocation registry across Git
+repositories. Stop affected instances first. Occupied ports, existing SHM
+segments, live sockets, uncertain processes, or a cooperating init/create-db
+operation block reset. The commands never kill processes or remove kernel IPC.
+
+Only numeric assignments are released. Unique TMP/install/configuration/storage
+paths, databases, logs, registry contents and non-resource tuning remain.
+Environment loading is disabled until explicit `cub-workenv init` with the same
+recorded install/preset/state-home. Reinitialization reuses unique paths and
+allocates the lowest available numeric values in the requested pool; its order
+determines assignments after a full reset. Reload old shells after the operation.
+See the CLI repository's `docs/reset.md` for the lifecycle and failure contract.

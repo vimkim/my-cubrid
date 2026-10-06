@@ -41,3 +41,29 @@ config:
 [working-directory(justfile_directory())]
 env:
     @"${CUB_WORKENV_CLI:-cub-workenv}" env --worktree "$PWD"
+
+
+# Show complete isolation settings and storage paths for every Git worktree.
+[working-directory(justfile_directory())]
+all-details:
+    @python3 "${MY_CUBRID:-$HOME/my-cubrid}/bin/cubrid-workenv-report.py" all-details
+
+# Preview release of the current worktree's numeric allocations; preserve paths/data.
+[working-directory(justfile_directory())]
+reset:
+    @"${CUB_WORKENV_CLI:-cub-workenv}" reset --worktree "$PWD"
+
+# Release the current worktree's idle ports/SHM assignments; explicit init required.
+[working-directory(justfile_directory())]
+reset-apply:
+    @"${CUB_WORKENV_CLI:-cub-workenv}" reset --worktree "$PWD" --apply
+
+# Preview release of all numeric allocations in the default host namespace.
+[working-directory(justfile_directory())]
+reset-all:
+    @"${CUB_WORKENV_CLI:-cub-workenv}" reset-all
+
+# Release all idle numeric allocations in the default host namespace; preserve paths/data.
+[working-directory(justfile_directory())]
+reset-all-apply:
+    @"${CUB_WORKENV_CLI:-cub-workenv}" reset-all --apply

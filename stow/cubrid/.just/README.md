@@ -41,6 +41,15 @@ Each worktree may provide an optional `local.just` directory managed by
 `stow-create.sh`. Ticket-specific scripts and SQL belong there instead of in
 the shared modules.
 
+`just prepare` also stows `AGENTS.override.md`, which replaces the stale root
+`AGENTS.md` for Codex and loads `/home/vimkim/my-cubrid/CUBRID.md`. Maintain the
+override in `my-cubrid/stow/cubrid/AGENTS.override.md`; edits reach every linked
+worktree. Optional `AGENTS.user.md` files belong in individual worktree roots.
+Preparation adds both root filenames to Git's local `info/exclude`, shared by
+linked worktrees, without modifying the upstream `.gitignore` or `AGENTS.md`.
+Nested instruction files remain applicable. Start a new Codex session after
+preparation or instruction edits so discovery runs again.
+
 Every module recipe explicitly uses the root `justfile` directory as its
 working directory. This preserves behavior when `just` is invoked below the
 worktree root even though the module sources are stowed symlinks.

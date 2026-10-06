@@ -4,6 +4,16 @@ set -euo pipefail
 MY_CUBRID="${MY_CUBRID:-$HOME/my-cubrid}"
 CUBRID_JUSTFILES_DIR="${CUBRID_JUSTFILES_DIR:-$HOME/gh/my-cubrid-justfiles}"
 
+# Keep personal instruction files local to this Git repository's worktrees.
+instruction_exclude="$(git rev-parse --path-format=absolute --git-path info/exclude)"
+mkdir -p "$(dirname "$instruction_exclude")"
+touch "$instruction_exclude"
+for instruction_pattern in /AGENTS.override.md /AGENTS.user.md; do
+    if ! grep -Fxq -- "$instruction_pattern" "$instruction_exclude"; then
+        printf '\n%s\n' "$instruction_pattern" >> "$instruction_exclude"
+    fi
+done
+
 ticket_from()
 {
     local text="${1,,}"

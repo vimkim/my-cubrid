@@ -1,20 +1,19 @@
-# Personal CUBRID instruction loader
+# Personal CUBRID instructions
 
-Before doing any work, load the following files from the CUBRID worktree
-directory containing this symlink, in order:
+This file replaces the root `AGENTS.md`, whose instructions are stale. Use
+the following maintained sources instead of loading that root file:
 
-1. Read `AGENTS.md`, if present, for shared project instructions.
-2. Read `AGENTS.user.md`, if present, for personal worktree instructions.
+1. Before any CUBRID work, read `/home/vimkim/my-cubrid/CUBRID.md` for personal
+   CUBRID policies and pointers to task-specific guidance.
+2. Read `AGENTS.user.md`, if present in this worktree, for task-specific
+   instructions.
 
-Resolve these paths relative to the symlink's location in the worktree, not
-its target in `my-cubrid/stow/cubrid`. Skip missing files; report unreadable
-files instead of silently treating them as absent.
+Resolve `AGENTS.user.md` relative to this symlink's location in the worktree,
+not its target in `my-cubrid/stow/cubrid`. The CUBRID policy file is required;
+report it if missing or unreadable. Skip an absent `AGENTS.user.md`, but report
+an unreadable one.
 
-Apply both sets of instructions. Personal instructions take precedence over
-conflicting project guidance. Continue to load applicable instructions in
-subdirectories when working there.
-
-For host environment preparation, preset/install selection, DB tests, or diagnosis,
-read `$HOME/my-cubrid/docs/host-workenv.md`. Initialize explicitly after build/install;
-use ordinary `cubrid` and `csql` in the selected environment and diagnose with
-`cub-workenv doctor`. Container initialization remains independent.
+Apply the personal CUBRID policies over conflicting repository guidance,
+then apply worktree-specific instructions. Continue to load applicable
+instructions in subdirectories when working there; this override replaces
+only the root `AGENTS.md`.

@@ -32,7 +32,7 @@ class CliTest(unittest.TestCase):
         fake.write_text('''#!/usr/bin/env python3
 import json,os,sys
 with open(os.environ['GH_FIXTURE']) as f: data=json.load(f)
-key='pr' if sys.argv[1:3]==['pr','view'] else sys.argv[2]
+key='pr' if os.path.basename(sys.argv[0])=='gh-pr-info' or sys.argv[1:3]==['pr','view'] else sys.argv[2]
 value=data.get(key, {'error':'Unexpected request: '+repr(sys.argv)})
 if isinstance(value,dict) and 'sequence' in value:
  from pathlib import Path
@@ -45,6 +45,9 @@ if isinstance(value,dict) and 'error' in value:
 print(json.dumps(value))
 ''')
         fake.chmod(0o755)
+        resolver = self.root / 'gh-pr-info'
+        resolver.write_text(fake.read_text())
+        resolver.chmod(0o755)
 
     def run_cli(self, *args):
         fixture = self.root / 'fixture.json'

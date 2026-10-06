@@ -99,6 +99,9 @@ class CheckerTest(unittest.TestCase):
         payload = f'{{"number":{number},"url":"{url}","baseRefName":"{base}"}}'
         gh.write_text(f"#!/bin/sh\nprintf '%s\\n' '{payload}'\n")
         gh.chmod(0o755)
+        resolver = fake_bin / 'gh-pr-info'
+        resolver.write_text(gh.read_text())
+        resolver.chmod(0o755)
         self.env['PATH'] = str(fake_bin) + os.pathsep + os.environ['PATH']
 
     def test_pr_detection_and_validation(self):

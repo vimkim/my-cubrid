@@ -39,6 +39,7 @@ class CommandFixture:
         self.registered_paths: list[Path] = [self.control]
         self.checkout_returncode = 0
         self.checkout_returncodes: dict[int, int] = {}
+        self.association_returncode = 0
         self.prepare_returncode = 0
         self.calls: list[tuple[list[str], Path]] = []
         self.command_inputs: dict[str, str] = {}
@@ -111,6 +112,9 @@ class CommandFixture:
             if returncode == 0:
                 Path(command[command.index("--worktree") + 1]).mkdir()
             return subprocess.CompletedProcess(command, returncode, "", "")
+        if command[:4] == ["git", "config", "--local", "--replace-all"]:
+            return subprocess.CompletedProcess(command, self.association_returncode, "",
+                                               "association failed" if self.association_returncode else "")
         if command and command[0] == "fzf":
             if self.fzf_missing:
                 raise FileNotFoundError("fzf")
@@ -153,6 +157,12 @@ class ReviewWorktreeTest(unittest.TestCase):
             self.assertEqual(result, 0)
             self.assertEqual(stderr, "")
             expected = fixture.parent / "review-CBRD-27325-pr-7887"
+            self.assertEqual(
+                fixture.calls_starting_with(["git", "config"]),
+                [(["git", "config", "--local", "--replace-all",
+                   "branch.review-CBRD-27325-pr-7887.pr-url",
+                   "https://github.com/CUBRID/cubrid/pull/7887"], expected)],
+            )
             self.assertIn(f"Created review worktree: {expected}", stdout)
             checkout_calls = fixture.calls_starting_with(["gh", "pr", "checkout"])
             self.assertEqual(len(checkout_calls), 1)
@@ -174,6 +184,18 @@ class ReviewWorktreeTest(unittest.TestCase):
                     fixture.control,
                 ),
             )
+
+    def test_failed_association_preserves_checkout_and_skips_prepare(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            fixture = CommandFixture(Path(temporary))
+            fixture.association_returncode = 1
+            result, stdout, stderr = self.run_main(
+                fixture, "https://github.com/CUBRID/cubrid/pull/7887", "--prepare"
+            )
+            self.assertEqual(result, 1)
+            self.assertTrue((fixture.parent / "review-CBRD-27325-pr-7887").exists())
+            self.assertIn("gh-pr-associate", stderr)
+            self.assertEqual(fixture.calls_starting_with(["just"]), [])
 
     def test_first_ticket_token_wins(self) -> None:
         self.assertEqual(

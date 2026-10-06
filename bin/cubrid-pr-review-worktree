@@ -470,6 +470,21 @@ def create_review_worktree(
     except UserError as exc:
         raise UserError(f"{exc}\nNo automatic cleanup was attempted.") from exc
 
+    try:
+        run_capture(
+            [
+                "git", "config", "--local", "--replace-all",
+                f"branch.{branch}.pr-url",
+                f"https://github.com/CUBRID/cubrid/pull/{number}",
+            ],
+            cwd=target_path,
+        )
+    except UserError as exc:
+        raise UserError(
+            f"{exc}\nThe review worktree remains at: {target_path}\n"
+            "PR association was not recorded; use gh-pr-associate PR_URL there."
+        ) from exc
+
     print(f"Created review worktree: {target_path}")
     print(f"Local branch: {branch}")
 

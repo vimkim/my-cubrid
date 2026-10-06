@@ -1,7 +1,7 @@
 #!/bin/bash
 
 # Format all files changed in the current PR.
-# Auto-detects base and head branches via `gh pr view`.
+# Auto-detects base and head branches via `gh-pr-info`.
 # Usage: cubrid-format-pr-diff.sh [--dry-run|-d]
 
 DRY_RUN=""
@@ -9,10 +9,10 @@ if [[ "$1" == "--dry-run" || "$1" == "-d" ]]; then
     DRY_RUN="--dry-run"
 fi
 
-PR_JSON=$(gh pr view --json baseRefName,headRefName,baseRefOid,headRefOid,number 2>&1)
+PR_JSON=$(gh-pr-info --repo CUBRID/cubrid --json baseRefName,headRefName,baseRefOid,headRefOid,number 2>&1)
 if [[ $? -ne 0 ]]; then
-    echo "Error: No PR found for the current branch."
-    echo "Make sure you're on a branch with an open PR."
+    echo "Error: Could not resolve PR metadata for the current branch."
+    echo "Check the lookup error below, or record its URL with gh-pr-associate."
     echo "$PR_JSON"
     exit 1
 fi

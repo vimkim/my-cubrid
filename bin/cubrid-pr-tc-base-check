@@ -18,9 +18,9 @@ def command(*args, cwd=None, allowed=(0,)):
 
 
 def pr_metadata(pr=None):
-    args = ["gh", "pr", "view"]
+    args = ["gh-pr-info", "--repo", "CUBRID/cubrid"]
     if pr is not None:
-        args += [str(pr), "--repo", "CUBRID/cubrid"]
+        args += [str(pr)]
     pr = json.loads(command(*args, "--json", "number,url,baseRefName").stdout)
     if not re.fullmatch(r"https://github\.com/CUBRID/cubrid/pull/[1-9][0-9]*", pr["url"], re.I):
         raise RuntimeError("Current PR must belong to CUBRID/cubrid; use --pr N explicitly.")

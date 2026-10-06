@@ -17,11 +17,11 @@ PREFIX = 'repos/' + REPO
 FIELDS = 'number,title,url,headRefOid,state,isDraft,reviewDecision,mergeable'
 
 
-def gh(*args):
+def gh(*args, executable='gh'):
     try:
-        result = subprocess.run(['gh', *args], capture_output=True, text=True, timeout=45)
+        result = subprocess.run([executable, *args], capture_output=True, text=True, timeout=45)
     except FileNotFoundError as exc:
-        raise RuntimeError('gh is missing; install GitHub CLI and run gh auth login.') from exc
+        raise RuntimeError(f'{executable} is missing; install gh and my-git-utils.') from exc
     except subprocess.TimeoutExpired as exc:
         raise RuntimeError('GitHub request timed out after 45 seconds.') from exc
     if result.returncode:
@@ -38,7 +38,7 @@ def api(path):
 
 def read_pr(target):
     args = [target] if target else []
-    pr = gh('pr', 'view', *args, '--json', FIELDS)
+    pr = gh(*args, '--repo', REPO, '--json', FIELDS, executable='gh-pr-info')
     if not re.fullmatch(r'https://github\.com/CUBRID/cubrid/pull/[0-9]+', pr['url'], re.I):
         raise RuntimeError('This command supports CUBRID/cubrid PRs only.')
     return pr

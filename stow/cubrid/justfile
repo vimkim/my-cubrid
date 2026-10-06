@@ -14,6 +14,9 @@ mod core '.just/core.just'
 # Local database lifecycle, server control, csql, and cubrid.conf workflows.
 mod db '.just/db.just'
 
+# Work environment settings, resource allocation reports, and diagnostics.
+mod workenv '.just/workenv.just'
+
 # CTP shell-test workflows.
 mod ctp '.just/ctp.just'
 

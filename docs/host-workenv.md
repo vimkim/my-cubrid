@@ -92,6 +92,13 @@ IPC is not force-removed and owners are not killed. Explicit init with the same
 recorded selection is required afterward; reload old shells. See the CLI's
 `docs/reset.md` for prerequisites, interruption recovery and reinitialization.
 
+Missing Git worktree entries reported by `workenv::all` can be inspected with
+`just workenv::prune` and cleaned with `just workenv::prune-apply`. Only missing,
+unlocked linked worktrees are eligible; matching allocations must pass inactivity
+checks. Branches, TMP/install/storage paths and existing worktrees are preserved.
+Pruning uses the current repository and selected workenv allocation namespace;
+blocked entries remain visible with reasons.
+
 ## Internal database deletion and recreation
 
 The user chose automatic lifecycle only for known, wholly internal storage.

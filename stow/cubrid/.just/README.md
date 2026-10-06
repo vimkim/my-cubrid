@@ -122,3 +122,27 @@ recorded install/preset/state-home. Reinitialization reuses unique paths and
 allocates the lowest available numeric values in the requested pool; its order
 determines assignments after a full reset. Reload old shells after the operation.
 See the CLI repository's `docs/reset.md` for the lifecycle and failure contract.
+
+## Prune missing worktrees
+
+```sh
+just workenv::prune        # Preview
+just workenv::prune-apply  # Apply eligible entries
+just workenv::all          # Check remaining worktrees
+```
+
+Prune inspects the current Git repository's registered linked worktrees. Missing
+entries without an allocation in the selected namespace need only Git metadata
+cleanup. Matching allocations are released only after the allocator's deleted,
+inactive-worktree checks pass. Existing and locked worktrees, symlink/uncertain
+paths, occupied ports/SHM, remaining TMP entries and live/uninspectable owners
+are retained with a `KEEP` reason. Safe entries can be processed even when others
+are blocked; retained missing entries make the command exit nonzero.
+
+The namespace defaults to this worktree's recorded state-home, otherwise the
+host default. Use `cub-workenv prune --worktree "$PWD" --state-home PATH` for an
+explicit namespace (add `--apply` to act). Prune does not search unrelated state
+homes or allocation-only records whose Git registration was already removed.
+It preserves branches, installations, TMP directories, external databases and
+all existing worktrees. It does not kill processes, remove kernel IPC or delete
+physical data. See `cubrid-workenv/docs/prune.md` for scope and recovery details.

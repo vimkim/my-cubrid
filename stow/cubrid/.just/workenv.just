@@ -67,3 +67,13 @@ reset-all:
 [working-directory(justfile_directory())]
 reset-all-apply:
     @"${CUB_WORKENV_CLI:-cub-workenv}" reset-all --apply
+
+# Preview pruning missing Git worktree registrations and their idle allocations.
+[working-directory(justfile_directory())]
+prune:
+    @"${CUB_WORKENV_CLI:-cub-workenv}" prune --worktree "$PWD"
+
+# Prune eligible missing worktrees and release allocations; preserve branches and paths.
+[working-directory(justfile_directory())]
+prune-apply:
+    @"${CUB_WORKENV_CLI:-cub-workenv}" prune --worktree "$PWD" --apply

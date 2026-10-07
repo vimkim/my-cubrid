@@ -16,14 +16,24 @@ lookup failures separately.
 
 ## PR workflow
 
-The user usually implements features and bug fixes in individual worktrees.
-After implementation is complete, the usual workflow is to push to the PR's
-`headRefName` in its head repository (usually `github.com/vimkim/cubrid`) and
-trigger CI.
+For fixes to an existing PR, use its `headRefName` in its head repository
+(usually `github.com/vimkim/cubrid`) as the development branch and local
+integration destination. Base any separate task worktree on the current local
+`headRefName`. After completing the fixes and relevant checks, rebase the task
+branch onto the current local `headRefName` and fast-forward merge into it
+through the local worktree workflow. Integrating fixes into `headRefName`
+requires no additional PR, team code review, or squash merge.
 
-The user has the right to merge the PR into its `baseRefName` after CI is
-green (or after confirming that this PR introduces no significant testcase
-failures) and one or two team members have approved the code review.
+After implementation is complete, the usual workflow is to push the updated
+`headRefName` to its head repository and trigger CI. Pushing requires explicit
+user authorization.
+
+Integrating changes into the PR's `baseRefName` in `CUBRID/cubrid` requires
+creating or using the matching PR and following the repository's reviewed
+squash-merge process. The user has the right to squash merge the PR after CI
+is green (or after confirming that this PR introduces no significant testcase
+failures) and one or two team members have approved the code review. Update
+`baseRefName` through that PR process.
 
 ## Instruction sources
 

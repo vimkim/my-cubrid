@@ -1,81 +1,103 @@
-# TC URLs and terminal presentation
+# PR testcase baseline ancestry, URLs, and terminal presentation
 
-Design interview in progress, 2026-10-08. Work-tracker item 309.
-This document records the `grill-with-docs` interview for the existing
-`cubrid-pr-tc-base-check`; implementation awaits confirmation of shared
-understanding. The separate `cubrid-pr-tc-info` design is work item 308.
+Design settled on 2026-10-08; awaiting confirmation of shared understanding
+before implementation. Work-tracker item 309. This changes the existing
+`cubrid-pr-tc-base-check`; the separate `cubrid-pr-tc-info` is work item 308.
 
-## Requested behavior
+## Baseline ancestry
 
-- Show public and private testcase URLs.
-- Improve the visuals with colors when the user runs the checker directly.
+Use the engine PR's destination branch as the same-named published testcase
+baseline in each of the public and private testcase repositories. For example,
+an engine PR targeting `develop` compares each repository's `tc/pr-N` with
+its latest published `develop` tip. A PR targeting `feature/name` compares
+with that repository's `feature/name` tip. The check applies generally to
+destination branches; a nonfeature branch name does not cause `SKIP`.
 
-## Established context
+`develop` can advance after a PR testcase branch is created, just as a feature
+baseline can. Both therefore require the same ancestry check. The current
+feature-only limitation is removed.
 
-The public testcase repository is `CUBRID/cubrid-testcases`; the private
-testcase repository is `CUBRID/cubrid-testcases-private-ex`. A PR testcase
-branch is `tc/pr-N`, where N is the engine PR number. A testcase pull request
-has its own independent number. These terms are defined in [the repository
-vocabulary](../../CONTEXT.md).
+After fetching origin heads, require the current testcase baseline tip to be
+an ancestor of the PR testcase branch tip. Equality and additional testcase
+commits pass. Incorporating the latest baseline by merge or rebase passes.
+Stale or divergent history and missing branches fail. Both repositories are
+inspected even when one fails. Shallow history remains a check error.
 
-The existing checker reports whether each PR testcase branch includes the
-latest published feature testcase baseline. Its text output includes fetched
-hashes, commit counts, common ancestors, and full Git graphs. It has no JSON
-or color mode. `--pr` together with `--base` currently avoids GitHub queries
-and requires only Git. Nonfeature PR bases return `SKIP` before inspecting
-testcase repositories.
+Preserve fetched hashes, TC-only/base-only commit counts, common ancestors,
+and full Git graphs for both `develop` and feature baselines. Results describe
+each repository at fetch time. Preserve the existing exit meanings: 0 when
+both pass, 1 for ancestry failure or missing branches, and 2 for setup or
+inspection errors; a check error takes precedence.
 
-Configured testcase directories can override the defaults. Fetches use their
-`origin` remotes, while the current repository labels remain canonical CUBRID
-names. The six existing tests use local bare origins and pass; they do not
-cover URL rendering or terminal color behavior.
+Continue fetching each configured directory's `origin` without changing
+local branches or working files. Existing environment overrides remain
+available. Generalize `--base` validation and help to accept destination
+branch names beyond `feature/*`. With both `--pr` and `--base`, engine PR
+metadata resolution is bypassed as before; the supplied base is not verified
+against GitHub. The OOS wrapper remains a convenience for `feature/oos-merge`.
 
-## Round 1: answers
+## Testcase PR URLs
 
-1. URL destinations: testcase pull-request URLs only. Branch browsing URLs
-   are outside the requested output.
-2. Color selection: automatic terminal colors with `--color=auto|always|never`,
-   `TERM=dumb`, and `NO_COLOR` support. Captured output is plain by default;
-   an agent using a terminal can explicitly select `--color=never`.
-   The user's question about an existing interactive selector was investigated:
-   this checker has none and never prompts. Related sync checkers' `--check`
-   suppresses confirmation/pushing, while `cubrid-pr-status` has separate
-   `--human`/`--json` output modes. Neither controls this checker's presentation.
-3. Presentation: accepted a short overall summary and separate Public/Private
-   sections, labeled URLs, status colors, aligned details, and full graphs.
-   Status remains understandable without color.
+Show testcase pull-request URLs for both `CUBRID/cubrid-testcases` and
+`CUBRID/cubrid-testcases-private-ex`, including engine PRs targeting `develop`.
+Branch browsing URLs are outside the requested output. Use [the repository
+vocabulary](../../CONTEXT.md) to distinguish PR testcase branches from testcase
+pull requests, whose numbers are independent of the engine PR number.
 
-## Round 2: answers
+Match the exact `tc/pr-N` head branch owned by the canonical testcase
+repository. Show every matching open PR. If none are open, show the most
+recently updated merged/closed PR, with its state clearly labeled. Report
+the absence of a matching PR explicitly.
 
-4. PR selection: prefer open testcase PRs for `tc/pr-N`, showing every open
-   match; otherwise show the most recently updated merged/closed PR with a
-   state label. Report no matching PR explicitly. Accepted.
-5. PR discovery: query GitHub by default, including with `--pr` plus `--base`;
-   report lookup unavailability without changing the ancestry verdict or exit
-   status. Add `--no-pr-links` for Git-only operation. Accepted.
-   This explicitly changes the previous Git-only default for that combination.
-6. Nonfeature bases: pending clarification. For an engine PR targeting
-   `develop`, this command currently prints `SKIP` and exits before testcase
-   inspection. The proposal keeps ancestry skipped and exit 0, but still shows
-   both repositories' testcase PR URLs. A concrete output example was provided;
-   recommendation remains yes.
+Discover PR URLs by default, including with `--pr` plus `--base`. Missing
+`gh`, unavailable authentication, and lookup errors report that the TC PR
+URL is unavailable without changing the ancestry verdict or exit status.
+Add `--no-pr-links` to disable discovery. In particular,
+`--pr N --base develop --no-pr-links` needs only Git and performs no GitHub
+queries. Default URL discovery explicitly changes the old Git-only promise
+for `--pr` plus `--base` without this opt-out.
 
-## Lookup facts
+## Presentation
 
-The generic `gh-pr-info` helper can resolve a testcase branch, but requires a
-unique matching PR and cannot directly implement the proposed multiple-open
-or latest-historical selection. A bare branch selector can also match fork
-branches; discovery must constrain the head repository and exact branch.
+Start with a short overall result. Show separate Public and Private sections
+with labeled testcase PR URLs, status words, aligned branch/hash/count details,
+common ancestors, and full Git graphs. Status remains understandable without
+color. Use the name "Baseline ancestry check" throughout; the check is no
+longer limited to feature branches.
 
-The existing ancestry tests use filesystem bare origins. PR discovery must
-be stubbed or disabled in tests so they continue to run without network access.
-Ancestry fetches continue using each configured directory's `origin`; testcase
-PR lookup concerns the canonical public/private CUBRID repositories named by
-the checker.
+Provide `--color=auto|always|never`, defaulting to `auto`. Automatic colors
+require stdout to be a terminal, with `TERM` other than `dumb` and without
+a nonempty `NO_COLOR`. Captured output is plain by default. Agents using a
+terminal can explicitly select `--color=never`. `always` explicitly requests
+colors, and `never` disables them. No interactive prompts are needed.
 
-## Workflow
+## Verification
 
-Documentation checkout: `/home/vimkim/my-cubrid-pr-tc-base-output`, branch
+Preserve the existing ancestry and local-branch immutability checks. Extend
+coverage to current and advanced `develop` baselines, restoration by merge
+or rebase, generic `--base` names, testcase PR selection/fallback/unavailability,
+the Git-only opt-out, and color behavior for terminal and captured output.
+Stub PR discovery so tests using filesystem bare origins remain independent
+of GitHub and network access. Check the OOS wrapper still forwards arguments.
+
+## Evidence and workflow
+
+The local CUBRID TC Branch Sync workflow creates `tc/pr-N` branches and draft
+TC PRs in both testcase repositories for engine PRs targeting `develop` and
+`feature/**`, normally using the engine base branch as the testcase baseline.
+Relevant source: `/home/vimkim/gh/cb/develop/.github/workflows/tc-branch-sync.yml`.
+
+The creation workflow can fall back to testcase `develop` when an engine
+destination branch is missing. This checker instead reports a missing named
+baseline as failure. Release branches use a separate CI workflow; generic
+ancestry inspection supports them when their baseline and `tc/pr-N` exist
+without assuming the same creation automation. The feature merge PR's separate
+equal-tip checker retains its stronger rule.
+
+The existing checker's six tests passed during the design investigation.
+No functional changes have been made yet.
+
+Checkout: `/home/vimkim/my-cubrid-pr-tc-base-output`, branch
 `feat/pr-tc-base-output`, starting branch and local merge destination `main`.
-No functional changes have been made. Local integration requires the user's
-established merge approval; no push is authorized.
+Implementation follows shared-understanding confirmation. Local integration
+requires the user's established merge approval; no push is authorized.

@@ -42,7 +42,12 @@ reviewer and belonging to the normal tracked pull-request population.
 
 **PR testcase branch**:
 The published `tc/pr-N` branch associated with CUBRID pull request N in each
-of the public and private testcase repositories.
+of the public and private testcase repositories, including pull requests
+targeting `develop` and feature branches.
+
+**Testcase baseline**:
+The published testcase branch corresponding to an engine pull request's
+destination branch. Each testcase repository has its own baseline.
 
 **PR testcase baseline**:
 The current published testcase branch corresponding to an engine PR's target,

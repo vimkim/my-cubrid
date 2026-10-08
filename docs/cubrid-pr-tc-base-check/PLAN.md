@@ -45,17 +45,20 @@ cover URL rendering or terminal color behavior.
    sections, labeled URLs, status colors, aligned details, and full graphs.
    Status remains understandable without color.
 
-## Round 2: awaiting answers
+## Round 2: answers
 
 4. PR selection: prefer open testcase PRs for `tc/pr-N`, showing every open
    match; otherwise show the most recently updated merged/closed PR with a
-   state label. Report no matching PR explicitly. Recommendation: yes.
+   state label. Report no matching PR explicitly. Accepted.
 5. PR discovery: query GitHub by default, including with `--pr` plus `--base`;
    report lookup unavailability without changing the ancestry verdict or exit
-   status. Add `--no-pr-links` for Git-only operation. Recommendation: yes.
+   status. Add `--no-pr-links` for Git-only operation. Accepted.
    This explicitly changes the previous Git-only default for that combination.
-6. Nonfeature bases: retain the ancestry `SKIP` and exit 0, but still show both
-   repositories' testcase PR URLs. Recommendation: yes.
+6. Nonfeature bases: pending clarification. For an engine PR targeting
+   `develop`, this command currently prints `SKIP` and exits before testcase
+   inspection. The proposal keeps ancestry skipped and exit 0, but still shows
+   both repositories' testcase PR URLs. A concrete output example was provided;
+   recommendation remains yes.
 
 ## Lookup facts
 

@@ -51,6 +51,19 @@ Its latest tip is the shared testcase history the PR testcase branch should
 include.
 _Avoid_: Original branch creation point, testcase revision tested by CI
 
+**Public testcase repository**:
+The publicly accessible `CUBRID/cubrid-testcases` repository containing CUBRID
+testcases.
+
+**Private testcase repository**:
+The access-restricted `CUBRID/cubrid-testcases-private-ex` repository containing
+CUBRID testcases.
+
+**Testcase pull request**:
+A pull request in a testcase repository proposing testcase changes. Its number
+is independent of the associated CUBRID engine pull request's number.
+_Avoid_: PR testcase branch
+
 **Feature-current PR testcase branch**:
 For a CUBRID pull request targeting `feature/<name>`, a PR testcase branch
 whose history includes the latest published `feature/<name>` tip in the same

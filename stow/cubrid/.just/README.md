@@ -46,10 +46,15 @@ the shared modules.
 `AGENTS.md` for Codex and loads `/home/vimkim/my-cubrid/CUBRID.md`. Maintain the
 override in `my-cubrid/stow/cubrid/AGENTS.override.md`; edits reach every linked
 worktree. Optional `AGENTS.user.md` files belong in individual worktree roots.
-Preparation adds both root filenames to Git's local `info/exclude`, shared by
+Preparation also stows `CLAUDE.local.md`, which imports `AGENTS.override.md`
+for Claude Code. Claude Code never reads `AGENTS.override.md` itself; the stale
+root `CLAUDE.md`/`AGENTS.md` is dropped by `claudeMdExcludes` in
+`~/.claude/settings.json`, and nested `AGENTS.md` files load through the
+`claude-md-and-agents-md` instruction-files setting.
+Preparation adds these root filenames to Git's local `info/exclude`, shared by
 linked worktrees, without modifying the upstream `.gitignore` or `AGENTS.md`.
-Nested instruction files remain applicable. Start a new Codex session after
-preparation or instruction edits so discovery runs again.
+Nested instruction files remain applicable. Start a new Codex or Claude Code
+session after preparation or instruction edits so discovery runs again.
 
 Every module recipe explicitly uses the root `justfile` directory as its
 working directory. This preserves behavior when `just` is invoked below the

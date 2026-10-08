@@ -8,7 +8,7 @@ CUBRID_JUSTFILES_DIR="${CUBRID_JUSTFILES_DIR:-$HOME/gh/my-cubrid-justfiles}"
 instruction_exclude="$(git rev-parse --path-format=absolute --git-path info/exclude)"
 mkdir -p "$(dirname "$instruction_exclude")"
 touch "$instruction_exclude"
-for instruction_pattern in /AGENTS.override.md /AGENTS.user.md; do
+for instruction_pattern in /AGENTS.override.md /AGENTS.user.md /CLAUDE.local.md; do
     if ! grep -Fxq -- "$instruction_pattern" "$instruction_exclude"; then
         printf '\n%s\n' "$instruction_pattern" >> "$instruction_exclude"
     fi

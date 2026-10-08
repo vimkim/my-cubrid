@@ -30,29 +30,45 @@ Configured testcase directories can override the defaults. Fetches use their
 names. The six existing tests use local bare origins and pass; they do not
 cover URL rendering or terminal color behavior.
 
-## Round 1: awaiting answers
+## Round 1: answers
 
-1. URL destinations: branch links, testcase pull-request links, or both?
-   Recommendation: both, clearly labeled, when available.
-2. Color selection: automatic terminal detection or explicit opt-in?
-   Recommendation: stdout TTY detection, `TERM=dumb` and `NO_COLOR` support,
-   with `--color=auto|always|never`. Agents using a TTY can request plain output.
-3. Presentation: a short overall summary and separate Public/Private sections,
-   or minimal edits to the existing layout?
-   Recommendation: summary and sections, labeled URLs, status colors, aligned
-   details, and full graphs. Status remains understandable without color.
+1. URL destinations: testcase pull-request URLs only. Branch browsing URLs
+   are outside the requested output.
+2. Color selection: automatic terminal colors with `--color=auto|always|never`,
+   `TERM=dumb`, and `NO_COLOR` support. Captured output is plain by default;
+   an agent using a terminal can explicitly select `--color=never`.
+   The user's question about an existing interactive selector was investigated:
+   this checker has none and never prompts. Related sync checkers' `--check`
+   suppresses confirmation/pushing, while `cubrid-pr-status` has separate
+   `--human`/`--json` output modes. Neither controls this checker's presentation.
+3. Presentation: accepted a short overall summary and separate Public/Private
+   sections, labeled URLs, status colors, aligned details, and full graphs.
+   Status remains understandable without color.
 
-## Decisions dependent on round 1
+## Round 2: awaiting answers
 
-If testcase pull-request links are selected, settle discovery behavior:
-Git-only compatibility, lookup failures, missing pull requests, and multiple
-historical pull requests for one branch.
+4. PR selection: prefer open testcase PRs for `tc/pr-N`, showing every open
+   match; otherwise show the most recently updated merged/closed PR with a
+   state label. Report no matching PR explicitly. Recommendation: yes.
+5. PR discovery: query GitHub by default, including with `--pr` plus `--base`;
+   report lookup unavailability without changing the ancestry verdict or exit
+   status. Add `--no-pr-links` for Git-only operation. Recommendation: yes.
+   This explicitly changes the previous Git-only default for that combination.
+6. Nonfeature bases: retain the ancestry `SKIP` and exit 0, but still show both
+   repositories' testcase PR URLs. Recommendation: yes.
 
-Settle link presentation when a branch is missing, inspection fails, a
-nonfeature PR is skipped, or a configured origin differs from the canonical
-repository. Settle whether plain text is sufficient for agents or a new
-machine-readable output mode is in scope. These are open questions, not
-accepted requirements.
+## Lookup facts
+
+The generic `gh-pr-info` helper can resolve a testcase branch, but requires a
+unique matching PR and cannot directly implement the proposed multiple-open
+or latest-historical selection. A bare branch selector can also match fork
+branches; discovery must constrain the head repository and exact branch.
+
+The existing ancestry tests use filesystem bare origins. PR discovery must
+be stubbed or disabled in tests so they continue to run without network access.
+Ancestry fetches continue using each configured directory's `origin`; testcase
+PR lookup concerns the canonical public/private CUBRID repositories named by
+the checker.
 
 ## Workflow
 

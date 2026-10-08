@@ -1,17 +1,19 @@
 #!/usr/bin/env python3
-"""Check that a feature-branch PR's testcase branches contain the feature baseline."""
+"""Check that a PR's testcase branches contain its latest destination baseline."""
 
 import argparse
+from datetime import datetime
 import json
 import os
 from pathlib import Path
 import re
 import subprocess
 import sys
+from urllib.parse import urlencode
 
 
-def command(*args, cwd=None, allowed=(0,)):
-    result = subprocess.run(args, cwd=cwd, capture_output=True, text=True, timeout=120)
+def command(*args, cwd=None, allowed=(0,), timeout=120):
+    result = subprocess.run(args, cwd=cwd, capture_output=True, text=True, timeout=timeout)
     if result.returncode not in allowed:
         raise RuntimeError(result.stderr.strip() or f"{' '.join(args)} exited {result.returncode}")
     return result
@@ -33,72 +35,174 @@ def positive_number(value):
     return int(value)
 
 
-def feature_branch(value):
-    if not re.fullmatch(r"feature/[^\s]+", value):
-        raise argparse.ArgumentTypeError("base must be a feature/<name> branch")
+def branch_name(value):
+    if not isinstance(value, str) or not value or value.startswith("-"):
+        raise argparse.ArgumentTypeError("base must be a valid Git branch name")
+    result = command("git", "check-ref-format", "--branch", value, allowed=(0, 1, 128))
+    if result.returncode or result.stdout.strip() != value:
+        raise argparse.ArgumentTypeError("base must be a valid Git branch name")
     return value
 
 
-def inspect(label, directory, base, target):
-    def git(*args, allowed=(0,)):
-        return command("git", "-C", str(directory), *args, allowed=allowed)
+def tc_prs(repository, target):
+    query = urlencode(dict(state="all", head=f"CUBRID:{target}", sort="updated",
+                           direction="desc", per_page=100))
+    response = command("gh", "api", f"repos/{repository}/pulls?{query}",
+                       "--hostname", "github.com", "--method", "GET",
+                       "--paginate", "--slurp", timeout=30)
+    pages = json.loads(response.stdout)
+    if not isinstance(pages, list) or any(not isinstance(page, list) for page in pages):
+        raise ValueError("invalid paginated testcase PR response")
+    candidates = {}
+    for page in pages:
+        for item in page:
+            if item["head"]["ref"] != target:
+                continue
+            head_repo = item["head"]["repo"]
+            if head_repo is None:
+                continue
+            if not isinstance(head_repo["full_name"], str):
+                raise ValueError("invalid testcase PR head repository")
+            if head_repo["full_name"].lower() != repository.lower():
+                continue
+            number = item["number"]
+            if type(number) is not int or number <= 0 or item["state"] not in ("open", "closed"):
+                raise ValueError("invalid testcase PR identity or state")
+            url = f"https://github.com/{repository}/pull/{number}"
+            if (not isinstance(item["html_url"], str) or item["html_url"].lower() != url.lower()
+                    or type(item["draft"]) is not bool):
+                raise ValueError("invalid testcase PR URL or draft state")
+            if not isinstance(item["updated_at"], str):
+                raise ValueError("invalid testcase PR update time")
+            updated = datetime.fromisoformat(item["updated_at"].replace("Z", "+00:00"))
+            if updated.tzinfo is None:
+                raise ValueError("testcase PR update time has no timezone")
+            state = "MERGED" if item["merged_at"] else item["state"].upper()
+            candidates[number] = dict(number=number, url=url, state=state,
+                                      draft=item["draft"], updated=updated)
+    ordered = sorted(candidates.values(), key=lambda item: (item["updated"], item["number"]), reverse=True)
+    opened = [item for item in ordered if item["state"] == "OPEN"]
+    return opened or ordered[:1]
 
-    print(f"\n{label} ({directory})", flush=True)
-    # Fetch all heads explicitly so narrow origin fetch configurations cannot
-    # leave either inspected ref stale. Prune also removes deleted TC branches.
-    git("fetch", "--prune", "--no-tags", "origin",
-        "+refs/heads/*:refs/remotes/origin/*")
-    refs = [f"refs/remotes/origin/{branch}" for branch in (base, target)]
-    tips = []
-    for branch, ref in zip((base, target), refs):
-        result = git("rev-parse", "--verify", f"{ref}^{{commit}}", allowed=(0, 128))
-        if result.returncode:
-            raise RuntimeError(f"missing published branch origin/{branch}")
-        tips.append(result.stdout.strip())
-    source, tc = tips
-    print(f"  origin/{base}: {source}\n  origin/{target}: {tc}")
-    # A shallow boundary can conceal ancestry; never report that as divergence.
-    if git("rev-parse", "--is-shallow-repository").stdout.strip() == "true":
-        raise RuntimeError("shallow history: fetch full history before checking ancestry")
-    contains = git("merge-base", "--is-ancestor", source, tc, allowed=(0, 1)).returncode == 0
-    tc_only, base_only = map(int, git("rev-list", "--left-right", "--count", f"{tc}...{source}").stdout.split())
-    bases = git("merge-base", "--all", source, tc, allowed=(0, 1)).stdout.split()
-    if contains:
-        state = f"PASS: contains latest {base} tip"
-    elif not bases:
-        state = "FAIL: unrelated histories"
-    else:
-        state = f"FAIL: latest {base} tip is not an ancestor"
-    print(f"  {state}; TC-only={tc_only}, base-only={base_only}")
-    print("  Common ancestors: " + (", ".join(bases) or "none"))
-    args = ["log", "--graph", "--no-color", "--decorate=short", "--date-order",
-            "--abbrev=12", "--format=%h %as%d %s"]
-    args += [f"--decorate-refs={ref}" for ref in refs]
-    args += tips
-    if bases:
-        args += ["--not"] + [f"{base}^@" for base in bases]
-    graph = git(*args).stdout.rstrip()
-    for merge_base in bases:
-        short = git("rev-parse", "--short=12", merge_base).stdout.strip()
-        graph = graph.replace(short, f"{short} [common ancestor]", 1)
-    print("  Branch relationship:")
-    for line in graph.splitlines():
-        print(f"    {line}")
-    return contains
+
+def color_enabled(mode):
+    if mode != "auto":
+        return mode == "always"
+    return sys.stdout.isatty() and os.environ.get("TERM") != "dumb" and not os.environ.get("NO_COLOR")
+
+
+def paint(value, code, color):
+    # Child tools can color their diagnostics independently of our output mode.
+    text = re.sub(r"\x1b\[[0-?]*[ -/]*[@-~]", "", str(value))
+    return f"\033[{code}m{text}\033[0m" if color else text
+
+
+def inspect(directory, base, target, color):
+    def git(*args, allowed=(0,)):
+        return command("git", "-c", "color.ui=false", "-C", str(directory), *args, allowed=allowed)
+
+    row = dict(tips={}, tc_only=None, base_only=None, bases=[], graph=None)
+    try:
+        # Fetch all heads so narrow fetch configurations cannot leave stale refs.
+        # Prune also removes deleted testcase branches.
+        git("fetch", "--prune", "--no-tags", "origin",
+            "+refs/heads/*:refs/remotes/origin/*")
+        refs = [f"refs/remotes/origin/{branch}" for branch in (base, target)]
+        missing = []
+        for branch, ref in zip((base, target), refs):
+            result = git("rev-parse", "--verify", f"{ref}^{{commit}}", allowed=(0, 128))
+            if result.returncode:
+                missing.append(f"missing published branch origin/{branch}")
+            else:
+                row["tips"][branch] = result.stdout.strip()
+        if missing:
+            raise RuntimeError("; ".join(missing))
+        source, tc = (row["tips"][branch] for branch in (base, target))
+        # A shallow boundary can conceal ancestry; never report divergence.
+        if git("rev-parse", "--is-shallow-repository").stdout.strip() == "true":
+            raise RuntimeError("shallow history: fetch full history before checking ancestry")
+        contains = git("merge-base", "--is-ancestor", source, tc, allowed=(0, 1)).returncode == 0
+        row["tc_only"], row["base_only"] = map(int, git(
+            "rev-list", "--left-right", "--count", f"{tc}...{source}").stdout.split())
+        row["bases"] = git("merge-base", "--all", source, tc, allowed=(0, 1)).stdout.split()
+        row.update(status="PASS" if contains else "FAIL", exit_code=0 if contains else 1)
+        if contains:
+            row["reason"] = f"contains latest {base} tip"
+        elif not row["bases"]:
+            row["reason"] = "unrelated histories"
+        else:
+            row["reason"] = f"latest {base} tip is not an ancestor"
+        args = ["log", "--graph", "--color=always" if color else "--no-color",
+                "--decorate=short", "--date-order", "--abbrev=12",
+                "--format=%C(auto)%h %as%d %s%C(reset)"]
+        args += [f"--decorate-refs={ref}" for ref in refs]
+        args += [source, tc]
+        if row["bases"]:
+            args += ["--not"] + [f"{merge_base}^@" for merge_base in row["bases"]]
+        graph = git(*args).stdout.rstrip()
+        for merge_base in row["bases"]:
+            short = git("rev-parse", "--short=12", merge_base).stdout.strip()
+            graph = graph.replace(short, f"{short} [common ancestor]", 1)
+        row["graph"] = graph
+    except (RuntimeError, OSError, subprocess.TimeoutExpired, ValueError) as exc:
+        missing = str(exc).startswith("missing published branch ")
+        row.update(status="FAIL" if missing else "ERROR", reason=str(exc), exit_code=1 if missing else 2)
+    return row
+
+
+def render(pr, base, target, rows, color):
+    colors = {"PASS": "1;32", "FAIL": "1;31", "ERROR": "1;31"}
+    exit_code = max(row["exit_code"] for row in rows)
+    state = ("PASS", "FAIL", "ERROR")[exit_code]
+    summary = ", ".join(f'{row["visibility"]}: {row["status"]}' for row in rows)
+    print(paint(f"Baseline ancestry check: {state}", colors[state], color) + f"  ({summary})")
+    print(f"PR #{pr}: published {target} must contain latest {base} (fetched snapshot).")
+    for row in rows:
+        print("\n" + paint(f'{row["visibility"]}  {row["repository"]}', "1;36", color))
+        print(f'  Checkout  {row["directory"]}')
+        print("  TC PR     ", end="")
+        if row["links_disabled"]:
+            print("lookup disabled (--no-pr-links)")
+        elif row["link_error"]:
+            print(paint("URL unavailable: " + row["link_error"], "33", color))
+        elif not row["prs"]:
+            print(paint(f"no matching testcase PR for {target}", "33", color))
+        else:
+            for index, item in enumerate(row["prs"]):
+                state = item["state"] + (" (draft)" if item["draft"] else "")
+                if index:
+                    print("            ", end="")
+                print(item["url"] + "  " + paint(state, "36" if item["state"] == "OPEN" else "90", color))
+        print(f'  Baseline  origin/{base}: {row["tips"].get(base, "unavailable")}')
+        print(f'  TC branch origin/{target}: {row["tips"].get(target, "unavailable")}')
+        result = f'{row["status"]}: {row["reason"]}'
+        if row["tc_only"] is not None:
+            result += f'; TC-only={row["tc_only"]}, base-only={row["base_only"]}'
+        print("  Status    " + paint(result, colors[row["status"]], color))
+        if row["graph"] is not None:
+            print("  Common ancestors: " + (", ".join(row["bases"]) or "none"))
+            print("  Branch relationship:")
+            for line in row["graph"].splitlines():
+                print(f"    {line}")
+    return exit_code
 
 
 def main():
-    parser = argparse.ArgumentParser(description=__doc__, epilog=(
-        "A PR targeting feature/<name> passes when origin/feature/<name> is an ancestor "
-        "of origin/tc/pr-N in both testcase repositories; other PR bases are skipped. "
+    parser = argparse.ArgumentParser(description=__doc__, allow_abbrev=False, epilog=(
+        "A PR passes when origin/<destination> is an ancestor of origin/tc/pr-N "
+        "in both testcase repositories, including develop and feature/* baselines. "
         "Fetches origin refs only; never merges, rebases, checks out, or pushes. "
-        "Exit 0: both pass or skipped; 1: ancestry failure or missing branch; "
+        "Exit 0: both pass; 1: ancestry failure or missing branch; "
         "2: setup/check error. "
         "Paths: CUBRID_TESTCASES_DIR and CUBRID_TESTCASES_PRIVATE_EX_DIR."))
     parser.add_argument("--pr", type=positive_number, help="CUBRID PR number (default: current worktree PR)")
-    parser.add_argument("--base", type=feature_branch, help=(
-        "expected feature/<name> PR base; with --pr, GitHub is not queried "
-        "(default: the PR's base branch)"))
+    parser.add_argument("--base", type=branch_name, help=(
+        "expected PR destination branch; with --pr, bypass engine PR lookup "
+        "(default: the PR's destination branch)"))
+    parser.add_argument("--color", choices=("auto", "always", "never"), default="auto",
+                        help="terminal colors (default: auto; honors TERM=dumb and NO_COLOR)")
+    parser.add_argument("--no-pr-links", action="store_true", help=(
+        "disable testcase PR lookup; with --pr and --base, only Git is required"))
     args = parser.parse_args()
     if args.pr is not None and args.base is not None:
         pr, base = args.pr, args.base
@@ -106,26 +210,27 @@ def main():
         pr, base = pr_metadata(args.pr)
         if args.base is not None and base != args.base:
             raise RuntimeError(f"PR #{pr} targets {base}, not {args.base}")
-    if not base.startswith("feature/"):
-        print(f"PR #{pr} targets {base}: SKIP, testcase baseline check applies only to feature/* bases.")
-        return 0
+    base = branch_name(base)
     target = f"tc/pr-{pr}"
-    print(f"PR #{pr}: published {target} must contain latest {base} (fetched snapshot).")
+    color = color_enabled(args.color)
     repositories = (
-        ("CUBRID/cubrid-testcases", "CUBRID_TESTCASES_DIR", "/home/vimkim/gh/cubrid-testcases/develop"),
-        ("CUBRID/cubrid-testcases-private-ex", "CUBRID_TESTCASES_PRIVATE_EX_DIR",
+        ("Public", "CUBRID/cubrid-testcases", "CUBRID_TESTCASES_DIR", "/home/vimkim/gh/cubrid-testcases/develop"),
+        ("Private", "CUBRID/cubrid-testcases-private-ex", "CUBRID_TESTCASES_PRIVATE_EX_DIR",
          "/home/vimkim/gh/cubrid-testcases-private-ex/develop"),
     )
-    exit_code = 0
-    for label, variable, default in repositories:
-        try:
-            if not inspect(label, Path(os.environ.get(variable, default)), base, target):
-                exit_code = max(exit_code, 1)
-        except (RuntimeError, OSError, subprocess.TimeoutExpired) as exc:
-            print(f"  FAIL: {exc}", flush=True)
-            code = 1 if str(exc).startswith("missing published branch ") else 2
-            exit_code = max(exit_code, code)
-    return exit_code
+    rows = []
+    for visibility, repository, variable, default in repositories:
+        directory = Path(os.environ.get(variable, default))
+        row = inspect(directory, base, target, color)
+        row.update(visibility=visibility, repository=repository, directory=directory,
+                   links_disabled=args.no_pr_links, prs=[], link_error=None)
+        if not args.no_pr_links:
+            try:
+                row["prs"] = tc_prs(repository, target)
+            except (RuntimeError, OSError, subprocess.TimeoutExpired, ValueError, KeyError, TypeError) as exc:
+                row["link_error"] = str(exc)
+        rows.append(row)
+    return render(pr, base, target, rows, color)
 
 
 if __name__ == "__main__":

@@ -1,7 +1,7 @@
 # PR testcase baseline ancestry, URLs, and terminal presentation
 
-Design settled on 2026-10-08; awaiting confirmation of shared understanding
-before implementation. Work-tracker item 309. This changes the existing
+Design settled and shared understanding confirmed on 2026-10-08.
+Work-tracker item 309. This changes the existing
 `cubrid-pr-tc-base-check`; the separate `cubrid-pr-tc-info` is work item 308.
 
 ## Baseline ancestry
@@ -94,10 +94,11 @@ ancestry inspection supports them when their baseline and `tc/pr-N` exist
 without assuming the same creation automation. The feature merge PR's separate
 equal-tip checker retains its stronger rule.
 
-The existing checker's six tests passed during the design investigation.
-No functional changes have been made yet.
+Implementation includes destination-baseline checks, testcase PR lookup,
+terminal color controls, and the report layout described above. Validation
+is recorded in the work-tracker item and implementation commit.
 
 Checkout: `/home/vimkim/my-cubrid-pr-tc-base-output`, branch
 `feat/pr-tc-base-output`, starting branch and local merge destination `main`.
-Implementation follows shared-understanding confirmation. Local integration
-requires the user's established merge approval; no push is authorized.
+Local integration requires the user's established merge approval;
+no push is authorized.

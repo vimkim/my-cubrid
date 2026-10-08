@@ -14,6 +14,31 @@ with a PR. Collect the PR identity, head repository, `headRefName`, and
 `baseRefName` from the output. Record when no PR is found; report other
 lookup failures separately.
 
+## PR implementation and CI
+
+After implementing a CUBRID PR and passing focused checks, commit the task
+changes and push to the PR's `headRefName` in its head repository. This is
+standing authorization to commit, push, and trigger CUBRID CI; no separate
+approval is required for these actions.
+
+The CUBRID TC Branch Sync GHA bot creates a testcase (TC) branch and PR in
+each of the two testcase repositories. TC Merge Gate blocks merging the
+CUBRID PR into `baseRefName` until both TC PRs are merged or closed.
+
+- If TC changes are required, update, check, commit, and push them to the
+  corresponding TC PR head branches before triggering CUBRID CI. The human
+  reviews and merges those TC PRs into their base branches.
+- If no TC changes are required, report this to the human, who closes the
+  TC PRs. Their branches are then deleted automatically.
+- Agent publication in TC repositories is limited to commits and pushes
+  on the TC PR head branches. Never merge or close TC PRs or delete their
+  branches.
+
+Trigger CUBRID CI once after the source and any required TC pushes. Wait for
+that run to finish, report its result and run URL, including any TC Merge
+Gate blocker, then stop and wait for the human's direction. Do not make
+follow-up fixes, push again, or rerun CI until directed.
+
 ## Instruction sources
 
 This file replaces the root `AGENTS.md`, whose instructions are stale. Use

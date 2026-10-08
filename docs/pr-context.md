@@ -1,7 +1,8 @@
 # Current-branch PR context
 
 Install the generic `my-git-utils` PR commands before using implicit PR lookup
-in `cubrid-pr-status`, `cubrid-pr-tc-base-check`, or `cubrid-format-pr-diff.sh`.
+in `cubrid-pr-status`, `cubrid-pr-tc-info`, `cubrid-pr-tc-base-check`, or
+`cubrid-format-pr-diff.sh`.
 After the reviewed generic changes are merged, run `just sync` from the
 `my-git-utils` main checkout. Personal URL wrappers are managed separately by
 chezmoi and need their own targeted deployment.

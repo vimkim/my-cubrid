@@ -44,6 +44,13 @@ reviewer and belonging to the normal tracked pull-request population.
 The published `tc/pr-N` branch associated with CUBRID pull request N in each
 of the public and private testcase repositories.
 
+**PR testcase baseline**:
+The current published testcase branch corresponding to an engine PR's target,
+or the explicitly identified develop fallback when that counterpart is absent.
+Its latest tip is the shared testcase history the PR testcase branch should
+include.
+_Avoid_: Original branch creation point, testcase revision tested by CI
+
 **Feature-current PR testcase branch**:
 For a CUBRID pull request targeting `feature/<name>`, a PR testcase branch
 whose history includes the latest published `feature/<name>` tip in the same

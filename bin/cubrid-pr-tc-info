@@ -1,0 +1,297 @@
+#!/usr/bin/env python3
+"""Read-only public/private testcase information for a CUBRID engine PR."""
+
+import argparse
+from concurrent.futures import ThreadPoolExecutor
+from datetime import datetime, timezone
+import json
+import os
+import re
+import subprocess
+import sys
+from urllib.parse import quote, urlencode
+
+REPOSITORY = 'CUBRID/cubrid'
+TC_REPOSITORIES = (
+    ('public', 'CUBRID/cubrid-testcases'),
+    ('private', 'CUBRID/cubrid-testcases-private-ex'),
+)
+PR_FIELDS = 'number,title,url,state,headRefName,headRefOid,baseRefName'
+PR_URL = r'https://github\.com/CUBRID/cubrid/pull/([1-9][0-9]*)/?'
+SHA = r'[0-9a-f]{40}'
+
+
+class LookupError(RuntimeError):
+    def __init__(self, message, status=None):
+        super().__init__(message)
+        self.status = status
+
+
+def request(executable, *args):
+    try:
+        result = subprocess.run([executable, *args], capture_output=True,
+                                text=True, timeout=45)
+    except FileNotFoundError as exc:
+        raise LookupError(f'{executable} is missing; install gh and my-git-utils.') from exc
+    except subprocess.TimeoutExpired as exc:
+        raise LookupError(f'{executable} request timed out after 45 seconds.') from exc
+    if result.returncode:
+        message = result.stderr.strip() or f'{executable} request failed.'
+        match = re.search(r'\bHTTP (\d{3})\b', message)
+        raise LookupError(message, int(match.group(1)) if match else None)
+    try:
+        return json.loads(result.stdout)
+    except json.JSONDecodeError as exc:
+        raise LookupError(f'{executable} returned invalid JSON.') from exc
+
+
+def api(path, paginate=False):
+    args = ['api', path, '--hostname', 'github.com', '--method', 'GET']
+    if paginate:
+        args += ['--paginate', '--slurp']
+    return request('gh', *args)
+
+
+def text_field(value, label):
+    if not isinstance(value, str) or not value:
+        raise ValueError(f'Invalid {label} in GitHub response.')
+    return value
+
+
+def sha_field(value):
+    if not isinstance(value, str) or not re.fullmatch(SHA, value):
+        raise ValueError('Invalid commit SHA in GitHub response.')
+    return value
+
+
+def read_pr(selector):
+    args = [selector] if selector else []
+    data = request('gh-pr-info', *args, '--repo', REPOSITORY, '--json', PR_FIELDS)
+    match = re.fullmatch(PR_URL, data['url'], re.I)
+    if not match or type(data['number']) is not int or int(match.group(1)) != data['number']:
+        raise ValueError('Resolved PR must belong to CUBRID/cubrid.')
+    return dict(number=data['number'], title=text_field(data['title'], 'PR title'),
+                url=data['url'], state=text_field(data['state'], 'PR state'),
+                head_branch=text_field(data['headRefName'], 'PR head branch'),
+                head_sha=sha_field(data['headRefOid']),
+                base_branch=text_field(data['baseRefName'], 'PR base branch'))
+
+
+def branch_url(repository, branch):
+    return f'https://github.com/{repository}/tree/{quote(branch, safe="/")}'
+
+
+def branch_tip(repository, branch):
+    try:
+        data = api(f'repos/{repository}/git/ref/heads/{quote(branch, safe="")}')
+    except LookupError as exc:
+        if exc.status == 404:
+            return None
+        raise
+    if data['ref'] != f'refs/heads/{branch}' or data['object']['type'] != 'commit':
+        raise ValueError('GitHub returned an unexpected branch ref.')
+    return sha_field(data['object']['sha'])
+
+
+def tc_prs(repository, branch):
+    query = urlencode(dict(state='all', head=f'CUBRID:{branch}', per_page=100))
+    pages = api(f'repos/{repository}/pulls?{query}', paginate=True)
+    candidates = {}
+    if not isinstance(pages, list) or any(not isinstance(page, list) for page in pages):
+        raise ValueError('Invalid paginated TC PR response.')
+    for page in pages:
+        for item in page:
+            if item['head']['ref'] != branch:
+                continue
+            head_repo = item['head']['repo']
+            if head_repo is None or text_field(head_repo['full_name'], 'TC PR repository').lower() != repository.lower():
+                continue
+            number = item['number']
+            if type(number) is not int or number <= 0 or item['state'] not in ('open', 'closed'):
+                raise ValueError('Invalid TC PR identity or state.')
+            if item['html_url'] != f'https://github.com/{repository}/pull/{number}':
+                raise ValueError('Unexpected TC PR URL.')
+            if type(item['draft']) is not bool:
+                raise ValueError('Invalid TC PR draft state.')
+            state = 'MERGED' if item['merged_at'] else item['state'].upper()
+            candidates[number] = dict(number=number, url=item['html_url'], state=state,
+                                      is_draft=item['draft'],
+                                      base_branch=text_field(item['base']['ref'], 'TC PR base branch'),
+                                      head_sha=sha_field(item['head']['sha']))
+    ordered = sorted(candidates.values(), key=lambda item: item['number'], reverse=True)
+    opened = [item for item in ordered if item['state'] == 'OPEN']
+    return opened or ordered[:1]
+
+
+def comparison(repository, base_sha, tc_sha):
+    data = api(f'repos/{repository}/compare/{base_sha}...{tc_sha}')
+    status = data['status']
+    ahead, behind = data['ahead_by'], data['behind_by']
+    if (status not in ('identical', 'ahead', 'behind', 'diverged') or
+            type(ahead) is not int or type(behind) is not int or min(ahead, behind) < 0):
+        raise ValueError('Invalid baseline comparison response.')
+    if data['base_commit']['sha'] != base_sha:
+        raise ValueError('GitHub comparison does not match the requested baseline SHA.')
+    merge_base = sha_field(data['merge_base_commit']['sha'])
+    contains = status in ('identical', 'ahead') and behind == 0 and merge_base == base_sha
+    if (status in ('identical', 'ahead') and not contains) or (behind == 0 and not contains):
+        raise ValueError('Inconsistent baseline ancestry response.')
+    return dict(status=status, contains_baseline=contains, tc_only=ahead,
+                baseline_only=behind, merge_base_sha=merge_base)
+
+
+def inspect_repository(visibility, repository, pr):
+    branch = f'tc/pr-{pr["number"]}'
+    baseline = pr['base_branch']
+    row = dict(visibility=visibility, repository=repository, complete=True,
+               branch=dict(name=branch, url=branch_url(repository, branch), sha=None, status='unknown'),
+               baseline=dict(requested_branch=baseline, name=baseline,
+                             url=branch_url(repository, baseline), sha=None, status='unknown',
+                             fallback=False, comparison=None),
+               tc_prs=[], errors=[])
+
+    def collect(stage, action):
+        try:
+            action()
+        except (LookupError, OSError, ValueError, KeyError, TypeError) as exc:
+            row['errors'].append(dict(stage=stage, message=str(exc)))
+            row['complete'] = False
+
+    def check_access():
+        data = api(f'repos/{repository}')
+        name = text_field(data['full_name'], 'repository name')
+        if name.lower() != repository.lower() or (data.get('permissions') or {}).get('pull') is False:
+            raise LookupError(f'Cannot read testcase repository {repository}.')
+
+    collect('repository', check_access)
+    if not row['complete']:
+        return row
+
+    def read_branch():
+        sha = branch_tip(repository, branch)
+        row['branch'].update(sha=sha, status='present' if sha else 'missing')
+
+    def read_baseline():
+        record = row['baseline']
+        sha = branch_tip(repository, baseline)
+        if sha is None and baseline != 'develop':
+            record.update(name='develop', url=branch_url(repository, 'develop'), fallback=True)
+            sha = branch_tip(repository, 'develop')
+        record.update(sha=sha, status='present' if sha else 'missing')
+
+    def read_tc_prs():
+        row['tc_prs'] = tc_prs(repository, branch)
+
+    collect('branch', read_branch)
+    collect('baseline', read_baseline)
+    collect('tc_prs', read_tc_prs)
+    if row['branch']['sha'] and row['baseline']['sha']:
+        def read_comparison():
+            row['baseline']['comparison'] = comparison(
+                repository, row['baseline']['sha'], row['branch']['sha'])
+        collect('comparison', read_comparison)
+    return row
+
+
+def snapshot(pr=None, rows=None, errors=None):
+    rows, errors = rows or [], list(errors or [])
+    for row in rows:
+        errors += [dict(repository=row['repository'], **error) for error in row['errors']]
+    return dict(schema_version=1, repository=REPOSITORY,
+                fetched_at=datetime.now(timezone.utc).isoformat(timespec='seconds'),
+                complete=not errors, pr=pr, repositories=rows, errors=errors)
+
+
+def clean(value):
+    return ''.join(char if char.isprintable() else ' ' for char in str(value))
+
+
+def paint(value, color):
+    value = clean(value)
+    enabled = sys.stdout.isatty() and os.environ.get('TERM') != 'dumb' and not os.environ.get('NO_COLOR')
+    return f'\033[{color}m{value}\033[0m' if enabled else value
+
+
+def render(data):
+    pr = data['pr']
+    if pr:
+        print(paint(f'PR #{pr["number"]}  {pr["title"]}', '1;36'))
+        print(clean(pr['url']))
+        print(clean(f'{pr["state"]} | target: {pr["base_branch"]} | head: {pr["head_sha"][:12]}'))
+    for row in data['repositories']:
+        print('\n' + paint(f'{row["visibility"].upper()}  {row["repository"]}', '1;36'))
+        branch, baseline = row['branch'], row['baseline']
+        print('  TC branch  ' + paint(branch['name'], '36'))
+        print('  TC tip     ' + (paint(branch['sha'][:12], '36') if branch['sha'] else
+                                  paint(branch['status'].upper(), '33')))
+        if not row['tc_prs']:
+            print('  TC PR      ' + paint('UNAVAILABLE' if any(
+                error['stage'] in ('repository', 'tc_prs') for error in row['errors']) else 'NONE', '33'))
+        for item in row['tc_prs']:
+            state = item['state'] + (' (draft)' if item['is_draft'] else '')
+            color = '33' if item['is_draft'] and item['state'] == 'OPEN' else '36' if item['state'] == 'OPEN' else '90'
+            print('  TC PR      ' + clean(item['url']) + '  ' + paint(state, color))
+            if item['base_branch'] != baseline['name']:
+                print('             ' + paint(f'TC PR target: {item["base_branch"]} (differs from baseline)', '33'))
+        label = f'{baseline["name"]} @ {baseline["sha"][:12]}' if baseline['sha'] else f'{baseline["name"]}: {baseline["status"].upper()}'
+        print('  Baseline   ' + paint(label, '36'))
+        if baseline['fallback']:
+            print('             ' + paint(f'develop fallback: {baseline["requested_branch"]} is absent', '33'))
+        result = baseline['comparison']
+        if result:
+            state = 'CURRENT: includes latest baseline' if result['contains_baseline'] else 'OUTDATED: baseline updates missing'
+            counts = f'TC-only={result["tc_only"]}, baseline-only={result["baseline_only"]}'
+            print('  Status     ' + paint(f'{state}; {counts}', '32' if result['contains_baseline'] else '33'))
+        else:
+            print('  Status     ' + paint('Ancestry unavailable', '33'))
+    for error in data['errors']:
+        print('\n' + paint(f'INCOMPLETE {error["repository"] or REPOSITORY} / {error["stage"]}: {error["message"]}', '31'))
+    print('\nSnapshot: ' + data['fetched_at'])
+
+
+class Arguments(argparse.ArgumentParser):
+    def error(self, message):
+        raise ValueError(message)
+
+
+def main():
+    tokens = sys.argv[1:]
+    options = tokens[:tokens.index('--')] if '--' in tokens else tokens
+    json_mode = '--json' in options
+    parser = Arguments(description=__doc__, allow_abbrev=False, epilog=(
+        'Requires authenticated gh and gh-pr-info (my-git-utils). No local testcase clones needed. '
+        'Agents: use --json; check schema_version == 1, complete, and errors. '
+        'Exit 0: lookup completed (including missing/stale branches). '
+        'Exit 2: invalid input or incomplete lookup. Read-only; does not establish CI success.'))
+    parser.add_argument('pr', nargs='?', help='CUBRID PR URL; otherwise resolve the current worktree PR')
+    modes = parser.add_mutually_exclusive_group()
+    modes.add_argument('--json', action='store_true', help='single versioned JSON snapshot, including errors')
+    modes.add_argument('--human', action='store_true', help='colored terminal view (default)')
+    stage, pr, rows = 'arguments', None, []
+    try:
+        args = parser.parse_args()
+        json_mode = args.json
+        if args.pr and not re.fullmatch(PR_URL, args.pr, re.I):
+            parser.error('expected a https://github.com/CUBRID/cubrid/pull/NUMBER URL')
+        stage = 'pr'
+        pr = read_pr(args.pr.rstrip('/') if args.pr else None)
+        with ThreadPoolExecutor(max_workers=2) as pool:
+            futures = [pool.submit(inspect_repository, visibility, repository, pr)
+                       for visibility, repository in TC_REPOSITORIES]
+            rows = [future.result() for future in futures]
+        stage = 'pr_check'
+        final_pr = read_pr(pr['url'])
+        if any(final_pr[key] != pr[key] for key in ('number', 'base_branch', 'head_sha', 'state')):
+            raise LookupError('PR metadata changed during lookup; retry for a fresh snapshot.')
+        data = snapshot(pr, rows)
+    except (LookupError, OSError, ValueError, KeyError, TypeError) as exc:
+        data = snapshot(pr, rows, [dict(repository=None, stage=stage, message=str(exc))])
+    if json_mode:
+        print(json.dumps(data, indent=2))
+    else:
+        render(data)
+    return 0 if data['complete'] else 2
+
+
+if __name__ == '__main__':
+    sys.exit(main())

@@ -273,6 +273,18 @@
       }
     },
     {
+      "name": "debug_clang_bare",
+      "description": "Clang Debug with project defaults and no personal compiler flags or feature overrides",
+      "generator": "Ninja",
+      "binaryDir": "${sourceDir}/build_preset_${presetName}",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Debug",
+        "CMAKE_C_COMPILER": "clang",
+        "CMAKE_CXX_COMPILER": "clang++",
+        "CMAKE_INSTALL_PREFIX": "$env{CUBRID}"
+      }
+    },
+    {
       "name": "debug_clang",
       "inherits": "user_clang_debug",
       "environment": {
@@ -388,6 +400,10 @@
     {
       "name": "debug_gcc_fast",
       "configurePreset": "debug_gcc_fast"
+    },
+    {
+      "name": "debug_clang_bare",
+      "configurePreset": "debug_clang_bare"
     },
     {
       "name": "debug_clang",

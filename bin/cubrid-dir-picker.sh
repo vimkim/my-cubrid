@@ -7,6 +7,7 @@ readonly repo_specs=(
   "$HOME/gh/my-cubrid-skills"$'\t'"https://github.com/vimkim/my-cubrid-skills"
   "$HOME/gh/cubrid-oos-context"$'\t'"https://github.com/vimkim/cubrid-oos-context"
   "$HOME/gh/cb/develop"$'\t'"https://github.com/CUBRID/cubrid.git"
+  "$HOME/gh/my-skills"$'\t'"https://github.com/vimkim/my-skills.git"
 )
 declare -a repos=()
 for repo_spec in "${repo_specs[@]}"; do

@@ -101,3 +101,9 @@ dwb-get:
 
 cubrid-pr-status:
     cubrid-pr-status
+
+# Edit the selected installation's cubrid.conf in the terminal.
+[no-cd]
+[positional-arguments]
+cubrid-conf-tui *args:
+    cubrid-conf-tui "$@"

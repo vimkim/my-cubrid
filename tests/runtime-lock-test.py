@@ -12,7 +12,8 @@ import time
 import unittest
 
 
-COORDINATOR = Path(__file__).resolve().parents[1] / 'bin/cubrid-build-coordinator.sh'
+COORDINATOR = Path(os.environ.get('COORDINATOR_UNDER_TEST',
+    Path(__file__).resolve().parents[1] / 'bin/cubrid-build-coordinator.sh'))
 
 
 class RuntimeLockTest(unittest.TestCase):

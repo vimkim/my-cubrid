@@ -29,8 +29,11 @@ script.write_text('#!/bin/sh\nset -eu\ntest -x "$CUBRID/bin/cubrid"\n"$CUBRID/bi
 script.chmod(0o755)
 name = 'cwe-migration-' + root.name.rsplit('-', 1)[-1]
 env = dict(os.environ, MY_CUBRID=str(repo), CUBRID=str(install), PRESET_MODE='debug',
-           CUBRID_BUILD_DIR=str(source / 'build'), TMPDIR='/tmp')
+           CUBRID_BUILD_DIR=str(source / 'build'), TMPDIR='/tmp', XDG_RUNTIME_DIR=str(root))
 coordinator = repo / 'bin/cubrid-build-coordinator.sh'
+# exec replaces the shim's argv; locate the selected Python supervisor.
+selected_cli = shutil.which(os.environ.get('CUBRID_BUILD_COORDINATOR_CLI', 'cubrid-build-coordinator'))
+assert selected_cli, 'install cubrid-build-coordinator or set CUBRID_BUILD_COORDINATOR_CLI'
 runner = repo / 'bin/cubrid-podman-test.sh'
 record = {'root': str(root), 'container': name, 'steps': []}
 
@@ -54,7 +57,7 @@ with (root / 'container.log').open('w') as log:
             if process.poll() is not None:
                 raise RuntimeError((root / 'container.log').read_text())
             result = subprocess.run(['podman', 'exec', name, 'test', '-f', '/sandbox/test.ready'],
-                                    stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+                                    env=env, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
             if result.returncode == 0:
                 break
             time.sleep(0.2)
@@ -68,7 +71,7 @@ with (root / 'container.log').open('w') as log:
         for proc in Path('/proc').glob('[0-9]*'):
             try:
                 cmdline = (proc / 'cmdline').read_bytes().split(b'\0')
-                if str(coordinator).encode() in cmdline and str(script).encode() in cmdline:
+                if str(selected_cli).encode() in cmdline and str(script).encode() in cmdline:
                     children.append(int(proc.name))
             except OSError:
                 pass
@@ -77,14 +80,14 @@ with (root / 'container.log').open('w') as log:
         status = process.wait(timeout=40)
         record['signalled_supervisor'] = children[0]
         record['recipe_exit_after_signal'] = status
-        result = subprocess.run(['podman', 'container', 'exists', name])
+        result = subprocess.run(['podman', 'container', 'exists', name], env=env)
         assert result.returncode == 1, 'owned container survived supervisor signal'
         run('lock-released-after-cleanup', [coordinator, 'installation-use', '0', '--', 'true'])
         record['verdict'] = 'pass'
     finally:
         # The runner owns immutable-ID/label verification; never remove by a raw
         # unverified podman name from this harness.
-        if subprocess.run(['podman', 'container', 'exists', name]).returncode == 0:
+        if subprocess.run(['podman', 'container', 'exists', name], env=env).returncode == 0:
             run('cleanup-owned-container', [runner, 'stop', name])
         if process.poll() is None:
             process.wait(timeout=40)

@@ -10,9 +10,23 @@ executable under the installation prefix. After the environment becomes idle,
 `just install` completes the remaining step.
 
 This guide describes personal tooling in `my-cubrid`, inspected on 2026-10-20.
-The implementation starts from revision `332d062` and adds live owner reporting.
+The Python implementation lives in the separate
+[cubrid-build-coordinator project](https://github.com/vimkim/cubrid-build-coordinator).
 These commands are local development tools. They are separate from CUBRID's
 transaction locks, page latches, and native database file locks.
+
+## Install the coordinator
+
+Run `just install` from the permanent `cubrid-build-coordinator` checkout to link
+its launcher into `~/.local/bin`. Keep that checkout in place and put the command
+directory on PATH. The package requires Python 3.10 or newer, Linux, GNU
+`realpath`, and CMake. Host selection also requires Bash and `cub-workenv`.
+
+The existing `my-cubrid/bin/cubrid-build-coordinator.sh` entrypoint is an `exec`
+shim. It selects `cubrid-build-coordinator` from PATH, or the executable named by
+`CUBRID_BUILD_COORDINATOR_CLI`. Use an absolute candidate path for isolated
+review. Install the Python CLI before merging or using the shim. A missing CLI
+returns 127 with setup guidance. There is no fallback that can repeat an action.
 
 ## Find the owner
 
@@ -77,9 +91,11 @@ flowchart TD
 
 The [shared recipes](../stow/cubrid/justfile) provide commands such as `build`,
 `install`, `ctest`, and `db::ini`.
-The [coordinator](../bin/cubrid-build-coordinator.sh) controls lock acquisition,
-installation checks, command supervision, and exit status.
-The [owner inspector](../bin/cubrid-lock-status.py) reads Linux process evidence.
+The [compatibility entrypoint](../bin/cubrid-build-coordinator.sh) executes the
+Python coordinator, which controls acquisition, installation checks, command
+supervision, and exit status. Its packaged owner inspector reads Linux process
+evidence. The old [standalone inspector](../bin/cubrid-lock-status.py) remains
+available for direct consumers. Coordinator diagnostics use the packaged copy.
 Lock files remain the synchronization objects. Owner reports require no sidecar file.
 
 `cub-workenv` owns host initialization, saved resource allocations, database

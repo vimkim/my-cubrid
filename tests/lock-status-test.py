@@ -6,6 +6,7 @@ import hashlib
 import importlib.util
 import json
 import os
+import shutil
 from pathlib import Path
 import subprocess
 import sys
@@ -15,8 +16,11 @@ import unittest
 from unittest import mock
 
 
-COORDINATOR = Path(__file__).resolve().parents[1] / 'bin/cubrid-build-coordinator.sh'
-SPEC = importlib.util.spec_from_file_location('lock_status', COORDINATOR.with_name('cubrid-lock-status.py'))
+COORDINATOR = Path(os.environ.get('COORDINATOR_UNDER_TEST',
+    Path(__file__).resolve().parents[1] / 'bin/cubrid-build-coordinator.sh'))
+INSPECTOR_PATH = Path(os.environ.get('INSPECTOR_UNDER_TEST', COORDINATOR.with_name('cubrid-lock-status.py')))
+sys.path.insert(0, str(INSPECTOR_PATH.parent.parent))
+SPEC = importlib.util.spec_from_file_location('lock_status', INSPECTOR_PATH)
 INSPECTOR = importlib.util.module_from_spec(SPEC)
 SPEC.loader.exec_module(INSPECTOR)
 
@@ -185,8 +189,19 @@ class LockStatusTest(unittest.TestCase):
                          ['run', '--password', '<redacted>', '--access-token=<redacted>', 'API_KEY=<redacted>', 'normal'])
 
     def test_diagnostic_failure_preserves_temporary_failure_status(self):
-        copied = self.root / 'coordinator-without-helper.sh'
-        copied.write_bytes(COORDINATOR.read_bytes())
+        copied = self.root / 'coordinator-without-inspection'
+        if 'report_lock_owner()' in COORDINATOR.read_text():
+            copied.write_bytes(COORDINATOR.read_bytes())
+        else:
+            launcher = shutil.which(os.environ.get('CUBRID_BUILD_COORDINATOR_CLI', 'cubrid-build-coordinator'))
+            self.assertIsNotNone(launcher, 'install the Python CLI or set CUBRID_BUILD_COORDINATOR_CLI')
+            package_root = Path(launcher).resolve().parents[1]
+            copied.write_text(
+                '#!/usr/bin/env python3\n'
+                f'import sys; sys.path.insert(0, {str(package_root)!r})\n'
+                'from cubrid_build_coordinator import cli, status\n'
+                'status.main = lambda *args: 1\n'
+                'sys.exit(cli.main())\n')
         copied.chmod(0o755)
         with self.runtime_holder():
             result = subprocess.run([str(copied), 'install', '0'], env=self.env,

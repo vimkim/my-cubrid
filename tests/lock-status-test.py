@@ -6,6 +6,7 @@ import hashlib
 import importlib.util
 import json
 import os
+import shlex
 import shutil
 from pathlib import Path
 import subprocess
@@ -195,13 +196,18 @@ class LockStatusTest(unittest.TestCase):
         else:
             launcher = shutil.which(os.environ.get('CUBRID_BUILD_COORDINATOR_CLI', 'cubrid-build-coordinator'))
             self.assertIsNotNone(launcher, 'install the Python CLI or set CUBRID_BUILD_COORDINATOR_CLI')
-            package_root = Path(launcher).resolve().parents[1]
-            copied.write_text(
-                '#!/usr/bin/env python3\n'
+            launcher_path = Path(launcher).resolve()
+            package_root = launcher_path.parents[1]
+            interpreter = launcher_path.parent / 'python'
+            if not interpreter.is_file():
+                interpreter = Path(sys.executable)
+            code = (
                 f'import sys; sys.path.insert(0, {str(package_root)!r})\n'
                 'from cubrid_build_coordinator import cli, status\n'
                 'status.main = lambda *args: 1\n'
                 'sys.exit(cli.main())\n')
+            copied.write_text(
+                '#!/bin/sh\nexec ' + shlex.join([str(interpreter), '-c', code]) + ' "$@"\n')
         copied.chmod(0o755)
         with self.runtime_holder():
             result = subprocess.run([str(copied), 'install', '0'], env=self.env,

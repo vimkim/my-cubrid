@@ -10,7 +10,7 @@ from pathlib import Path
 
 # Add personal tool checkouts here once their sync recipe installs local commands.
 # Keep sites and other projects whose sync recipe publishes content out of this list.
-PROJECTS = ("cubrid-conf-tui",)
+PROJECTS = ("cubrid-conf-tui", "cubrid-build-coordinator")
 
 
 def main() -> int:
@@ -18,7 +18,8 @@ def main() -> int:
         description="Install or refresh personal CUBRID tools by running just sync.",
         epilog=(
             "Uses the current local source; update checkouts separately when needed. "
-            "Default: ~/gh/cubrid-conf-tui. Pass directories to sync other tools."
+            "Defaults: ~/gh/cubrid-conf-tui and ~/gh/cubrid-build-coordinator. "
+            "Pass directories to sync other tools."
         ),
     )
     parser.add_argument(

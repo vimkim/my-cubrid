@@ -42,11 +42,24 @@ class DailyUpdateTest(unittest.TestCase):
         )
         return project
 
-    def test_default_list_contains_only_the_tui(self):
+    def test_default_list_contains_the_tui_and_build_coordinator(self):
         result = self.run_cli("--list")
         self.assertEqual(result.returncode, 0, result.stderr)
-        self.assertEqual(result.stdout.strip(), str(Path.home() / "gh/cubrid-conf-tui"))
+        self.assertEqual(result.stdout.splitlines(), [
+            str(Path.home() / "gh/cubrid-conf-tui"),
+            str(Path.home() / "gh/cubrid-build-coordinator"),
+        ])
         self.assertFalse(self.log.exists())
+
+    def test_default_run_syncs_both_registered_tools(self):
+        home = self.root / "home"
+        (home / "gh").mkdir(parents=True)
+        tools = ("cubrid-conf-tui", "cubrid-build-coordinator")
+        for tool in tools:
+            (home / "gh" / tool).symlink_to(self.project(tool), target_is_directory=True)
+        result = self.run_cli(env=dict(self.env, HOME=str(home)))
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertEqual(self.log.read_text().splitlines(), list(tools))
 
     def test_runs_in_each_checkout_and_deduplicates_directories(self):
         first = self.project("first project")

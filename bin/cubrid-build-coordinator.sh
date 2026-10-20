@@ -27,6 +27,7 @@ Actions:
   installation-use [lock-wait-seconds] -- command [args...]
   installation-delete [lock-wait-seconds]
   stop-and-build
+  locks [--all] [--json]
 
 Exit status 75 means that the operation is safe to retry later.
 EOF
@@ -37,6 +38,18 @@ die_usage()
   printf 'Error: %s\n' "$*" >&2
   usage >&2
   exit "$EX_USAGE"
+}
+
+lock_status()
+{
+  local helper_dir
+  helper_dir="$(dirname -- "$(realpath -- "${BASH_SOURCE[0]}")")"
+  python3 "$helper_dir/cubrid-lock-status.py" "$@"
+}
+
+report_lock_owner()
+{
+  lock_status --lock "$1" >&2 || printf 'Lock owner inspection was incomplete.\n' >&2
 }
 
 require_environment()
@@ -85,6 +98,7 @@ acquire_build_lock()
   exec {BUILD_LOCK_FD}>"$BUILD_LOCK"
   if ! flock -w "$timeout" "$BUILD_LOCK_FD"; then
     printf 'Build directory is busy: %s\n' "$CUBRID_BUILD_DIR" >&2
+    report_lock_owner build
     printf 'Retry this command later. No process was stopped.\n' >&2
     exit "$EX_TEMPFAIL"
   fi
@@ -121,7 +135,8 @@ report_runtime_busy()
       printf '  PID %-8s %-20s %s\n' "$pid" "$name" "$executable" >&2
     done <<<"$processes"
   else
-    printf 'Another coordinated test or runtime command owns the runtime lock.\n' >&2
+    printf 'The runtime lock could not be acquired.\n' >&2
+    report_lock_owner runtime
   fi
   printf 'No process was stopped. Retry with: just install\n' >&2
 }
@@ -165,7 +180,7 @@ acquire_runtime_lock()
   if ! flock -w "$timeout" "$RUNTIME_LOCK_FD"; then
     printf 'Runtime command could not acquire the lock within %s seconds.\n' "$timeout" >&2
     printf 'Environment: %s\nLock: %s\n' "$CUBRID" "$RUNTIME_LOCK" >&2
-    printf 'Another runtime command or a daemon holding an inherited lock may own it.\n' >&2
+    report_lock_owner runtime
     exit "$EX_TEMPFAIL"
   fi
 }
@@ -290,6 +305,11 @@ wait_for_runtime_to_stop()
 action="${1:-}"
 [[ -n "$action" ]] || die_usage "action is required"
 shift
+
+if [[ "$action" == locks ]]; then
+  lock_status "$@"
+  exit
+fi
 
 require_environment
 initialize_locks

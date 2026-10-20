@@ -164,6 +164,13 @@ Busy work returns 75 and leaves the instance running; compilation may finish
 before installation is deferred. Arbitrary selected CMake targets are protected
 conservatively because they may perform installation.
 
+Busy reports identify accessible live lock holders. Use `just locks` for the
+selected build/installation, `just locks-all` for held locks in this user's
+coordinator namespace, or `just locks-json` for selected owner data. Inspection
+does not acquire locks or initialize the host environment. See
+[build and runtime lock architecture](runtime-locks.md) for descriptor ownership,
+the build/install split, diagnostic output and visibility limits.
+
 Coordinated host recipes hold the installation-use lock and select with
 `cub-workenv env`. The lock belongs to the foreground supervisor, not daemon
 descendants. Signals are forwarded while the supervisor retains its locks until

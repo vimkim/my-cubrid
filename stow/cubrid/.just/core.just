@@ -195,6 +195,21 @@ build-wait timeout='300': ensure-build-jdk
 install-wait timeout='300':
     "${MY_CUBRID:-$HOME/my-cubrid}/bin/cubrid-build-coordinator.sh" install {{ timeout }}
 
+# Inspect the selected build and runtime locks without acquiring them.
+[working-directory(justfile_directory())]
+locks:
+    "${MY_CUBRID:-$HOME/my-cubrid}/bin/cubrid-build-coordinator.sh" locks
+
+# Inspect held locks in the current user's runtime namespace.
+[working-directory(justfile_directory())]
+locks-all:
+    "${MY_CUBRID:-$HOME/my-cubrid}/bin/cubrid-build-coordinator.sh" locks --all
+
+# Export the selected build and runtime lock owners as JSON.
+[working-directory(justfile_directory())]
+locks-json:
+    "${MY_CUBRID:-$HOME/my-cubrid}/bin/cubrid-build-coordinator.sh" locks --json
+
 # Stop active CUBRID processes and build after explicit confirmation.
 [working-directory(justfile_directory())]
 stop-and-build: confirm-no

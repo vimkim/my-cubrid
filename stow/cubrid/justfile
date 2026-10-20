@@ -90,6 +90,15 @@ build-wait timeout='300': (core::build-wait timeout)
 # Wait up to `timeout` seconds for an idle runtime, then install.
 install-wait timeout='300': (core::install-wait timeout)
 
+# Show the live owners of the selected build and runtime locks.
+locks: core::locks
+
+# Show held coordinator locks in this user's runtime namespace.
+locks-all: core::locks-all
+
+# Export the selected lock status and live owners as JSON.
+locks-json: core::locks-json
+
 # Stop active CUBRID processes and build after explicit confirmation.
 stop-and-build: core::stop-and-build
 

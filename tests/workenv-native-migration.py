@@ -209,7 +209,7 @@ try:
             'buildPresets': [{'name': 'debug_gcc', 'configurePreset': 'debug_gcc'}]}))
         run('configure-build-fixture', [repo / 'bin/cubrid-build-coordinator.sh', 'configure'], a)
         registry_before_build = registry.read_bytes()
-        run('explicit-stop-and-build', [repo / 'bin/cubrid-build-coordinator.sh', 'stop-and-build'], a)
+        run('explicit-build-and-install-stop-runtime', [repo / 'bin/cubrid-build-coordinator.sh', 'build-and-install', '--stop-runtime'], a)
         assert registry.read_bytes() == registry_before_build
         assert (a['install'] / 'bin/probe').is_file()
         run('restart-after-build', ['just', 'db::start-testdb'], a)

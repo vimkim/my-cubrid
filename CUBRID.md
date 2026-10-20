@@ -13,8 +13,11 @@ Search `my-cubrid-docs` before web research for CUBRID-specific design or archit
 
 ## Local development
 
-- Use the personal `just` recipes for local development, especially `just build` and `just build-test`.
-  - `just build` finishes within 2 min for the first build, and within 20 secs for second build (thanks to ccache).
+- Use the personal `just` recipes for local development: `just configure` generates build rules, `just build` produces artifacts, and `just install` installs existing artifacts.
+  - Use `just build-and-install` for both stages, or `just configure-build-and-install` to include configuration. `just configure-build` omits installation.
+  - `just build-test` builds and runs configured ctest tests. Use `just build-and-install-test` when tests need refreshed installed artifacts.
+  - Explicit service stops use `just build-and-install --stop-runtime`.
+  - `just build-and-install` finishes within 2 min for the first build, and within 20 secs for second build (thanks to ccache).
 - In CUBRID organization-facing documentation, pull-request text, reviewer instructions, and verification steps, express the workflow with project-provided scripts, CMake, or ctest rather than personal recipes.
 - Preserve existing indentation exactly and keep formatting changes semantically necessary. Report unexplained indentation-only changes as possible GNU indent issues.
 - Most CUBRID `.c` sources compile as C++, while legacy `.c` and `.h` files are formatted with GNU indent. Wrap C++-specific syntax added to those legacy files exactly as follows so GNU indent preserves it:

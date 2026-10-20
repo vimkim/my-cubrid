@@ -26,6 +26,10 @@ class WorkenvIntegration(unittest.TestCase):
             env = dict(os.environ, CUB_WORKENV_CLI=CLI, CUBRID=str(install),
                        CUBRID_BUILD_DIR=str(root / 'build'), PRESET_MODE='debug',
                        XDG_RUNTIME_DIR=str(root), MY_CUBRID=str(REPO))
+            (root / 'CMakePresets.json').write_text(json.dumps({
+                'version': 3, 'configurePresets': [
+                    {'name': 'debug', 'binaryDir': '$env{CUBRID_BUILD_DIR}'}],
+                'buildPresets': [{'name': 'debug', 'configurePreset': 'debug'}]}))
             result = subprocess.run([CLI, 'init', '--no-db', '--worktree', str(root), '--install', str(install),
                 '--preset', 'debug', '--state-home', str(root / 'host'),
                 '--port-start', '46000', '--port-end', '46999'], text=True, capture_output=True, env=env)
@@ -60,7 +64,7 @@ class WorkenvIntegration(unittest.TestCase):
                     target.write_text('#!/bin/sh\n' + f'printf "%s\\n" "{command} $*" >> {shlex.quote(str(log))}\n')
                     target.chmod(0o755)
                 before = (root / '.cub-workenv/state.json').read_bytes()
-                rebuilt = subprocess.run([str(REPO / 'bin/cubrid-build-coordinator.sh'), 'stop-and-build'],
+                rebuilt = subprocess.run([str(REPO / 'bin/cubrid-build-coordinator.sh'), 'build-and-install', '--stop-runtime'],
                     cwd=root, env=dict(env, PATH=str(commands) + ':' + env['PATH']), capture_output=True, text=True)
                 self.assertEqual(rebuilt.returncode, 0, rebuilt.stderr)
                 self.assertEqual((root / '.cub-workenv/state.json').read_bytes(), before)

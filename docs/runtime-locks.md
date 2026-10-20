@@ -89,7 +89,7 @@ flowchart TD
     Inspect --> Proc["Linux kernel locks and process descriptors"]
 ```
 
-The [shared recipes](../stow/cubrid/justfile) provide commands such as `build`,
+The [shared recipes](../stow/cubrid/justfile) provide commands such as `build-and-install`,
 `install`, `ctest`, and `db::ini`.
 The [compatibility entrypoint](../bin/cubrid-build-coordinator.sh) executes the
 Python coordinator, which controls acquisition, installation checks, command
@@ -136,26 +136,38 @@ The namespace also depends on the user and `XDG_RUNTIME_DIR`. Commands in
 different namespaces do not coordinate through these files. `locks-all` reports
 the current namespace, rather than every environment on the host.
 
+## Build stage names
+
+`configure` generates build rules, `build` produces artifacts without installing,
+and `install` copies existing artifacts. `build-and-install` combines building
+and installation. The old `compile` command is now `build`, and the old installing
+`build` command is now `build-and-install`. Use
+`build-and-install --stop-runtime` in place of `stop-and-build`.
+
+`just configure-build` stops after artifact generation. Use
+`just configure-build-and-install` when installation is required. `just build-test`
+builds artifacts and runs ctest; `just build-and-install-test` installs first.
+
 ## What each operation locks
 
 | Operation | Build lock | Runtime lock | Additional condition |
 | --- | --- | --- | --- |
 | `just configure` | During CMake configuration | None | Valid build selection |
-| `just compile` | During compilation | None | Valid build selection |
-| `just build` | During compilation and installation | After compilation, through installation | No executable active under the installation prefix |
+| `just build` | During compilation | None | Valid build selection |
+| `just build-and-install` | During compilation and installation | After compilation, through installation | No executable active under the installation prefix |
 | `just install` | During installation | During installation | No executable active under the installation prefix |
 | `just ctest` | None | During the ctest command | No host DB initialization requirement |
 | `runtime -- command` | None | During validation and the foreground command | Selected host environment ready |
 | `installation-use -- command` | None | During the foreground command | No host DB initialization requirement |
 | Arbitrary CMake `target` action | During the target | During the target | Conservative installation guard |
 | `installation-delete` | During deletion | During deletion | Idle prefix and additional path/storage checks |
-| `stop-and-build` | During compilation, stop, and installation | After compilation, through stop and installation | Valid selected environment and explicit stop request |
+| `build-and-install --stop-runtime` | During compilation, stop, and installation | After compilation, through stop and installation | Valid selected environment and explicit stop request |
 
 The table describes coordinator actions. Some recipe prerequisites run before
 the coordinator, including JDK preparation and ctest socket checks.
 
 Actions that need both locks acquire the **build lock first**. The ordinary
-`build` action keeps that lock while it attempts to acquire the runtime lock.
+`build-and-install` action keeps that lock while it attempts to acquire the runtime lock.
 An interactive editor can therefore block installation without blocking the
 preceding compilation. A build waiting for installation also delays other
 coordinated operations on that same build directory.
@@ -164,7 +176,7 @@ Runtime commands use one exclusive lock. Two coordinated tests against the same
 installation serialize even when they select different database names.
 The coordinator does not support recursive entry into the same runtime lock.
 
-### Why the build returned 75
+### Why build-and-install returned 75
 
 ```mermaid
 sequenceDiagram
@@ -183,8 +195,8 @@ sequenceDiagram
     Editor->>RL: Release lock when editor command exits
 ```
 
-`just configure-build` runs configuration and then `build`. The `build` action
-includes installation, so successful linking does not guarantee a successful
+`just configure-build-and-install` runs configuration and then
+`build-and-install`. The `build-and-install` action includes installation, so successful linking does not guarantee a successful
 recipe exit. Configuration and build use separate coordinator invocations.
 
 ### Wait behavior
@@ -192,9 +204,9 @@ recipe exit. Configuration and build use separate coordinator invocations.
 | Path | Default behavior |
 | --- | --- |
 | Build-directory acquisition | Wait up to 600 seconds, configurable with `CUBRID_BUILD_LOCK_TIMEOUT` |
-| Installation in `build` or `install` | Attempt immediately, return 75 when busy |
+| Installation in `build-and-install` or `install` | Attempt immediately, return 75 when busy |
 | `just install-wait 300` | Retry the installation guard for up to 300 seconds |
-| `just build-wait 300` | Compile first, then retry the installation guard for up to 300 seconds |
+| `just build-and-install-wait 300` | Compile first, then retry the installation guard for up to 300 seconds |
 | Coordinator `runtime` or `installation-use` | Default wait 300 seconds, unless the caller supplies a timeout |
 
 Installation retries check the runtime lock and native processes every two

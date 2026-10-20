@@ -14,9 +14,17 @@ coordinate work contexts without depending on the stowed worktree interface.
 
 The root `justfile` intentionally exposes only the stable build contract:
 
-- `prepare`, `prepare-debug-gcc`, `configure`, `compile`, `install`
-- `build`, `ctest`, `test`, `build-test`
-- `build-wait`, `install-wait`, `stop-and-build`
+- `prepare`, `prepare-debug-gcc`, `configure`, `build`, `install`
+- `build-and-install`, `configure-build`, `configure-build-and-install`
+- `ctest`, `test`, `build-test`, `build-and-install-test`
+- `build-and-install-wait`, `install-wait`
+
+`build` produces artifacts without installing. `install` copies existing artifacts;
+`build-and-install` combines both. Add `--stop-runtime` to `build-and-install` only
+when deliberately stopping the selected services before installation. The old
+`compile`, installing `build`, and `stop-and-build` spellings have been replaced.
+`build-test` runs ctest after building; use `build-and-install-test` when tests
+need refreshed installed artifacts.
 
 Running `just` lists these commands and the available namespaces. `test` is
 currently an honest alias for the configured ctest suite; it does not claim to

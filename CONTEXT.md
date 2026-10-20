@@ -4,6 +4,8 @@ Host preparation and selection follow [host work environments](docs/host-workenv
 and [ADR-0002](docs/adr/0002-workenv-authority.md). Legacy terms in dated evidence
 refer to the retired runtime engine.
 
+Build stage names are defined in [the build glossary](GLOSSARY.md).
+
 ## Language
 
 **Managed CUBRID workflow**:

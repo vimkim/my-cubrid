@@ -7,7 +7,9 @@ CUBRID is an open-source C/C++17 RDBMS. Apache 2.0 license, version 11.5.x.
 ## Build
 
 ```bash
-just build-test    # Build and test (preferred)
+just build                     # Produce artifacts without installing
+just install                   # Install existing artifacts
+just build-and-install-test    # Build, install, and run configured ctest tests
 ```
 
 ## Build Modes & Preprocessor Guards

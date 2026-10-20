@@ -2,6 +2,7 @@
 """A daemon spawned by a runtime command must not retain the coordinator lock."""
 import hashlib
 import fcntl
+import json
 import os
 from pathlib import Path
 import signal
@@ -44,6 +45,13 @@ class RuntimeLockTest(unittest.TestCase):
             CUBRID_DATABASES=str(root / 'databases'),
         )
         environment.pop('CUBRID_RUNTIME_LOCK_HELD', None)
+        (root / 'CMakePresets.json').write_text(json.dumps({
+            'version': 3, 'configurePresets': [
+                {'name': 'debug', 'binaryDir': '$env{CUBRID_BUILD_DIR}'}],
+            'buildPresets': [{'name': 'debug', 'configurePreset': 'debug'}]}))
+        build = Path(environment['CUBRID_BUILD_DIR'])
+        build.mkdir()
+        (build / 'CMakeCache.txt').write_text(f'CMAKE_INSTALL_PREFIX:PATH={environment["CUBRID"]}\n')
         return environment
 
     def test_installation_use_does_not_require_host_initialization(self):
@@ -87,7 +95,7 @@ class RuntimeLockTest(unittest.TestCase):
                     self.assertFalse(marker.exists())
                     self.assertIn('runtime_invalid', result.stderr)
 
-    def test_stop_and_build_revalidates_before_stopping_or_installing(self):
+    def test_build_and_install_stop_runtime_revalidates_before_stopping_or_installing(self):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
             command_log = root / 'commands.log'
@@ -114,7 +122,7 @@ class RuntimeLockTest(unittest.TestCase):
             env['PATH'] = f'{command_bin}:{env["PATH"]}'
 
             result = subprocess.run(
-                [str(COORDINATOR), 'stop-and-build'],
+                [str(COORDINATOR), 'build-and-install', '--stop-runtime'],
                 cwd=root,
                 env=env,
                 capture_output=True,
@@ -207,7 +215,7 @@ class RuntimeLockTest(unittest.TestCase):
                 f'echo start >> {str(log)!r}\nsleep 0.2\necho end >> {str(log)!r}\n')
             cmake.chmod(0o755)
             env['PATH'] = str(command_bin) + ':' + env['PATH']
-            processes = [subprocess.Popen([str(COORDINATOR), 'compile'], cwd=root, env=env) for _ in range(2)]
+            processes = [subprocess.Popen([str(COORDINATOR), 'build'], cwd=root, env=env) for _ in range(2)]
             for process in processes:
                 self.assertEqual(process.wait(timeout=5), 0)
             self.assertEqual(log.read_text().splitlines(), ['start', 'end', 'start', 'end'])
@@ -351,7 +359,7 @@ class RuntimeLockTest(unittest.TestCase):
             )
 
             result = subprocess.run(
-                [str(COORDINATOR), 'build', '0'],
+                [str(COORDINATOR), 'build-and-install', '0'],
                 cwd=root,
                 env=env,
                 capture_output=True,

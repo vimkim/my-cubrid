@@ -7,10 +7,10 @@ alias build-without-log := core::build-without-log
 alias build-with-log := core::build
 
 [private]
-alias build-only := core::compile
+alias build-only := core::build
 
 [private]
-alias build-for-ctp := core::build
+alias build-and-install-for-ctp := core::build-and-install
 
 [private]
 alias cmake-preset-mode-select := core::preset-select
@@ -55,10 +55,10 @@ alias stow-delete := core::stow-delete
 alias stow-cb := core::stow-cb
 
 [private]
-configure-build-for-ctp: core::configure core::build
+configure-build-and-install-for-ctp: core::configure core::build-and-install
 
 [private]
-build-restart-testdb: core::build db::restart-testdb
+build-and-install-restart-testdb: core::build-and-install db::restart-testdb
 
 [private]
 alias server-start-demodb := db::start-demodb
@@ -262,10 +262,10 @@ alias perf-flamegraph := profile::perf-flamegraph
 alias check-simd-native := profile::check-simd-native
 
 [private]
-alias build-prepare-oos := oos::build-prepare
+alias build-and-install-prepare-oos := oos::build-and-install-prepare
 
 [private]
-alias configure-build-prepare-oos := oos::configure-build-prepare
+alias configure-build-and-install-prepare-oos := oos::configure-build-and-install-prepare
 
 [private]
 alias oos-prepare-server := oos::prepare-server
@@ -280,7 +280,7 @@ test-oos-sql:
     @exit 2
 
 [private]
-alias n1 := oos::build-prepare
+alias n1 := oos::build-and-install-prepare
 
 [private]
 alias n2 := db::recreate-testdb
@@ -298,7 +298,7 @@ alias np := oos::prepare-server
 alias nt := core::build-test
 
 [private]
-alias b := oos::build-prepare
+alias b := oos::build-and-install-prepare
 
 [private]
 alias c := configure
@@ -307,7 +307,7 @@ alias c := configure
 alias t := test
 
 [private]
-alias cb := configure-build
+alias cb := configure-build-and-install
 
 # These live only in develop's local module. Recursive dispatch keeps other worktrees parseable.
 [private]

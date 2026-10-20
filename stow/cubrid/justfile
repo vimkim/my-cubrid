@@ -64,16 +64,24 @@ preset-debug-gcc: (core::preset-set "debug_gcc")
 # Select the commonly used GCC release preset.
 preset-release-gcc: (core::preset-set "release_gcc")
 
-# Compile without installing.
-compile: core::compile
-
-# Install an already-compiled tree when its runtime is idle.
-install: core::install
-
-# Compile, install, and capture the complete log; initialize databases explicitly.
+# Build artifacts and capture the complete log without installing.
 build: core::build
 
+# Install existing build artifacts when the installation is idle.
+install: core::install
+
+# Build and install; --stop-runtime explicitly stops services before installation.
+[positional-arguments]
+build-and-install *args:
+    just core::build-and-install "$@"
+
+# Configure and build artifacts without installing.
 configure-build: core::configure core::build
+
+# Configure, build and install the selected preset.
+[positional-arguments]
+configure-build-and-install *args: core::configure
+    just core::build-and-install "$@"
 
 # Run configured ctest tests while holding the runtime lock.
 ctest: core::ctest
@@ -84,8 +92,11 @@ test: core::test
 # Build, then run the currently configured test suite.
 build-test: core::build-test
 
-# Wait up to `timeout` seconds for an idle runtime, then build.
-build-wait timeout='300': (core::build-wait timeout)
+# Build, install, then run the currently configured test suite.
+build-and-install-test: core::build-and-install-test
+
+# Build first, then wait up to `timeout` seconds for an idle installation and install.
+build-and-install-wait timeout='300': (core::build-and-install-wait timeout)
 
 # Wait up to `timeout` seconds for an idle runtime, then install.
 install-wait timeout='300': (core::install-wait timeout)
@@ -98,9 +109,6 @@ locks-all: core::locks-all
 
 # Export the selected lock status and live owners as JSON.
 locks-json: core::locks-json
-
-# Stop active CUBRID processes and build after explicit confirmation.
-stop-and-build: core::stop-and-build
 
 dwb-off:
     "${MY_CUBRID:-$HOME/my-cubrid}/bin/cubrid-build-coordinator.sh" runtime 300 -- ini.sh -s common "${CUBRID_CONF_FILE:-$CUBRID/conf/cubrid.conf}" double_write_buffer_size 0

@@ -10,9 +10,12 @@ independent environment and storage.
 Discover recipes with `just --list` and `just --show build`. For missing shared
 files, run `just -f ~/my-cubrid/cubrid-justfiles/justfile -d . prepare-build`.
 `my-cubrid-init.sh` remains a **build preparation** shortcut, not host initialization.
-Select the preset, configure and build through the worktree's live recipes.
-Build/install and `ctest` work without host initialization. A successful build
-never creates a database or switches an existing workenv.
+Select the preset, then run `just configure` and `just build` to produce artifacts.
+Run `just install` to install existing artifacts, or `just build-and-install` to
+build and install together. `just configure-build` omits installation;
+`just configure-build-and-install` includes it.
+Building, installation, and `ctest` work without host initialization.
+A successful build or installation never creates a database or switches an existing workenv.
 
 After installation, explicitly initialize:
 
@@ -184,8 +187,8 @@ owned container is removed. Container cleanup still verifies invocation label
 and immutable container ID; unknown/foreign containers are never deleted.
 Container startup stays independent of host initialization.
 
-`stop-and-build` compiles, obtains the installation lock, loads the selected host
-environment, explicitly stops its registered servers/service/broker, waits for
+`build-and-install --stop-runtime` builds artifacts, obtains the installation
+lock, loads the selected host environment, explicitly stops its registered servers/service/broker, waits for
 native executables to exit, then installs. Installation deletion refuses broad
 paths and prefixes containing DB volume/log artifacts. It does not delete host
 workenv state, external DBs or historical legacy metadata.

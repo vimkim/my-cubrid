@@ -7,17 +7,17 @@ set shell := ["sh", "-cu"]
 prepare-server:
     just db set-port
 
-# Build and apply the shared OOS server configuration.
+# Build, install, and apply the shared OOS server configuration.
 [working-directory(justfile_directory())]
-build-prepare:
-    just build
+build-and-install-prepare:
+    just build-and-install
     just oos prepare-server
 
-# Configure, build, and apply the shared OOS server configuration.
+# Configure, build, install, and apply the shared OOS server configuration.
 [working-directory(justfile_directory())]
-configure-build-prepare:
+configure-build-and-install-prepare:
     just configure
-    just oos build-prepare
+    just oos build-and-install-prepare
 
 # Run one OOS isolation test or the default OOS isolation suite.
 [working-directory(justfile_directory())]

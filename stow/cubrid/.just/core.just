@@ -157,22 +157,7 @@ preset-set $preset:
     trap - EXIT
     printf 'Selected preset: %s\n' "$preset"
 
-# Compile without installing.
-[working-directory(justfile_directory())]
-compile: ensure-build-jdk
-    "${MY_CUBRID:-$HOME/my-cubrid}/bin/cubrid-build-coordinator.sh" compile
-
-# Install an already-compiled tree when its runtime is idle.
-[working-directory(justfile_directory())]
-install:
-    "${MY_CUBRID:-$HOME/my-cubrid}/bin/cubrid-build-coordinator.sh" install 0
-
-# Compile and install without build-log capture.
-[working-directory(justfile_directory())]
-build-without-log: ensure-build-jdk
-    "${MY_CUBRID:-$HOME/my-cubrid}/bin/cubrid-build-coordinator.sh" build 0
-
-# Compile, install, and capture the complete log; initialize databases explicitly.
+# Build artifacts and capture the complete log without installing.
 [working-directory(justfile_directory())]
 build: ensure-build-jdk
     #!/usr/bin/env bash
@@ -182,13 +167,43 @@ build: ensure-build-jdk
     log_file="$build_dir/build.log"
     echo "Logging build output to: $log_file"
     {
-      direnv exec . "${MY_CUBRID:-$HOME/my-cubrid}/bin/cubrid-build-coordinator.sh" build 0
+      direnv exec . "${MY_CUBRID:-$HOME/my-cubrid}/bin/cubrid-build-coordinator.sh" build
     } 2>&1 | tee "$log_file"
 
-# Wait up to `timeout` seconds for an idle runtime, then build.
+# Build artifacts without log capture or installation.
 [working-directory(justfile_directory())]
-build-wait timeout='300': ensure-build-jdk
-    "${MY_CUBRID:-$HOME/my-cubrid}/bin/cubrid-build-coordinator.sh" build {{ timeout }}
+build-without-log: ensure-build-jdk
+    "${MY_CUBRID:-$HOME/my-cubrid}/bin/cubrid-build-coordinator.sh" build
+
+# Install existing build artifacts when the installation is idle.
+[working-directory(justfile_directory())]
+install:
+    "${MY_CUBRID:-$HOME/my-cubrid}/bin/cubrid-build-coordinator.sh" install 0
+
+# Build and install without log capture.
+[working-directory(justfile_directory())]
+[positional-arguments]
+build-and-install-without-log *args: ensure-build-jdk
+    "${MY_CUBRID:-$HOME/my-cubrid}/bin/cubrid-build-coordinator.sh" build-and-install "$@"
+
+# Build and install with log capture; --stop-runtime explicitly stops services before installation.
+[working-directory(justfile_directory())]
+[positional-arguments]
+build-and-install *args: ensure-build-jdk
+    #!/usr/bin/env bash
+    set -euo pipefail
+    build_dir="$(direnv exec . bash -c 'echo "${CUBRID_BUILD_DIR:?set PRESET_MODE / allow direnv first}"')"
+    mkdir -p "$build_dir"
+    log_file="$build_dir/build.log"
+    echo "Logging build and installation output to: $log_file"
+    {
+      direnv exec . "${MY_CUBRID:-$HOME/my-cubrid}/bin/cubrid-build-coordinator.sh" build-and-install "$@"
+    } 2>&1 | tee "$log_file"
+
+# Build first, then wait up to `timeout` seconds for an idle installation and install.
+[working-directory(justfile_directory())]
+build-and-install-wait timeout='300': ensure-build-jdk
+    "${MY_CUBRID:-$HOME/my-cubrid}/bin/cubrid-build-coordinator.sh" build-and-install {{ timeout }}
 
 # Wait up to `timeout` seconds for an idle runtime, then install.
 [working-directory(justfile_directory())]
@@ -210,11 +225,6 @@ locks-all:
 locks-json:
     "${MY_CUBRID:-$HOME/my-cubrid}/bin/cubrid-build-coordinator.sh" locks --json
 
-# Stop active CUBRID processes and build after explicit confirmation.
-[working-directory(justfile_directory())]
-stop-and-build: confirm-no
-    "${MY_CUBRID:-$HOME/my-cubrid}/bin/cubrid-build-coordinator.sh" stop-and-build
-
 # Run configured ctest tests while holding the runtime lock.
 [working-directory(justfile_directory())]
 ctest:
@@ -225,9 +235,13 @@ ctest:
 [working-directory(justfile_directory())]
 test: ctest
 
-# Build, then run the currently configured test suite.
+# Build artifacts, then run the currently configured test suite.
 [working-directory(justfile_directory())]
 build-test: build test
+
+# Build, install, then run the currently configured test suite.
+[working-directory(justfile_directory())]
+build-and-install-test: build-and-install test
 
 # Install the third-party target.
 [working-directory(justfile_directory())]

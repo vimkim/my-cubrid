@@ -10,7 +10,7 @@ user DB, allocation or shared symlink has been migrated or cleaned by this task.
 | Responsibility | New home / disposition |
 | --- | --- |
 | Host init, allocation, selection, registry creation | Public `cub-workenv` CLI only; no legacy fallback |
-| Serialize configure/compile/build and install targets | Narrowed existing coordinator, canonical build lock |
+| Serialize configure/build/build-and-install and install targets | Narrowed existing coordinator, canonical build lock |
 | Refuse replacement of a busy install | Existing installation lock and native executable observation, exit 75 |
 | Foreground command/harness lifetime | Supervisor owns locks, forwards signals, waits for cleanup; descendants close lock FDs |
 | Persistent container ownership and cleanup | Existing `cubrid-podman-test.sh` label/immutable-ID verification, `installation-use` lock |
@@ -18,7 +18,7 @@ user DB, allocation or shared symlink has been migrated or cleaned by this task.
 | DB create | `cub-workenv create-db`; no precondition that output DB already exists |
 | Internal delete/recreate | Personal helper consumes creation provenance, checks physical paths, native deletion, exact target registry removal |
 | External/mixed/unknown DB | Preserve and direct to reviewed manual lifecycle, as explicitly chosen by the user |
-| Stop-and-build | Compile → installation lock → selected host environment → stop its registered servers → idle check → install |
+| Build and install with `--stop-runtime` | Compile → installation lock → selected host environment → stop its registered servers → idle check → install |
 | Installation deletion | Build+installation locks, native-idle check, broad-path/DB-artifact refusal; host state/data are retained |
 | Legacy runtime command | Actionable retirement stub, no implementation or automatic migration |
 
@@ -40,13 +40,13 @@ below; a listed disposition does not claim native execution of every interactive
 | `stow/cubrid/justfile:dwb-off` | Selected native command under installation lock: `ini.sh -s common "${CUBRID_CONF_FILE:-$CUBRID/conf/cubrid.conf}" double_write_buffer_size 0` |
 | `stow/cubrid/justfile:dwb-get` | Selected native command under installation lock: `ini.sh -s common "${CUBRID_CONF_FILE:-$CUBRID/conf/cubrid.conf}" double_write_buffer_size` |
 | `stow/cubrid/.just/core.just:configure` | Coordinator `configure`; build/install/container boundary |
-| `stow/cubrid/.just/core.just:compile` | Coordinator `compile`; build/install/container boundary |
-| `stow/cubrid/.just/core.just:install` | Coordinator `install`; build/install/container boundary |
-| `stow/cubrid/.just/core.just:build-without-log` | Coordinator `build`; build/install/container boundary |
 | `stow/cubrid/.just/core.just:build` | Coordinator `build`; build/install/container boundary |
-| `stow/cubrid/.just/core.just:build-wait` | Coordinator `build`; build/install/container boundary |
+| `stow/cubrid/.just/core.just:install` | Coordinator `install`; build/install/container boundary |
+| `stow/cubrid/.just/core.just:build-and-install-without-log` | Coordinator `build-and-install`; build/install/container boundary |
+| `stow/cubrid/.just/core.just:build-and-install` | Coordinator `build-and-install`; build/install/container boundary |
+| `stow/cubrid/.just/core.just:build-and-install-wait` | Coordinator `build-and-install`; build/install/container boundary |
 | `stow/cubrid/.just/core.just:install-wait` | Coordinator `install`; build/install/container boundary |
-| `stow/cubrid/.just/core.just:stop-and-build` | Coordinator `stop-and-build`; build/install/container boundary |
+| `stow/cubrid/.just/core.just:build-and-install --stop-runtime` | Coordinator `build-and-install --stop-runtime`; build/install/container boundary |
 | `stow/cubrid/.just/core.just:ctest` | Coordinator `installation-use`; build/install/container boundary |
 | `stow/cubrid/.just/core.just:install-3rdparty` | Coordinator `install-target`; build/install/container boundary |
 | `stow/cubrid/.just/core.just:install-csql-util` | Coordinator `install-target`; build/install/container boundary |
@@ -196,8 +196,8 @@ has that limitation; no protection was silently replaced by a DB lock.
   external/mixed refusal, running-owner refusal and health, busy-install deferral,
   selected PID, A/B noninterference, demodb create/load/recreate, composed
   stop/recreate/start, cheap reentry/A→B, allocated-port restoration, read-only
-  doctor, CLI-created internal DB deletion, explicit stop-and-build and SQL/data
-  preservation after restarting. All fixture-owned processes stopped normally.
+  doctor, CLI-created internal DB deletion, explicit build-and-install with runtime
+  stopping and SQL/data preservation after restarting. All fixture-owned processes stopped normally.
 - [Final lifecycle probe](../tests/evidence/complete-workenv/native/final-lifecycle.json)
   reruns actual create/delete after adding config validation and proves unchanged
   non-target registry bytes. Final copied build is **11.5.0.2640-d0311e1**;

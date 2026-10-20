@@ -2,6 +2,9 @@
 status: superseded by ADR-0002
 ---
 
+Command-name update: the current explicit stop operation is
+`build-and-install --stop-runtime`; `stop-and-build` below is its historical name.
+
 # Enforce the runtime guard at the managed-workflow seam
 
 Historical decision, superseded by [ADR-0002](0002-workenv-authority.md). The

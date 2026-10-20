@@ -1,8 +1,11 @@
 #!/usr/bin/env python3
 """Verify the exec shim and representative recipes with disposable commands."""
+import fcntl
+import hashlib
 import json
 import os
 from pathlib import Path
+import shutil
 import subprocess
 import sys
 import tempfile
@@ -14,6 +17,65 @@ SHIM = REPO / 'bin/cubrid-build-coordinator.sh'
 
 
 class CoordinatorShimTest(unittest.TestCase):
+    @unittest.skipUnless(shutil.which('cmake') and shutil.which('make'), 'requires CMake and make')
+    def test_shared_recipes_build_while_busy_then_install_existing_artifacts(self):
+        with tempfile.TemporaryDirectory(prefix='coordinator-stages-') as tmp:
+            root = Path(tmp)
+            for name in ('justfile', '.just'):
+                (root / name).symlink_to(REPO / 'stow/cubrid' / name)
+            commands = root / 'commands'
+            commands.mkdir()
+            direnv = commands / 'direnv'
+            direnv.write_text('#!/bin/sh\nshift 2; exec "$@"\n')
+            direnv.chmod(0o755)
+            java = root / 'java'
+            for name in ('bin/java', 'bin/javac', 'include/jni.h'):
+                path = java / name
+                path.parent.mkdir(parents=True, exist_ok=True)
+                path.touch()
+            (root / 'payload').write_text('first\n')
+            (root / 'CMakeLists.txt').write_text(
+                'cmake_minimum_required(VERSION 3.21)\nproject(stage_probe NONE)\n'
+                'add_custom_target(probe ALL COMMAND "${CMAKE_COMMAND}" -E copy '
+                '"${CMAKE_SOURCE_DIR}/payload" "${CMAKE_BINARY_DIR}/artifact")\n'
+                'install(FILES "${CMAKE_BINARY_DIR}/artifact" DESTINATION share)\n')
+            (root / 'CMakePresets.json').write_text(json.dumps({
+                'version': 3, 'configurePresets': [
+                    {'name': 'debug', 'generator': 'Unix Makefiles',
+                     'binaryDir': '$env{CUBRID_BUILD_DIR}',
+                     'cacheVariables': {'CMAKE_INSTALL_PREFIX': '$env{CUBRID}'}}],
+                'buildPresets': [{'name': 'debug', 'configurePreset': 'debug'}]}))
+            env = dict(os.environ, MY_CUBRID=str(REPO), XDG_RUNTIME_DIR=str(root),
+                       CUBRID=str(root / 'install'), CUBRID_BUILD_DIR=str(root / 'build'),
+                       PRESET_MODE='debug', JAVA_HOME=str(java),
+                       PATH=f'{commands}:{os.environ["PATH"]}')
+
+            def recipe(*args):
+                return subprocess.run(['just', *args], cwd=root, env=env,
+                                      text=True, capture_output=True, timeout=15)
+
+            locks = root / f'cubrid-dev-locks-{os.getuid()}'
+            locks.mkdir(mode=0o700)
+            digest = hashlib.sha256(os.fsencode(os.path.realpath(env['CUBRID']))).hexdigest()
+            with (locks / f'runtime-{digest}.lock').open('w') as lock:
+                fcntl.flock(lock, fcntl.LOCK_EX)
+                result = recipe('configure-build')
+                self.assertEqual(result.returncode, 0, result.stderr)
+                self.assertEqual((root / 'build/artifact').read_text(), 'first\n')
+                self.assertFalse((root / 'install/share/artifact').exists())
+                result = recipe('build-and-install')
+                self.assertNotEqual(result.returncode, 0)
+                self.assertIn('75', result.stderr)
+                self.assertFalse((root / 'install/share/artifact').exists())
+            (root / 'payload').write_text('second\n')
+            result = recipe('install')
+            self.assertEqual(result.returncode, 0, result.stderr)
+            self.assertEqual((root / 'install/share/artifact').read_text(), 'first\n')
+            result = recipe('configure-build-and-install')
+            self.assertEqual(result.returncode, 0, result.stderr)
+            self.assertEqual((root / 'install/share/artifact').read_text(), 'second\n')
+            self.assertFalse((root / '.cub-workenv').exists())
+
     def test_exec_preserves_pid_arguments_streams_and_exit_status(self):
         with tempfile.TemporaryDirectory() as tmp:
             cli = Path(tmp) / 'reviewed cli'
@@ -67,6 +129,10 @@ class CoordinatorShimTest(unittest.TestCase):
                        CUBRID_DATABASES=str(registry),CUBRID_TMP=str(root/'tmp'),
                        PRESET_MODE='debug',JAVA_HOME=str(java),CUB_WORKENV_CLI=str(commands/'cub-workenv'),
                        PATH=f'{commands}:{os.environ["PATH"]}')
+            (root / 'CMakePresets.json').write_text(json.dumps({
+                'version': 3, 'configurePresets': [
+                    {'name': 'debug', 'binaryDir': '$env{CUBRID_BUILD_DIR}'}],
+                'buildPresets': [{'name': 'debug', 'configurePreset': 'debug'}]}))
             for recipe in ('db::edit-config','debug::csql-sa'):
                 result = subprocess.run(['just',recipe],env=env,cwd=root,text=True,
                                         input='interactive recipe input\n',capture_output=True,timeout=5)
@@ -75,10 +141,11 @@ class CoordinatorShimTest(unittest.TestCase):
             result = subprocess.run(['just','ctest'],env=env,cwd=root,text=True,capture_output=True,timeout=5)
             self.assertEqual(result.returncode,0,result.stderr)
             self.assertIn('ctest-fixture-pass',result.stdout)
-            result = subprocess.run(['just','build'],env=env,cwd=root,text=True,capture_output=True,timeout=5)
-            self.assertNotEqual(result.returncode,0)
-            self.assertIn('exit code 9',result.stderr)
-            self.assertIn('compile-fixture-failed',(root/'build/build.log').read_text())
+            for recipe in [('build',), ('build-and-install',), ('build-and-install', '--stop-runtime')]:
+                result = subprocess.run(['just',*recipe],env=env,cwd=root,text=True,capture_output=True,timeout=5)
+                self.assertNotEqual(result.returncode,0)
+                self.assertIn('exit code 9',result.stderr)
+                self.assertIn('compile-fixture-failed',(root/'build/build.log').read_text())
 
 
 if __name__ == '__main__':

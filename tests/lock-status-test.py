@@ -230,7 +230,7 @@ class LockStatusTest(unittest.TestCase):
             while not ready.exists() and time.monotonic() < deadline:
                 time.sleep(.01)
             self.assertTrue(ready.exists())
-            result = self.invoke('compile')
+            result = self.invoke('build')
             self.assertEqual(result.returncode, 75, result.stderr)
             self.assertIn(f'PID {holder.pid}', result.stderr)
             report = json.loads(self.invoke('locks', '--json').stdout)

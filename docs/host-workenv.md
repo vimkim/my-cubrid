@@ -77,6 +77,113 @@ executable identity, DB/utility role and the full instance environment, then
 rechecks process generation. `my-cubrid-process-select --database NAME` also
 supports non-default DBs. Startup cwd alone is not instance identity.
 
+## Daemon startup and captured output
+
+[CBRD-27443](https://jira.cubrid.org/browse/CBRD-27443) can keep a caller waiting
+after the startup command exits. Background master, server, or PL processes can
+retain the write end of the caller's output pipe. A reader then waits for EOF.
+This affects `| cat`, `| tee`, command substitution, and subprocess pipe capture.
+Python `capture_output=True` can wait for EOF after its direct child exits.
+A wrapper or PTY alone does not establish that every writer closed its descriptors.
+
+### Start a server from an agent
+
+1. Select the work environment through `cub-workenv` and load it with `direnv`.
+   Use an existing registered database. Initialize a new environment explicitly
+   when the task requires one.
+2. Send startup stdin to `/dev/null`. Send both stdout and stderr to regular files.
+   Apply redirection to the outer command when a recipe or wrapper starts CUBRID.
+3. Start the launcher in a separate session when the tool cleans up its process group.
+   Affected master startup can keep master in the launcher's group.
+4. Wait for the startup command with a deadline. Read its exit code and log files.
+   Check the selected server state separately before reporting startup success.
+
+Run this example from a prepared source worktree with a registered `testdb`:
+
+```bash
+direnv exec . python3 - <<'PY'
+from pathlib import Path
+import subprocess
+import tempfile
+
+logs = Path(tempfile.mkdtemp(prefix="cubrid-start-"))
+with (logs / "stdout.log").open("wb") as stdout, (logs / "stderr.log").open("wb") as stderr:
+    launcher = subprocess.Popen(
+        ["just", "db::start", "testdb"],
+        stdin=subprocess.DEVNULL, stdout=stdout, stderr=stderr,
+        close_fds=True, start_new_session=True,
+    )
+    try:
+        rc = launcher.wait(timeout=30)
+    except subprocess.TimeoutExpired:
+        print(f"Startup command still running: PID={launcher.pid}; logs={logs}", flush=True)
+        raise SystemExit(124)
+print(f"Startup command exited: rc={rc}; logs={logs}")
+raise SystemExit(rc)
+PY
+```
+
+Read the printed log paths in a separate command. Regular files provide a current
+snapshot without waiting for daemon EOF. Keep the files while the daemons use them.
+The 30-second limit bounds this example's wait. It is not a CUBRID startup timeout
+or proof that recovery is stuck. On expiry, the launcher can still be running.
+Inspect the reported PID before retrying or stopping anything.
+
+Python's [`start_new_session=True`](https://docs.python.org/3/library/subprocess.html#subprocess.Popen)
+starts the child in a separate session on POSIX. It does not close output pipes.
+Use it together with regular-file redirection for an intentionally persistent server.
+Check server state again in a later tool call. A launcher exit code alone does not
+show that master survived the caller's cleanup.
+
+Use the same environment for a state check. Redirect its output too:
+
+```bash
+direnv exec . cubrid server status </dev/null >server-status.log 2>&1
+```
+
+### Recover a caller that already waits for EOF
+
+1. Open a separate tool call or terminal in the same work environment.
+2. Check whether the startup command exited. Check server state or run a small SQL
+   query. A waiting reader does not prove that startup failed.
+3. Inspect `/proc/<pid>/fd` for the reader and the selected instance's processes.
+   Compare their `pipe:[inode]` targets. Record which processes retain write access.
+4. For an isolated instance owned by this test, stop its database through the same
+   selected environment. Send cleanup output to regular files as well.
+5. If master still retains the pipe, stop the isolated service only when this test
+   owns the whole instance. Check its database registrations and process identities first.
+   Shared services require the owner's explicit approval before a service-wide stop.
+6. Check that owned processes exit and the original reader completes.
+
+Preserve the selected installation, configuration, registry, master port, and TMP
+settings during recovery. Avoid global process kills, IPC cleanup, and lock-file deletion.
+A process-group timeout can also signal daemons that remain in the caller's group.
+It is not a general workaround for descriptor inheritance.
+
+Regular-file capture avoids this output-pipe wait. It does not repair other inherited
+descriptors or file locks. Keep the coordinator's descriptor protection for managed
+recipes. Use [lock owner inspection](runtime-locks.md#find-the-owner) for a blocked lock.
+
+### Reproduction evidence
+
+On 2026-10-21, Linux debug build `11.5.0.2707` reproduced the exact command
+`cubrid server start testdb | cat` in the `thirdparty-reuse-poc` work environment.
+The startup command was gone at four seconds, but `cat` still waited at ten seconds.
+A `SELECT 1` query succeeded. Master, server, and PL held FD 1 on the same pipe.
+Stopping `testdb` left master holding it. Stopping that isolated service released
+the pipe, and the pipeline returned 0 without a forced kill.
+
+The regular-file example without a separate session returned 0 in 3.44 seconds.
+Master was absent in a later tool call, and SQL failed. The test recorded no signal
+trace, so it does not establish which cleanup action removed master.
+The documented example with a separate session also returned 0 in 3.44 seconds.
+Master, server, and PL survived in a later tool call, and `SELECT 1` succeeded.
+Normal database and service stops then completed with no instance processes remaining.
+
+The [captured evidence](evidence/cbrd-27443-startup-capture.json) preserves binary
+hashes, pipe owners, command results, and cleanup results. This is an operational
+workaround for affected builds, not an engine repair or an assertion about every release.
+
 ## Isolation reports and numeric reset
 
 `just workenv::status` reports the named isolation environment, saved numeric

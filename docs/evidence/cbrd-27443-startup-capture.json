@@ -1,0 +1,793 @@
+{
+  "format_version": 1,
+  "observed_date_kst": "2026-10-21",
+  "issue_url": "https://jira.cubrid.org/browse/CBRD-27443",
+  "scope": "Local Linux x86_64 CUBRID 11.5.0.2707 debug installation; no engine change",
+  "pipe_reproduction": {
+    "command": "cubrid server start testdb | cat",
+    "shell": "bash -o pipefail -c",
+    "worktree": "/home/vimkim/gh/cb/thirdparty-reuse-poc",
+    "install": "/home/vimkim/.cub/install/thirdparty-reuse-poc/debug_gcc",
+    "registry": "/home/vimkim/gh/cb/thirdparty-reuse-poc/.cub-workenv/databases",
+    "master_port": "41064",
+    "binary_sha256": {
+      "cubrid": "2b1d00e887fee5fe19880e3d8ab90e84c7c9c4e759c6b07f448ad4e20d0bcf6d",
+      "cub_master": "6a1cf6817317bc43587e42a2e955e610b5f418fdf24084d1d0f646bc2152883a",
+      "cub_server": "178a87a32797aa8c795c37f8db6e10eb741d81cadaae7df1ce8d633e7d94fd60",
+      "cub_pl": "d2d332952b6a1f6042784d7d599dbbd26fca923053ea205a8bb21a593f7d7daf"
+    },
+    "control_commands": [
+      {
+        "label": "server-status",
+        "argv": [
+          "cubrid",
+          "server",
+          "status"
+        ],
+        "exit_code": 0,
+        "elapsed_seconds": 0.064
+      },
+      {
+        "label": "sql-select-one",
+        "argv": [
+          "csql",
+          "-C",
+          "-u",
+          "dba",
+          "-c",
+          "select 1;",
+          "testdb"
+        ],
+        "exit_code": 0,
+        "elapsed_seconds": 0.032
+      },
+      {
+        "label": "server-stop",
+        "argv": [
+          "cubrid",
+          "server",
+          "stop",
+          "testdb"
+        ],
+        "exit_code": 0,
+        "elapsed_seconds": 1.066
+      },
+      {
+        "label": "service-stop",
+        "argv": [
+          "cubrid",
+          "service",
+          "stop"
+        ],
+        "exit_code": 0,
+        "elapsed_seconds": 0.114
+      }
+    ],
+    "native_processes_before": [],
+    "pipeline_pid": 3596044,
+    "observations": [
+      {
+        "elapsed_seconds": 1.0,
+        "pipeline_exit_code": null,
+        "shell_children": [
+          {
+            "pid": 3596045,
+            "ppid": 3596044,
+            "comm": "cubrid",
+            "state": "S (sleeping)",
+            "exe": "/home/vimkim/.cub/install/thirdparty-reuse-poc/debug_gcc/bin/cubrid",
+            "argv": [
+              "cubrid",
+              "server",
+              "start",
+              "testdb"
+            ]
+          },
+          {
+            "pid": 3596046,
+            "ppid": 3596044,
+            "comm": "cat",
+            "state": "S (sleeping)",
+            "exe": "/usr/bin/cat",
+            "argv": [
+              "cat"
+            ]
+          }
+        ],
+        "pipe": "pipe:[366982522]",
+        "pipe_holders": [
+          {
+            "pid": 3596045,
+            "ppid": 3596044,
+            "comm": "cubrid",
+            "state": "S (sleeping)",
+            "exe": "/home/vimkim/.cub/install/thirdparty-reuse-poc/debug_gcc/bin/cubrid",
+            "argv": [
+              "cubrid",
+              "server",
+              "start",
+              "testdb"
+            ],
+            "pipe_fds": [
+              {
+                "fd": 1,
+                "mode": "write"
+              }
+            ]
+          },
+          {
+            "pid": 3596046,
+            "ppid": 3596044,
+            "comm": "cat",
+            "state": "S (sleeping)",
+            "exe": "/usr/bin/cat",
+            "argv": [
+              "cat"
+            ],
+            "pipe_fds": [
+              {
+                "fd": 0,
+                "mode": "read"
+              }
+            ]
+          },
+          {
+            "pid": 3596047,
+            "ppid": 3596045,
+            "comm": "cub_master",
+            "state": "S (sleeping)",
+            "exe": "/home/vimkim/.cub/install/thirdparty-reuse-poc/debug_gcc/bin/cub_master",
+            "argv": [
+              "cub_master"
+            ],
+            "pipe_fds": [
+              {
+                "fd": 1,
+                "mode": "write"
+              }
+            ]
+          }
+        ],
+        "native_processes": [
+          {
+            "pid": 3596045,
+            "ppid": 3596044,
+            "comm": "cubrid",
+            "state": "S (sleeping)",
+            "exe": "/home/vimkim/.cub/install/thirdparty-reuse-poc/debug_gcc/bin/cubrid",
+            "argv": [
+              "cubrid",
+              "server",
+              "start",
+              "testdb"
+            ]
+          },
+          {
+            "pid": 3596047,
+            "ppid": 3596045,
+            "comm": "cub_master",
+            "state": "S (sleeping)",
+            "exe": "/home/vimkim/.cub/install/thirdparty-reuse-poc/debug_gcc/bin/cub_master",
+            "argv": [
+              "cub_master"
+            ]
+          }
+        ]
+      },
+      {
+        "elapsed_seconds": 4.0,
+        "pipeline_exit_code": null,
+        "shell_children": [
+          {
+            "pid": 3596046,
+            "ppid": 3596044,
+            "comm": "cat",
+            "state": "S (sleeping)",
+            "exe": "/usr/bin/cat",
+            "argv": [
+              "cat"
+            ]
+          }
+        ],
+        "pipe": "pipe:[366982522]",
+        "pipe_holders": [
+          {
+            "pid": 3596046,
+            "ppid": 3596044,
+            "comm": "cat",
+            "state": "S (sleeping)",
+            "exe": "/usr/bin/cat",
+            "argv": [
+              "cat"
+            ],
+            "pipe_fds": [
+              {
+                "fd": 0,
+                "mode": "read"
+              }
+            ]
+          },
+          {
+            "pid": 3596047,
+            "ppid": 1,
+            "comm": "cub_master",
+            "state": "S (sleeping)",
+            "exe": "/home/vimkim/.cub/install/thirdparty-reuse-poc/debug_gcc/bin/cub_master",
+            "argv": [
+              "cub_master"
+            ],
+            "pipe_fds": [
+              {
+                "fd": 1,
+                "mode": "write"
+              }
+            ]
+          },
+          {
+            "pid": 3596055,
+            "ppid": 1,
+            "comm": "cub_server",
+            "state": "S (sleeping)",
+            "exe": "/home/vimkim/.cub/install/thirdparty-reuse-poc/debug_gcc/bin/cub_server",
+            "argv": [
+              "cub_server",
+              "testdb"
+            ],
+            "pipe_fds": [
+              {
+                "fd": 1,
+                "mode": "write"
+              }
+            ]
+          },
+          {
+            "pid": 3596058,
+            "ppid": 3596055,
+            "comm": "cub_pl",
+            "state": "S (sleeping)",
+            "exe": "/home/vimkim/.cub/install/thirdparty-reuse-poc/debug_gcc/bin/cub_pl",
+            "argv": [
+              "cub_pl",
+              "testdb"
+            ],
+            "pipe_fds": [
+              {
+                "fd": 1,
+                "mode": "write"
+              }
+            ]
+          }
+        ],
+        "native_processes": [
+          {
+            "pid": 3596047,
+            "ppid": 1,
+            "comm": "cub_master",
+            "state": "S (sleeping)",
+            "exe": "/home/vimkim/.cub/install/thirdparty-reuse-poc/debug_gcc/bin/cub_master",
+            "argv": [
+              "cub_master"
+            ]
+          },
+          {
+            "pid": 3596055,
+            "ppid": 1,
+            "comm": "cub_server",
+            "state": "S (sleeping)",
+            "exe": "/home/vimkim/.cub/install/thirdparty-reuse-poc/debug_gcc/bin/cub_server",
+            "argv": [
+              "cub_server",
+              "testdb"
+            ]
+          },
+          {
+            "pid": 3596058,
+            "ppid": 3596055,
+            "comm": "cub_pl",
+            "state": "S (sleeping)",
+            "exe": "/home/vimkim/.cub/install/thirdparty-reuse-poc/debug_gcc/bin/cub_pl",
+            "argv": [
+              "cub_pl",
+              "testdb"
+            ]
+          }
+        ]
+      },
+      {
+        "elapsed_seconds": 10.0,
+        "pipeline_exit_code": null,
+        "shell_children": [
+          {
+            "pid": 3596046,
+            "ppid": 3596044,
+            "comm": "cat",
+            "state": "S (sleeping)",
+            "exe": "/usr/bin/cat",
+            "argv": [
+              "cat"
+            ]
+          }
+        ],
+        "pipe": "pipe:[366982522]",
+        "pipe_holders": [
+          {
+            "pid": 3596046,
+            "ppid": 3596044,
+            "comm": "cat",
+            "state": "S (sleeping)",
+            "exe": "/usr/bin/cat",
+            "argv": [
+              "cat"
+            ],
+            "pipe_fds": [
+              {
+                "fd": 0,
+                "mode": "read"
+              }
+            ]
+          },
+          {
+            "pid": 3596047,
+            "ppid": 1,
+            "comm": "cub_master",
+            "state": "S (sleeping)",
+            "exe": "/home/vimkim/.cub/install/thirdparty-reuse-poc/debug_gcc/bin/cub_master",
+            "argv": [
+              "cub_master"
+            ],
+            "pipe_fds": [
+              {
+                "fd": 1,
+                "mode": "write"
+              }
+            ]
+          },
+          {
+            "pid": 3596055,
+            "ppid": 1,
+            "comm": "cub_server",
+            "state": "S (sleeping)",
+            "exe": "/home/vimkim/.cub/install/thirdparty-reuse-poc/debug_gcc/bin/cub_server",
+            "argv": [
+              "cub_server",
+              "testdb"
+            ],
+            "pipe_fds": [
+              {
+                "fd": 1,
+                "mode": "write"
+              }
+            ]
+          },
+          {
+            "pid": 3596058,
+            "ppid": 3596055,
+            "comm": "cub_pl",
+            "state": "S (sleeping)",
+            "exe": "/home/vimkim/.cub/install/thirdparty-reuse-poc/debug_gcc/bin/cub_pl",
+            "argv": [
+              "cub_pl",
+              "testdb"
+            ],
+            "pipe_fds": [
+              {
+                "fd": 1,
+                "mode": "write"
+              }
+            ]
+          }
+        ],
+        "native_processes": [
+          {
+            "pid": 3596047,
+            "ppid": 1,
+            "comm": "cub_master",
+            "state": "S (sleeping)",
+            "exe": "/home/vimkim/.cub/install/thirdparty-reuse-poc/debug_gcc/bin/cub_master",
+            "argv": [
+              "cub_master"
+            ]
+          },
+          {
+            "pid": 3596055,
+            "ppid": 1,
+            "comm": "cub_server",
+            "state": "S (sleeping)",
+            "exe": "/home/vimkim/.cub/install/thirdparty-reuse-poc/debug_gcc/bin/cub_server",
+            "argv": [
+              "cub_server",
+              "testdb"
+            ]
+          },
+          {
+            "pid": 3596058,
+            "ppid": 3596055,
+            "comm": "cub_pl",
+            "state": "S (sleeping)",
+            "exe": "/home/vimkim/.cub/install/thirdparty-reuse-poc/debug_gcc/bin/cub_pl",
+            "argv": [
+              "cub_pl",
+              "testdb"
+            ]
+          }
+        ]
+      }
+    ],
+    "pipeline_pending_at_10_seconds": true,
+    "before_cleanup": {
+      "shell_children": [
+        {
+          "pid": 3596046,
+          "ppid": 3596044,
+          "comm": "cat",
+          "state": "S (sleeping)",
+          "exe": "/usr/bin/cat",
+          "argv": [
+            "cat"
+          ]
+        }
+      ],
+      "pipe": "pipe:[366982522]",
+      "pipe_holders": [
+        {
+          "pid": 3596046,
+          "ppid": 3596044,
+          "comm": "cat",
+          "state": "S (sleeping)",
+          "exe": "/usr/bin/cat",
+          "argv": [
+            "cat"
+          ],
+          "pipe_fds": [
+            {
+              "fd": 0,
+              "mode": "read"
+            }
+          ]
+        },
+        {
+          "pid": 3596047,
+          "ppid": 1,
+          "comm": "cub_master",
+          "state": "S (sleeping)",
+          "exe": "/home/vimkim/.cub/install/thirdparty-reuse-poc/debug_gcc/bin/cub_master",
+          "argv": [
+            "cub_master"
+          ],
+          "pipe_fds": [
+            {
+              "fd": 1,
+              "mode": "write"
+            }
+          ]
+        },
+        {
+          "pid": 3596055,
+          "ppid": 1,
+          "comm": "cub_server",
+          "state": "S (sleeping)",
+          "exe": "/home/vimkim/.cub/install/thirdparty-reuse-poc/debug_gcc/bin/cub_server",
+          "argv": [
+            "cub_server",
+            "testdb"
+          ],
+          "pipe_fds": [
+            {
+              "fd": 1,
+              "mode": "write"
+            }
+          ]
+        },
+        {
+          "pid": 3596058,
+          "ppid": 3596055,
+          "comm": "cub_pl",
+          "state": "S (sleeping)",
+          "exe": "/home/vimkim/.cub/install/thirdparty-reuse-poc/debug_gcc/bin/cub_pl",
+          "argv": [
+            "cub_pl",
+            "testdb"
+          ],
+          "pipe_fds": [
+            {
+              "fd": 1,
+              "mode": "write"
+            }
+          ]
+        }
+      ],
+      "native_processes": [
+        {
+          "pid": 3596047,
+          "ppid": 1,
+          "comm": "cub_master",
+          "state": "S (sleeping)",
+          "exe": "/home/vimkim/.cub/install/thirdparty-reuse-poc/debug_gcc/bin/cub_master",
+          "argv": [
+            "cub_master"
+          ]
+        },
+        {
+          "pid": 3596055,
+          "ppid": 1,
+          "comm": "cub_server",
+          "state": "S (sleeping)",
+          "exe": "/home/vimkim/.cub/install/thirdparty-reuse-poc/debug_gcc/bin/cub_server",
+          "argv": [
+            "cub_server",
+            "testdb"
+          ]
+        },
+        {
+          "pid": 3596058,
+          "ppid": 3596055,
+          "comm": "cub_pl",
+          "state": "S (sleeping)",
+          "exe": "/home/vimkim/.cub/install/thirdparty-reuse-poc/debug_gcc/bin/cub_pl",
+          "argv": [
+            "cub_pl",
+            "testdb"
+          ]
+        }
+      ]
+    },
+    "after_server_stop": {
+      "pipeline_exit_code": null,
+      "shell_children": [
+        {
+          "pid": 3596046,
+          "ppid": 3596044,
+          "comm": "cat",
+          "state": "S (sleeping)",
+          "exe": "/usr/bin/cat",
+          "argv": [
+            "cat"
+          ]
+        }
+      ],
+      "pipe": "pipe:[366982522]",
+      "pipe_holders": [
+        {
+          "pid": 3596046,
+          "ppid": 3596044,
+          "comm": "cat",
+          "state": "S (sleeping)",
+          "exe": "/usr/bin/cat",
+          "argv": [
+            "cat"
+          ],
+          "pipe_fds": [
+            {
+              "fd": 0,
+              "mode": "read"
+            }
+          ]
+        },
+        {
+          "pid": 3596047,
+          "ppid": 1,
+          "comm": "cub_master",
+          "state": "S (sleeping)",
+          "exe": "/home/vimkim/.cub/install/thirdparty-reuse-poc/debug_gcc/bin/cub_master",
+          "argv": [
+            "cub_master"
+          ],
+          "pipe_fds": [
+            {
+              "fd": 1,
+              "mode": "write"
+            }
+          ]
+        }
+      ],
+      "native_processes": [
+        {
+          "pid": 3596047,
+          "ppid": 1,
+          "comm": "cub_master",
+          "state": "S (sleeping)",
+          "exe": "/home/vimkim/.cub/install/thirdparty-reuse-poc/debug_gcc/bin/cub_master",
+          "argv": [
+            "cub_master"
+          ]
+        }
+      ]
+    },
+    "pipeline_forced_cleanup": false,
+    "pipeline_final_exit_code": 0,
+    "elapsed_until_pipeline_return_seconds": 12.336,
+    "native_processes_after_cleanup": []
+  },
+  "pipe_reproduction_stdout": "@ cubrid master start\n++ cubrid master start: success\n@ cubrid server start: testdb\n\nThis may take a long time depending on the amount of recovery works to do.\n\nCUBRID 11.5.0 (11.5.0.2707) (64 debug build)\n\n++ cubrid server start: success\n",
+  "pipe_reproduction_stderr": "",
+  "pipe_reproduction_sql": "\n=== <Result of SELECT Command in Line 1> ===\n\n            1\n=============\n            1\n\n1 row selected. (0.001616 sec) Committed. (0.000005 sec) \n",
+  "regular_files_without_new_session": {
+    "procedure": "direnv exec . python3; Popen just db::start testdb with DEVNULL stdin, regular-file stdout/stderr and a 30-second launcher wait",
+    "example_sha256": "877eadadfda14cb137d7c4d13997d366452824ba19392a7b3c7fafa7633031cd",
+    "launcher_output": "Startup command exited: rc=0; logs=/mnt/nvme/data-5/tmp/cubrid-start-2iubup99\n",
+    "timing": "elapsed=3.44 exit=0\n",
+    "startup_stdout": "@ cubrid master start\n++ cubrid master start: success\n@ cubrid server start: testdb\n\nThis may take a long time depending on the amount of recovery works to do.\n\nCUBRID 11.5.0 (11.5.0.2707) (64 debug build)\n\n++ cubrid server start: success\n",
+    "startup_stderr": "\"${MY_CUBRID:-$HOME/my-cubrid}/bin/cubrid-build-coordinator.sh\" runtime 300 --database \"$database\" -- cubrid server start \"$database\"\ntry to re-establish the connection with master...\ntry to re-establish the connection with master...\ntry to re-establish the connection with master...\ntry to re-establish the connection with master...\n",
+    "native_processes_after_start": [
+      {
+        "pid": 3641897,
+        "exe": "/home/vimkim/.cub/install/thirdparty-reuse-poc/debug_gcc/bin/cub_server"
+      },
+      {
+        "pid": 3641900,
+        "exe": "/home/vimkim/.cub/install/thirdparty-reuse-poc/debug_gcc/bin/cub_pl"
+      }
+    ],
+    "commands": [
+      {
+        "name": "regular-server-status",
+        "argv": [
+          "cubrid",
+          "server",
+          "status"
+        ],
+        "exit_code": 0,
+        "seconds": 0.032,
+        "output": "@ cubrid server status\n++ cubrid master is not running.\n"
+      },
+      {
+        "name": "regular-sql-select-one",
+        "argv": [
+          "csql",
+          "-C",
+          "-u",
+          "dba",
+          "-c",
+          "select 1;",
+          "testdb"
+        ],
+        "exit_code": 1,
+        "seconds": 0.032,
+        "output": "\nERROR: Failed to connect to database server, 'testdb', on the following host(s): localhost\n\n"
+      },
+      {
+        "name": "regular-server-stop",
+        "argv": [
+          "cubrid",
+          "server",
+          "stop",
+          "testdb"
+        ],
+        "exit_code": 1,
+        "output": "@ cubrid server stop: testdb\n++ cubrid server 'testdb' is not running.\nCould not connect to master server on localhost\n"
+      },
+      {
+        "name": "regular-service-stop",
+        "argv": [
+          "cubrid",
+          "service",
+          "stop"
+        ],
+        "exit_code": 1,
+        "output": "++ cubrid service is not running.\n"
+      }
+    ],
+    "native_processes_after_cleanup": [
+      {
+        "pid": 3641897,
+        "exe": "/home/vimkim/.cub/install/thirdparty-reuse-poc/debug_gcc/bin/cub_server"
+      },
+      {
+        "pid": 3641900,
+        "exe": "/home/vimkim/.cub/install/thirdparty-reuse-poc/debug_gcc/bin/cub_pl"
+      }
+    ]
+  },
+  "regular_files_without_new_session_cleanup": {
+    "signals": [
+      {
+        "pid": 3641897,
+        "exe": "/home/vimkim/.cub/install/thirdparty-reuse-poc/debug_gcc/bin/cub_server",
+        "starttime": "47689767",
+        "signal": "SIGTERM"
+      },
+      {
+        "pid": 3641900,
+        "exe": "/home/vimkim/.cub/install/thirdparty-reuse-poc/debug_gcc/bin/cub_pl",
+        "starttime": "47689772",
+        "signal": "SIGTERM"
+      }
+    ],
+    "remaining": []
+  },
+  "regular_files_with_new_session": {
+    "procedure": "Popen just db::start testdb; DEVNULL stdin, regular-file stdout/stderr, close_fds=True, start_new_session=True, launcher.wait(timeout=30)",
+    "check_scope": "state and SQL checked in a later tool call, after the startup tool call returned",
+    "example_sha256": "7c83c4478128758430f6eba088a8bdf4a3cc417d334c5d2669dd3a376cb55715",
+    "launcher_output": "Startup command exited: rc=0; logs=/mnt/nvme/data-5/tmp/cubrid-start-865vqw64\n",
+    "timing": "elapsed=3.44 exit=0\n",
+    "startup_stdout": "@ cubrid master start\n++ cubrid master start: success\n@ cubrid server start: testdb\n\nThis may take a long time depending on the amount of recovery works to do.\n\nCUBRID 11.5.0 (11.5.0.2707) (64 debug build)\n\n++ cubrid server start: success\n",
+    "startup_stderr": "\"${MY_CUBRID:-$HOME/my-cubrid}/bin/cubrid-build-coordinator.sh\" runtime 300 --database \"$database\" -- cubrid server start \"$database\"\n",
+    "native_processes_after_start": [
+      {
+        "pid": 3659799,
+        "exe": "/home/vimkim/.cub/install/thirdparty-reuse-poc/debug_gcc/bin/cub_master",
+        "process_group": 3659701,
+        "session": 3659701
+      },
+      {
+        "pid": 3659995,
+        "exe": "/home/vimkim/.cub/install/thirdparty-reuse-poc/debug_gcc/bin/cub_server",
+        "process_group": 3659995,
+        "session": 3659995
+      },
+      {
+        "pid": 3660004,
+        "exe": "/home/vimkim/.cub/install/thirdparty-reuse-poc/debug_gcc/bin/cub_pl",
+        "process_group": 3660004,
+        "session": 3660004
+      }
+    ],
+    "commands": [
+      {
+        "name": "session-server-status",
+        "argv": [
+          "cubrid",
+          "server",
+          "status"
+        ],
+        "exit_code": 0,
+        "seconds": 0.032,
+        "output": "@ cubrid server status\n Server testdb (rel 11.5.0, pid 3659995)\n"
+      },
+      {
+        "name": "session-sql-select-one",
+        "argv": [
+          "csql",
+          "-C",
+          "-u",
+          "dba",
+          "-c",
+          "select 1;",
+          "testdb"
+        ],
+        "exit_code": 0,
+        "seconds": 0.032,
+        "output": "\n=== <Result of SELECT Command in Line 1> ===\n\n            1\n=============\n            1\n\n1 row selected. (0.001545 sec) Committed. (0.000005 sec) \n"
+      },
+      {
+        "name": "session-server-stop",
+        "argv": [
+          "cubrid",
+          "server",
+          "stop",
+          "testdb"
+        ],
+        "exit_code": 0,
+        "output": "@ cubrid server stop: testdb\n\nServer testdb notified of shutdown.\nThis may take several minutes. Please wait.\n++ cubrid server stop: success\n"
+      },
+      {
+        "name": "session-service-stop",
+        "argv": [
+          "cubrid",
+          "service",
+          "stop"
+        ],
+        "exit_code": 0,
+        "output": "@ cubrid broker stop\n++ cubrid broker is not running.\n@ cubrid master stop\n++ cubrid master stop: success\n"
+      }
+    ],
+    "native_processes_after_cleanup": []
+  },
+  "tested_example": "direnv exec . python3 - <<'PY'\nfrom pathlib import Path\nimport subprocess\nimport tempfile\n\nlogs = Path(tempfile.mkdtemp(prefix=\"cubrid-start-\"))\nwith (logs / \"stdout.log\").open(\"wb\") as stdout, (logs / \"stderr.log\").open(\"wb\") as stderr:\n    launcher = subprocess.Popen(\n        [\"just\", \"db::start\", \"testdb\"],\n        stdin=subprocess.DEVNULL, stdout=stdout, stderr=stderr,\n        close_fds=True, start_new_session=True,\n    )\n    try:\n        rc = launcher.wait(timeout=30)\n    except subprocess.TimeoutExpired:\n        print(f\"Startup command still running: PID={launcher.pid}; logs={logs}\", flush=True)\n        raise SystemExit(124)\nprint(f\"Startup command exited: rc={rc}; logs={logs}\")\nraise SystemExit(rc)\nPY\n",
+  "limits": [
+    "No signal trace was collected for the missing-master observation.",
+    "No claim that all command runners clean up the same process group.",
+    "File redirection and session isolation are operational measures, not an engine repair."
+  ],
+  "source_file_sha256": {
+    "receipt.json": "954321e748668494ed70809a03a4b24386808c6720f21748a6c87c304bd7ecbb",
+    "pipeline.stdout.log": "6da6f40891d81d0f02e7380e86a4b8b3796d8a6fdd906a920af1b8498e07cd96",
+    "pipeline.stderr.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "sql-select-one.log": "27b49de8c0f3b5fa622da5d6ffd4edb344981f741affcf685883729a39836612",
+    "documented-start-result.json": "5e5cc630d555b2746fd6ccf85a8b10ed8dd6581a5622a700a4defc057d6b0259",
+    "documented-start-orphan-cleanup.json": "0836a0a046c45413edb4b8fc82b1d56efddc4de517ebe01b252be43ca1108df4",
+    "documented-session-start-result.json": "4dccdd8e4d354bcf0008ee4837a61b4a12aac2747148d08a60b515012749b523",
+    "documented-session-start.sh": "7c83c4478128758430f6eba088a8bdf4a3cc417d334c5d2669dd3a376cb55715"
+  }
+}

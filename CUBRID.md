@@ -72,3 +72,14 @@ For source-worktree initialization, direnv loading, preset/install selection, ho
 DB tests, or environment diagnosis, read [host work environments](docs/host-workenv.md).
 It defines the explicit build/install → `cub-workenv init` boundary, ordinary
 `cubrid`/`csql` execution, and the independent container workflow.
+
+## Daemon startup from agent tools
+
+Before starting CUBRID daemons, read
+[daemon startup and captured output](docs/host-workenv.md#daemon-startup-and-captured-output).
+Redirect stdin from `/dev/null` and both stdout and stderr to regular files.
+Wait for the startup command with a deadline, then read the files.
+Use a separate launcher session when the tool cleans up its process group.
+[CBRD-27443](https://jira.cubrid.org/browse/CBRD-27443) can leave output pipes open
+after the startup command exits. This also affects wrappers and subprocess capture.
+Use a pipe only when the task explicitly requires reproducing this defect.

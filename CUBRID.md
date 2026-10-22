@@ -11,6 +11,35 @@ Read and follow this reference before any CUBRID-related task. These personal CU
 
 Search `my-cubrid-docs` before web research for CUBRID-specific design or architecture context. Search `my-cubrid-jira` for CBRD tickets, pull-request context, or issue writeups.
 
+## Daily tooling updates
+
+Run `daily-update-cubrid` to fetch `origin/main`, fast-forward each eligible
+checkout, and install its commands through its existing installation interface.
+Run `just sync` in this repository to install the updater itself.
+`--list` lists checkout paths without updating; `--dry-run` previews commands
+without fetching, merging, or installing. Positional directories replace the defaults.
+
+Defaults are `~/gh/cubrid-conf-tui`, `~/gh/cubrid-build-coordinator`,
+`~/gh/cubrid-workenv`, `~/gh/cubrid-jira`, `~/gh/cubrid-ci`,
+`~/gh/cubrid-qahome-fetcher`, and `~/temp/cubrid-ini-fzf`.
+The latter two preserve their existing checkout names and locations.
+Existing tools use `just sync`; `cubrid-ci` and `cubrid-ini-fzf` use `just install`,
+and `cubrid-qahome` uses `uv tool install --reinstall .`. Custom directories
+outside the defaults use their local `just sync` recipe.
+Checkouts must be clean primary repositories on `main` tracking `origin/main`;
+defaults also require the corresponding `vimkim` GitHub origin.
+Dirty, ahead, diverged, detached, topic, linked, and symlinked checkouts are
+preserved and skipped. A fetch failure prevents installation from stale sources.
+Independent projects continue after a skip or failure. Exit status is 0 for
+success, 2 for skips/partial sync, and 1 for any failure.
+
+Personal workflow decision, 2026-10-22: the owner excludes `grill-tui`,
+`gh-pr-comments-fetch`, `cubrid-dev2-pr`, and `volmap` from both daily updaters.
+This decision reflects personal workflow, not project quality, maturity,
+maintenance, or deprecation. Change these defaults only after an explicit owner
+decision. `work-tracker`, `my-skills`, `my-cubrid-skills`, and
+`cubrid-tc-chronicle` remain managed by the general `daily-update` command.
+
 ## Local development
 
 - Use the personal `just` recipes for local development: `just configure` generates build rules, `just build` produces artifacts, and `just install` installs existing artifacts.

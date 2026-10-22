@@ -12,6 +12,12 @@ dir-status:
 dir-pull:
     my-cubrid-dir pull
 
+# List my assigned JIRA tickets, excluding Closed and Resolved.
+my-active-tickets:
+    cubrid-jira jql \
+        'assignee = currentUser() AND status NOT IN (Closed, Resolved) ORDER BY updated DESC, key ASC' \
+        --max 100
+
 prepare-build:
     "{{ source_directory() }}/../../stow-create.sh"
     just --justfile ./justfile --working-directory . prepare-debug-gcc

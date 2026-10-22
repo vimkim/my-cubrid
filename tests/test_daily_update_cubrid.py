@@ -49,13 +49,14 @@ class DailyUpdateTest(unittest.TestCase):
             str(Path.home() / "gh/cubrid-conf-tui"),
             str(Path.home() / "gh/cubrid-build-coordinator"),
             str(Path.home() / "gh/cubrid-workenv"),
+            str(Path.home() / "gh/cubrid-jira"),
         ])
         self.assertFalse(self.log.exists())
 
     def test_default_run_syncs_all_registered_tools(self):
         home = self.root / "home"
         (home / "gh").mkdir(parents=True)
-        tools = ("cubrid-conf-tui", "cubrid-build-coordinator", "cubrid-workenv")
+        tools = ("cubrid-conf-tui", "cubrid-build-coordinator", "cubrid-workenv", "cubrid-jira")
         for tool in tools:
             (home / "gh" / tool).symlink_to(self.project(tool), target_is_directory=True)
         result = self.run_cli(env=dict(self.env, HOME=str(home)))

@@ -69,8 +69,11 @@ created DB for inspection. `pwddb-*` recipes and `my-cubrid-pwddb` are compatibi
 spellings for this same behavior; they never consult legacy manifests.
 `my-cubrid-pwddb-getname` prints the conventional `testdb` default.
 
-Configuration recipes use `CUBRID_CONF_FILE`; the companion `cubrid-ini-fzf`
-revision must be applied too. `db::set-port` restores the allocated master port,
+Configuration recipes use `CUBRID_CONF_FILE`. Use `just cubrid-conf-tui [DATABASE]`
+for interactive `[common]` editing; `cubrid-ini-fzf` and its `db::ini` recipe
+are retired. Broader section editing is tracked in the TUI's
+[README TODO](https://github.com/vimkim/cubrid-conf-tui#todo).
+`db::set-port` restores the allocated master port,
 not a fixed personal port. Deliberate resource reassignment needs a separately
 reviewed transition; editing the port is not allocation. PID selection compares
 executable identity, DB/utility role and the full instance environment, then

@@ -66,6 +66,8 @@ No process was stopped. Retry with: just install
 ```
 
 This is an illustrative report based on the configuration-editor incident.
+The example uses the retired `cubrid-ini-fzf` integration; use
+`just cubrid-conf-tui [DATABASE]` for current interactive `[common]` editing.
 The descriptor, terminal, and timestamp are example values. The process age
 measures time since process creation. It does **not** measure lock duration.
 
@@ -89,8 +91,8 @@ flowchart TD
     Inspect --> Proc["Linux kernel locks and process descriptors"]
 ```
 
-The [shared recipes](../stow/cubrid/justfile) provide commands such as `build-and-install`,
-`install`, `ctest`, and `db::ini`.
+The [shared recipes](../stow/cubrid/justfile) provide coordinated commands such as
+`build-and-install`, `install`, and `ctest`.
 The [compatibility entrypoint](../bin/cubrid-build-coordinator.sh) executes the
 Python coordinator, which controls acquisition, installation checks, command
 supervision, and exit status. Its packaged owner inspector reads Linux process

@@ -21,9 +21,9 @@ without fetching, merging, or installing. Positional directories replace the def
 
 Defaults are `~/gh/cubrid-conf-tui`, `~/gh/cubrid-build-coordinator`,
 `~/gh/cubrid-workenv`, `~/gh/cubrid-jira`, `~/gh/cubrid-ci`,
-`~/gh/cubrid-qahome-fetcher`, and `~/temp/cubrid-ini-fzf`.
-The latter two preserve their existing checkout names and locations.
-Existing tools use `just sync`; `cubrid-ci` and `cubrid-ini-fzf` use `just install`,
+and `~/gh/cubrid-qahome-fetcher`.
+The latter preserves its existing checkout name and location.
+Existing tools use `just sync`; `cubrid-ci` uses `just install`,
 and `cubrid-qahome` uses `uv tool install --reinstall .`. Custom directories
 outside the defaults use their local `just sync` recipe.
 Checkouts must be clean primary repositories on `main` tracking `origin/main`;
@@ -39,6 +39,13 @@ This decision reflects personal workflow, not project quality, maturity,
 maintenance, or deprecation. Change these defaults only after an explicit owner
 decision. `work-tracker`, `my-skills`, `my-cubrid-skills`, and
 `cubrid-tc-chronicle` remain managed by the general `daily-update` command.
+
+Deprecation decision, 2026-10-22: use `cubrid-conf-tui` for interactive
+configuration editing. `cubrid-ini-fzf` is deprecated and removed from
+`daily-update-cubrid` and the shared `db::ini` recipe. Use
+`just cubrid-conf-tui [DATABASE]` from a prepared worktree. The TUI currently
+edits `[common]` only; support for `[standalone]` and `[@DATABASE]` is a required
+follow-up tracked in its [README TODO](https://github.com/vimkim/cubrid-conf-tui#todo).
 
 ## Local development
 

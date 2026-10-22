@@ -20,14 +20,12 @@ PROJECTS = {
     "cubrid-jira": "gh/cubrid-jira",
     "cubrid-ci": "gh/cubrid-ci",
     "cubrid-qahome": "gh/cubrid-qahome-fetcher",
-    "cubrid-ini-fzf": "temp/cubrid-ini-fzf",
 }
 
 # Reuse each accepted project's existing installation interface.
 INSTALL_COMMANDS = {
     "cubrid-ci": ("just", "--justfile", "./justfile", "install"),
     "cubrid-qahome": ("uv", "tool", "install", "--reinstall", "."),
-    "cubrid-ini-fzf": ("just", "--justfile", "./justfile", "install"),
 }
 
 

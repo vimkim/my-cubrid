@@ -161,11 +161,6 @@ delete-demodb:
 recreate-demodb:
     "${MY_CUBRID:-$HOME/my-cubrid}/bin/cubrid-workenv-db" recreate demodb --load demodb
 
-# Interactively update a CUBRID system parameter in the active runtime.
-[working-directory(justfile_directory())]
-ini database='testdb' section='common':
-    "${MY_CUBRID:-$HOME/my-cubrid}/bin/cubrid-build-coordinator.sh" runtime 300 --database "{{ database }}" -- cubrid-ini-fzf --database "{{ database }}" --section "{{ section }}"
-
 # Show enable_string_compression from the selected config and effective testdb parameters.
 [working-directory(justfile_directory())]
 get-string-compression:

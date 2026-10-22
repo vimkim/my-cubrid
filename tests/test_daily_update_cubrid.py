@@ -115,7 +115,6 @@ class DailyUpdateTest(unittest.TestCase):
             str(self.home / "gh/cubrid-jira"),
             str(self.home / "gh/cubrid-ci"),
             str(self.home / "gh/cubrid-qahome-fetcher"),
-            str(self.home / "temp/cubrid-ini-fzf"),
         ])
         self.assertFalse(self.log.exists())
 
@@ -127,7 +126,6 @@ class DailyUpdateTest(unittest.TestCase):
             "cubrid-jira": "gh/cubrid-jira",
             "cubrid-ci": "gh/cubrid-ci",
             "cubrid-qahome": "gh/cubrid-qahome-fetcher",
-            "cubrid-ini-fzf": "temp/cubrid-ini-fzf",
         }
         for tool, relative in tools.items():
             self.project(tool, relative=relative)

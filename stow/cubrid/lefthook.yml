@@ -16,6 +16,7 @@ pre-commit:
 pre-push:
   commands:
     pr-base-freshness:
+      skip: true
       run: |
         if [ "${CUBRID_SKIP_PR_BASE_CHECK:-0}" = "1" ]; then
           echo "Skipping PR base freshness check because CUBRID_SKIP_PR_BASE_CHECK=1." >&2

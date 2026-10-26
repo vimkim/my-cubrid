@@ -26,6 +26,14 @@ mkdir -p "$fake_bin"
 ln -s "$repo_root/stow/cubrid/lefthook.yml" "$work_repo/lefthook.yml"
 ln -s "$repo_root/tests/fixtures/gh" "$fake_bin/gh"
 
+# The hook is disabled by default; opt in only for these behavior checks.
+cat > "$work_repo/lefthook-local.yml" <<'YAML'
+pre-push:
+  commands:
+    pr-base-freshness:
+      skip: false
+YAML
+
 run_hook()
 {
   cd "$work_repo"

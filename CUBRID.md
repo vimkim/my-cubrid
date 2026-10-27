@@ -13,11 +13,21 @@ Search `my-cubrid-docs` before web research for CUBRID-specific design or archit
 
 ## Daily tooling updates
 
-Run `daily-update-cubrid` to fetch `origin/main`, fast-forward each eligible
-checkout, and install its commands through its existing installation interface.
+Run `daily-update-cubrid` to first refresh and apply dotfiles through
+`daily-update --dotfiles-only`, then fetch `origin/main`, fast-forward each
+eligible CUBRID tool checkout, and install its commands through its existing
+installation interface. The dotfiles step requires `daily-update` on PATH and
+uses the configured chezmoi source: guarded fetch, `git merge --ff-only`, then
+`chezmoi-apply-unmodified`. Each command is printed to stdout before it runs.
+Dirty, ahead, diverged, detached and unexpected-origin dotfiles sources are
+preserved; failed refreshes prevent applying stale sources. Locally edited
+deployed targets are preserved by the helper. This mode does not mark the
+general daily upkeep complete or load its project inventory.
 Run `just sync` in this repository to install the updater itself.
 `--list` lists checkout paths without updating; `--dry-run` previews commands
 without fetching, merging, or installing. Positional directories replace the defaults.
+The dotfiles step still runs with positional directories. `--list` and
+`--dry-run` never run it; dry-run prints the delegation command and its purpose.
 
 Defaults are `~/gh/cubrid-conf-tui`, `~/gh/cubrid-build-coordinator`,
 `~/gh/cubrid-workenv`, `~/gh/cubrid-jira`, `~/gh/cubrid-ci`,
@@ -30,7 +40,7 @@ Checkouts must be clean primary repositories on `main` tracking `origin/main`;
 defaults also require the corresponding `vimkim` GitHub origin.
 Dirty, ahead, diverged, detached, topic, linked, and symlinked checkouts are
 preserved and skipped. A fetch failure prevents installation from stale sources.
-Independent projects continue after a skip or failure. Exit status is 0 for
+Independent steps continue after a dotfiles or tool skip or failure. Exit status is 0 for
 success, 2 for skips/partial sync, and 1 for any failure.
 
 Personal workflow decision, 2026-10-22: the owner excludes `grill-tui`,

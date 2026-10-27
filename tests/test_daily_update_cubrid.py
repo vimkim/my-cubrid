@@ -23,10 +23,12 @@ class DailyUpdateTest(unittest.TestCase):
         self.home = self.root / "home"
         self.home.mkdir()
         self.log = self.root / "sync.log"
+        self.dotfiles_log = self.root / "dotfiles.log"
         self.env = dict(
             os.environ,
             HOME=str(self.home),
             DAILY_UPDATE_TEST_LOG=str(self.log),
+            DAILY_UPDATE_DOTFILES_LOG=str(self.dotfiles_log),
             GIT_CONFIG_NOSYSTEM="1",
             GIT_CONFIG_GLOBAL="/dev/null",
             GIT_AUTHOR_NAME="Test",
@@ -38,6 +40,18 @@ class DailyUpdateTest(unittest.TestCase):
         self.remotes = {}
         tool_bin = self.root / "bin"
         tool_bin.mkdir()
+        updater = tool_bin / "daily-update"
+        updater.write_text(
+            '#!/bin/sh\n'
+            '[ "$*" = --dotfiles-only ] || exit 9\n'
+            'printf "%s\\n" "$*" >> "$DAILY_UPDATE_DOTFILES_LOG"\n'
+            'printf "TEST: dotfiles attempted\\n"\n'
+            'exit "${DAILY_UPDATE_TEST_DOTFILES_RESULT:-0}"\n'
+        )
+        updater.chmod(0o755)
+        # Contain command discovery: never fall through to the live daily updater.
+        for name in ("git", "just"):
+            (tool_bin / name).symlink_to(shutil.which(name))
         uv = tool_bin / "uv"
         uv.write_text(
             '#!/bin/sh\n'
@@ -47,7 +61,7 @@ class DailyUpdateTest(unittest.TestCase):
             'exit "${DAILY_UPDATE_TEST_UV_RESULT:-0}"\n'
         )
         uv.chmod(0o755)
-        self.env["PATH"] = str(tool_bin) + os.pathsep + os.environ["PATH"]
+        self.env["PATH"] = str(tool_bin) + os.pathsep + "/usr/bin:/bin"
 
     def git(self, project, *args):
         return subprocess.run(
@@ -117,6 +131,7 @@ class DailyUpdateTest(unittest.TestCase):
             str(self.home / "gh/cubrid-qahome-fetcher"),
         ])
         self.assertFalse(self.log.exists())
+        self.assertFalse(self.dotfiles_log.exists())
 
     def test_default_run_syncs_all_registered_tools(self):
         tools = {
@@ -132,6 +147,31 @@ class DailyUpdateTest(unittest.TestCase):
         result = self.run_cli()
         self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
         self.assertEqual(self.log.read_text().splitlines(), list(tools))
+        self.assertEqual(self.dotfiles_log.read_text(), "--dotfiles-only\n")
+        self.assertLess(result.stdout.index("TEST: dotfiles attempted"),
+                        result.stdout.index("── cubrid-conf-tui ──"))
+
+    def test_dotfiles_skip_or_failure_is_reported_and_tools_still_update(self):
+        project = self.project("tool")
+        for code in (1, 2):
+            with self.subTest(code=code):
+                self.log.unlink(missing_ok=True)
+                result = self.run_cli(
+                    project, env=dict(self.env, DAILY_UPDATE_TEST_DOTFILES_RESULT=str(code))
+                )
+                self.assertEqual(result.returncode, code, result.stdout + result.stderr)
+                self.assertIn("daily-update --dotfiles-only", result.stdout)
+                self.assertIn("dotfiles", result.stdout + result.stderr)
+                self.assertEqual(self.log.read_text(), "tool\n")
+
+    def test_missing_daily_update_is_reported_and_tools_still_update(self):
+        project = self.project("tool")
+        (self.root / "bin/daily-update").unlink()
+        result = self.run_cli(project)
+        self.assertEqual(result.returncode, 1, result.stdout + result.stderr)
+        self.assertIn("daily-update is not installed or not on PATH", result.stdout)
+        self.assertEqual(self.log.read_text(), "tool\n")
+        self.assertFalse(self.dotfiles_log.exists())
 
     def test_uv_installation_error_is_a_failure_and_other_tools_continue(self):
         project = self.project("cubrid-qahome", relative="gh/cubrid-qahome-fetcher")
@@ -176,7 +216,7 @@ class DailyUpdateTest(unittest.TestCase):
         self.git(project, "push")
         result = self.run_cli(project)
         self.assertEqual(result.returncode, 1, result.stdout + result.stderr)
-        self.assertIn("Failed projects:", result.stderr)
+        self.assertIn("Failed steps:", result.stderr)
         self.assertFalse(self.log.exists())
 
     def test_fetch_and_fast_forward_precede_installation(self):
@@ -303,6 +343,9 @@ class DailyUpdateTest(unittest.TestCase):
         self.assertEqual((project / "revision").read_text(), "before")
         self.assertEqual(self.git(project, "rev-parse", "origin/main"), before)
         self.assertFalse(self.log.exists())
+        self.assertIn("daily-update --dotfiles-only", result.stdout)
+        self.assertIn("chezmoi-apply-unmodified", result.stdout)
+        self.assertFalse(self.dotfiles_log.exists())
 
     def test_partial_sync_returns_two_and_continues(self):
         partial = self.project("partial", 2)

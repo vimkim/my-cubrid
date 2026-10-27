@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Fetch and fast-forward clean CUBRID tool checkouts, then install commands."""
+"""Refresh and apply dotfiles, then update clean CUBRID tool checkouts."""
 
 import argparse
 import shlex
@@ -44,6 +44,22 @@ def git(project, *args):
         capture_output=True,
         text=True,
     )
+
+
+def update_dotfiles(*, dry_run=False):
+    print("\n── dotfiles ──", flush=True)
+    command = ["daily-update", "--dotfiles-only"]
+    print(shlex.join(command), flush=True)
+    if dry_run:
+        print("# git fetch + git merge --ff-only, then chezmoi-apply-unmodified", flush=True)
+        return
+    if not shutil.which(command[0]):
+        raise Failed("daily-update is not installed or not on PATH; install it from dotfiles")
+    result = subprocess.run(command, check=False)
+    if result.returncode == 2:
+        raise Skipped("partial/skipped (daily-update --dotfiles-only exit 2)")
+    if result.returncode:
+        raise Failed(f"daily-update --dotfiles-only exited {result.returncode}")
 
 
 def refresh(project, *, github=None, dry_run=False):
@@ -95,7 +111,7 @@ def refresh(project, *, github=None, dry_run=False):
 
 def main() -> int:
     parser = argparse.ArgumentParser(
-        description="Fetch and fast-forward personal CUBRID tools, then install their commands.",
+        description="Refresh and apply dotfiles, then fetch, fast-forward and install personal CUBRID tools.",
         epilog=(
             "Requires clean primary checkouts on main tracking origin/main. "
             "Defaults: " + ", ".join(f"~/{path}" for path in PROJECTS.values()) + ". "
@@ -144,6 +160,14 @@ def main() -> int:
 
     failed = []
     skipped = []
+    try:
+        update_dotfiles(dry_run=args.dry_run)
+    except Skipped as error:
+        print(f"SKIPPED: {error}", flush=True)
+        skipped.append("dotfiles")
+    except (Failed, OSError) as error:
+        print(f"FAILED: {error}", flush=True)
+        failed.append("dotfiles")
     for project in projects:
         print(f"\n── {project.name} ──", flush=True)
         # Pin the recipe file so just never discovers an unrelated parent recipe.
@@ -186,10 +210,10 @@ def main() -> int:
         print(f"{project.name}: updated", flush=True)
 
     if skipped:
-        print("\nSkipped projects: " + ", ".join(str(path) for path in skipped))
+        print("\nSkipped steps: " + ", ".join(str(path) for path in skipped))
     if failed:
         print(
-            "\nFailed projects: " + ", ".join(str(path) for path in failed),
+            "\nFailed steps: " + ", ".join(str(path) for path in failed),
             file=sys.stderr,
         )
         return 1

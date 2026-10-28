@@ -34,7 +34,7 @@ class CsqlLauncherTest(unittest.TestCase):
         self.command("cubrid_rel", 'echo CUBRID')
         self.command("fzf", 'head -n 1')
         self.command("csql", 'printf "CSQL_ARGS\\n"; printf "%s\\n" "$@"')
-        self.command("csql-with-history", 'echo HISTORY_LAUNCH; exec csql "$@"')
+        self.command("csql-future", 'echo HISTORY_LAUNCH; exec csql "$@"')
         self.command("cubrid-binary-source-dir", '''case "$1" in
             /proc/*) printf "%s\\n" "$SERVER_SOURCE" ;;
             *) printf "%s\\n" "$CLIENT_SOURCE" ;;
@@ -89,10 +89,10 @@ class CsqlLauncherTest(unittest.TestCase):
         self.assertNotIn("HISTORY_LAUNCH", result.stdout)
 
     def test_missing_history_tool_has_install_guidance(self):
-        (self.commands / "csql-with-history").unlink()
+        (self.commands / "csql-future").unlink()
         result = self.run_helper("testdb", "-S")
         self.assertEqual(127, result.returncode)
-        self.assertIn("just sync in ~/gh/csql-with-history", result.stderr)
+        self.assertIn("just sync in ~/gh/csql-future", result.stderr)
 
     @unittest.skipUnless(shutil.which("nu"), "Nushell is required")
     def test_nushell_cs_alias_reaches_the_history_launcher(self):

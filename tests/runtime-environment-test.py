@@ -28,7 +28,7 @@ class RuntimeEnvironmentTest(unittest.TestCase):
             for name, body in {
                 'cubrid': 'if [ "$1" = server ]; then printf "%s\\n" "$SERVER_STATUS"; else printf "%s\\n" "$*"; fi',
                 'csql': 'printf "ARGS=%s\\n" "$*"',
-                'csql-with-history': 'printf "LAUNCHER=history\\n"; exec csql "$@"',
+                'csql-future': 'printf "LAUNCHER=history\\n"; exec csql "$@"',
                 'cubrid_rel': 'echo CUBRID',
             }.items():
                 binary = commands / name; binary.write_text('#!/bin/sh\n' + body + '\n'); binary.chmod(0o755)

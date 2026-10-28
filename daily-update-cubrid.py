@@ -20,7 +20,7 @@ PROJECTS = {
     "cubrid-jira": "gh/cubrid-jira",
     "cubrid-ci": "gh/cubrid-ci",
     "cubrid-qahome": "gh/cubrid-qahome-fetcher",
-    "csql-with-history": "gh/csql-with-history",
+    "csql-future": "gh/csql-future",
 }
 
 # Reuse each accepted project's existing installation interface.

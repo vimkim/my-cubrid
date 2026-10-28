@@ -61,8 +61,8 @@ done
 
 CSQL_BIN=$(command -v csql)
 CUBRID_BIN=$(command -v cubrid)
-if ! CSQL_LAUNCHER=$(command -v csql-with-history); then
-  printf 'csql-with-history is required; run just sync in ~/gh/csql-with-history.\n' >&2
+if ! CSQL_LAUNCHER=$(command -v csql-future); then
+  printf 'csql-future is required; run just sync in ~/gh/csql-future.\n' >&2
   exit 127
 fi
 

@@ -129,7 +129,7 @@ class DailyUpdateTest(unittest.TestCase):
             str(self.home / "gh/cubrid-jira"),
             str(self.home / "gh/cubrid-ci"),
             str(self.home / "gh/cubrid-qahome-fetcher"),
-            str(self.home / "gh/csql-with-history"),
+            str(self.home / "gh/csql-future"),
         ])
         self.assertFalse(self.log.exists())
         self.assertFalse(self.dotfiles_log.exists())
@@ -142,7 +142,7 @@ class DailyUpdateTest(unittest.TestCase):
             "cubrid-jira": "gh/cubrid-jira",
             "cubrid-ci": "gh/cubrid-ci",
             "cubrid-qahome": "gh/cubrid-qahome-fetcher",
-            "csql-with-history": "gh/csql-with-history",
+            "csql-future": "gh/csql-future",
         }
         for tool, relative in tools.items():
             self.project(tool, relative=relative)

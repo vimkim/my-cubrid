@@ -61,6 +61,10 @@ done
 
 CSQL_BIN=$(command -v csql)
 CUBRID_BIN=$(command -v cubrid)
+if ! CSQL_LAUNCHER=$(command -v csql-with-history); then
+  printf 'csql-with-history is required; run just sync in ~/gh/csql-with-history.\n' >&2
+  exit 127
+fi
 
 verify_server_build()
 {
@@ -135,20 +139,21 @@ BRIGHT_RED="\033[91m"
 cubrid_rel | rg "CUBRID"
 printf "${Y}===== Environment Info =====${N}\n"
 printf "  ${G}csql${N}           : %s\n" "$CSQL_BIN"
+printf "  ${G}Launcher${N}       : %s\n" "$CSQL_LAUNCHER"
 printf "  ${G}cubrid${N}         : %s\n" "$CUBRID_BIN"
 printf "  ${G}DB location${N}    : %s\n" "${CUBRID_DATABASES}"
 printf "  ${G}DB name${N}        : %s\n" "$DB"
 
 if [[ -n "$REQUESTED_MODE" ]]; then
-  exec "$CSQL_BIN" --no-pager -u dba "$DB" "$@"
+  exec "$CSQL_LAUNCHER" --no-pager -u dba "$DB" "$@"
 elif "$SERVER_RUNNING"; then
   printf "  ${G}Mode${N}           : ${CYAN}CS MODE\n${N}"
 printf "${Y}=============================${N}\n"
   printf "Running: csql -u dba %s ${MAGENTA}%s${N}\n\n" "$DB" "$*"
-  exec "$CSQL_BIN" --no-pager -u dba "$DB" "$@"
+  exec "$CSQL_LAUNCHER" --no-pager -u dba "$DB" "$@"
 else
   printf "  ${G}Mode${N}           : ${CYAN}SA MODE\n${N}"
 printf "${Y}=============================${N}\n"
   printf "Running: csql -u dba %s -S ${MAGENTA}%s${N}\n\n" "$DB" "$*"
-  exec "$CSQL_BIN" --no-pager -u dba "$DB" -S "$@"
+  exec "$CSQL_LAUNCHER" --no-pager -u dba "$DB" -S "$@"
 fi

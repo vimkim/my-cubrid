@@ -28,6 +28,7 @@ class RuntimeEnvironmentTest(unittest.TestCase):
             for name, body in {
                 'cubrid': 'if [ "$1" = server ]; then printf "%s\\n" "$SERVER_STATUS"; else printf "%s\\n" "$*"; fi',
                 'csql': 'printf "ARGS=%s\\n" "$*"',
+                'csql-with-history': 'printf "LAUNCHER=history\\n"; exec csql "$@"',
                 'cubrid_rel': 'echo CUBRID',
             }.items():
                 binary = commands / name; binary.write_text('#!/bin/sh\n' + body + '\n'); binary.chmod(0o755)
@@ -37,6 +38,7 @@ class RuntimeEnvironmentTest(unittest.TestCase):
                 result = subprocess.run([str(REPOSITORY / 'bin/csql.sh'), 'testdb', flag],
                                         cwd=root, env=env, capture_output=True, text=True)
                 self.assertEqual(result.returncode, 0, result.stderr)
+                self.assertIn('LAUNCHER=history', result.stdout)
                 args = result.stdout.split('ARGS=', 1)[1].split()
                 self.assertEqual([a for a in args if a in ('-S', '-C')], [flag])
                 result = subprocess.run([str(REPOSITORY / 'bin/cub-auto'), 'paramdump', 'testdb', flag],

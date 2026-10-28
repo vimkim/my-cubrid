@@ -44,6 +44,15 @@ settings. Partial or mismatched selections fail with diagnostic guidance.
 Ordinary `cubrid` and `csql` commands run directly in the prepared environment.
 Keep the installation, configuration, registry, master port and TMP selection
 together. A→B switching selects B's entire environment even with the same DB name.
+
+The Nushell `cs` alias calls `csql.sh`, which selects a registered database,
+chooses SA/CS mode, and checks the selected client's source tree against the
+running server before launching `csql-with-history`. Install the independent
+wrapper with `just sync` in `~/gh/csql-with-history`; its underlying `csql` comes
+from the active environment's `PATH`. Interactive sessions gain persistent
+history, Up/Down recall, Ctrl+R search, and multiline editing. File, command,
+pipe, and redirected invocations pass through to csql without recording history.
+
 `cub-env.sh`, `cub-env.nu` and `cubrid-use` load through the public CLI rather
 than constructing legacy DB paths. `cubrid-reset` clears the selected native
 variables and paths. Use direnv for build-only shell preparation.

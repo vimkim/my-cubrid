@@ -1,0 +1,498 @@
+#!/usr/bin/env python3
+"""Recommend CUBRID source reviewers without changing GitHub."""
+from __future__ import annotations
+
+import argparse
+from dataclasses import asdict, dataclass
+import fnmatch
+import itertools
+import json
+from pathlib import Path
+import re
+import subprocess
+import sys
+import tomllib
+from urllib.parse import quote, urlsplit
+
+ROOT = Path(__file__).resolve().parent.parent
+LOGIN = re.compile(r"[A-Za-z0-9](?:[A-Za-z0-9-]{0,37}[A-Za-z0-9])?\Z")
+SHA = re.compile(r"[0-9a-fA-F]{40}\Z")
+HUNK = re.compile(r"^@@ -(\d+)(?:,(\d+))? \+(\d+)(?:,(\d+))? @@")
+
+
+class UserError(Exception):
+    pass
+
+
+@dataclass(frozen=True)
+class Person:
+    login: str
+    name: str
+
+
+@dataclass(frozen=True)
+class ModuleOwnership:
+    id: str
+    primary: str
+    secondary: str
+
+
+@dataclass(frozen=True)
+class Rule:
+    module: str
+    paths: tuple[str, ...]
+    symbol: str | None
+
+
+@dataclass(frozen=True)
+class Ownership:
+    people: tuple[Person, ...]
+    modules: tuple[ModuleOwnership, ...]
+    rules: tuple[Rule, ...]
+    shared_paths: frozenset[str]
+
+
+@dataclass(frozen=True)
+class ChangedFile:
+    path: str
+    previous_path: str | None
+    status: str
+    additions: int
+    deletions: int
+    patch: str | None
+
+
+@dataclass(frozen=True)
+class Snapshot:
+    url: str
+    number: int
+    base: str
+    head: str
+    author: str
+    requested: tuple[str, ...]
+    teams: tuple[str, ...]
+    declared_count: int
+    files: tuple[ChangedFile, ...]
+    gaps: tuple[str, ...]
+
+
+@dataclass(frozen=True)
+class Evidence:
+    path: str
+    module: str
+    detail: str
+
+
+@dataclass(frozen=True)
+class Gap:
+    path: str
+    reason: str
+
+
+@dataclass(frozen=True)
+class Report:
+    url: str
+    base: str
+    head: str
+    author: str
+    verdict: str
+    requested: tuple[str, ...]
+    requested_teams: tuple[str, ...]
+    unmapped_requested: tuple[str, ...]
+    required_modules: tuple[str, ...]
+    existing_coverage: tuple[str, ...]
+    ranking: tuple[dict, ...]
+    recommendations: tuple[dict, ...]
+    alternative_count: int
+    uncovered_modules: tuple[str, ...]
+    evidence: tuple[Evidence, ...]
+    gaps: tuple[Gap, ...]
+
+
+def load_config(path: Path) -> Ownership:
+    try:
+        with path.open('rb') as stream:
+            data = tomllib.load(stream)
+        people = tuple(Person(p['login'], p['name']) for p in data['people'])
+        modules = tuple(ModuleOwnership(m['id'], m['primary'], m['secondary']) for m in data['modules'])
+        rules = tuple(Rule(r['module'], tuple(r['paths']), r.get('symbol')) for r in data['rules'])
+        shared = data['shared_paths']
+        if not isinstance(shared, list) or any(not isinstance(p, str) or not p.startswith('src/') or '*' in p for p in shared):
+            raise ValueError('shared_paths must contain literal src/ paths')
+        if not people or not modules or not rules:
+            raise ValueError('people, modules and rules must be nonempty')
+        if any(not isinstance(p.login, str) or not LOGIN.fullmatch(p.login) or not isinstance(p.name, str) or not p.name.strip() for p in people):
+            raise ValueError('invalid person')
+        logins = {p.login.casefold() for p in people}
+        if len(logins) != len(people):
+            raise ValueError('duplicate login')
+        ids = {m.id for m in modules}
+        if len(ids) != len(modules) or any(not isinstance(m.id, str) or not re.fullmatch(r'[a-z][a-z0-9_]*', m.id) or m.primary.casefold() not in logins or m.secondary.casefold() not in logins or m.primary.casefold() == m.secondary.casefold() for m in modules):
+            raise ValueError('invalid module ownership')
+        for r in rules:
+            if r.module not in ids or not r.paths or any(not isinstance(p, str) or not p.startswith('src/') for p in r.paths) or (r.symbol is not None and (not isinstance(r.symbol, str) or not r.symbol)):
+                raise ValueError('invalid rule')
+            if any(fnmatch.fnmatchcase(p, pattern) for p in shared for pattern in r.paths) and r.symbol is None:
+                raise ValueError('shared paths require symbol rules')
+            if r.symbol is not None and any(p not in shared for p in r.paths):
+                raise ValueError('symbol rules require literal shared paths')
+        return Ownership(people, modules, rules, frozenset(shared))
+    except (OSError, tomllib.TOMLDecodeError, KeyError, TypeError, AttributeError, ValueError) as exc:
+        raise UserError(f'invalid configuration {path}: {exc}') from exc
+
+
+def pr_number(url: str) -> int:
+    try:
+        parsed = urlsplit(url)
+    except ValueError as exc:
+        raise UserError('invalid PR URL') from exc
+    match = re.fullmatch(r'/CUBRID/cubrid/pull/([1-9][0-9]*)/?', parsed.path, re.IGNORECASE)
+    if parsed.scheme != 'https' or parsed.netloc.lower() != 'github.com' or parsed.query or parsed.fragment or not match:
+        raise UserError('expected https://github.com/CUBRID/cubrid/pull/NUMBER')
+    return int(match.group(1))
+
+
+def gh(*args: str) -> str:
+    try:
+        result = subprocess.run(['gh', 'api', *args], capture_output=True, text=True, timeout=45, check=True)
+        return result.stdout
+    except FileNotFoundError as exc:
+        raise UserError("GitHub CLI 'gh' is not installed") from exc
+    except subprocess.TimeoutExpired as exc:
+        raise UserError('GitHub request timed out') from exc
+    except (OSError, UnicodeError) as exc:
+        raise UserError(f'could not read GitHub response: {exc}') from exc
+    except subprocess.CalledProcessError as exc:
+        raise UserError(f"GitHub request failed: {(exc.stderr or exc.stdout).strip() or exc.returncode}") from exc
+
+
+def api_json(endpoint: str):
+    try:
+        return json.loads(gh(endpoint))
+    except json.JSONDecodeError as exc:
+        raise UserError('GitHub returned invalid JSON') from exc
+
+
+def metadata(number: int) -> tuple:
+    try:
+        item = api_json(f'repos/CUBRID/cubrid/pulls/{number}')
+        base, head = item['base']['sha'], item['head']['sha']
+        author, count = item['user']['login'], item['changed_files']
+        users, teams = item['requested_reviewers'], item['requested_teams']
+        if not isinstance(base, str) or not SHA.fullmatch(base) or not isinstance(head, str) or not SHA.fullmatch(head) or not isinstance(author, str) or not LOGIN.fullmatch(author) or type(count) is not int or count < 0 or not isinstance(users, list) or not isinstance(teams, list):
+            raise ValueError('invalid metadata fields')
+        requested = tuple(sorted((u['login'] for u in users), key=str.casefold))
+        team_names = tuple(sorted((t['slug'] for t in teams), key=str.casefold))
+        if any(not isinstance(x, str) or not LOGIN.fullmatch(x) for x in requested) or any(not isinstance(x, str) or not x.strip() for x in team_names):
+            raise ValueError('invalid reviewer')
+        return base, head, author, count, requested, team_names
+    except (KeyError, TypeError, ValueError) as exc:
+        raise UserError(f'invalid pull request metadata: {exc}') from exc
+
+
+def fetch_snapshot(number: int) -> Snapshot:
+    before = metadata(number)
+    items = []
+    page = 1
+    while True:
+        response = api_json(f'repos/CUBRID/cubrid/pulls/{number}/files?per_page=100&page={page}')
+        if not isinstance(response, list) or len(response) > 100:
+            raise UserError('invalid pull request files response')
+        items.extend(response)
+        if len(response) < 100:
+            break
+        page += 1
+        if page > 1000:
+            raise UserError('too many file pages')
+    files = []
+    try:
+        for item in items:
+            path, status = item['filename'], item['status']
+            old, patch = item.get('previous_filename'), item.get('patch')
+            adds, deletes = item['additions'], item['deletions']
+            if not isinstance(path, str) or not path or not isinstance(status, str) or (old is not None and (not isinstance(old, str) or not old)) or (patch is not None and not isinstance(patch, str)) or type(adds) is not int or adds < 0 or type(deletes) is not int or deletes < 0:
+                raise ValueError('invalid file fields')
+            if status == 'renamed' and old is None:
+                raise ValueError('renamed file lacks previous_filename')
+            files.append(ChangedFile(path, old, status, adds, deletes, patch))
+    except (KeyError, TypeError, ValueError) as exc:
+        raise UserError(f'invalid pull request file: {exc}') from exc
+    after = metadata(number)
+    gaps = []
+    if len(files) != before[3]:
+        gaps.append(f'GitHub reported {before[3]} changed files but returned {len(files)}')
+    if before != after:
+        gaps.append('pull request metadata changed while reading files')
+    return Snapshot(f'https://github.com/CUBRID/cubrid/pull/{number}', number, before[0], before[1], before[2], before[4], before[5], before[3], tuple(files), tuple(gaps))
+
+
+def patch_lines(patch: str) -> tuple[list[int], list[int]]:
+    old_lines, new_lines = [], []
+    old = new = None
+    old_end = new_end = None
+    for line in patch.splitlines():
+        match = HUNK.match(line)
+        if match:
+            if old is not None and (old != old_end or new != new_end):
+                raise ValueError('incomplete hunk')
+            old, new = int(match[1]), int(match[3])
+            old_end = old + int(match[2] if match[2] is not None else 1)
+            new_end = new + int(match[4] if match[4] is not None else 1)
+        elif line.startswith('\\ No newline at end of file'):
+            continue
+        elif old is None or not line or line[0] not in ' +-':
+            raise ValueError('invalid patch')
+        elif line[0] == ' ':
+            old += 1
+            new += 1
+        elif line[0] == '-':
+            old_lines.append(old)
+            old += 1
+        else:
+            new_lines.append(new)
+            new += 1
+    if old is None or old != old_end or new != new_end:
+        raise ValueError('incomplete hunk')
+    return old_lines, new_lines
+
+
+def mask_preserving_line_offsets(source: str) -> str:
+    pattern = r'/\*.*?\*/|//[^\n]*|"(?:\\.|[^"\\])*"|\'(?:\\.|[^\'\\])*\'|^[ \t]*\#(?:[^\n\\]|\\[^\n]|\\\n)*'
+    return re.sub(pattern, lambda m: re.sub(r'[^\n]', ' ', m.group()), source, flags=re.S | re.M)
+
+
+def definitions(source: str) -> list[tuple[int, int, str]]:
+    masked = mask_preserving_line_offsets(source)
+    spans = []
+    depth = 0
+    boundary = 0
+    i = 0
+    while i < len(masked):
+        ch = masked[i]
+        if ch == '{':
+            if depth == 0:
+                signature = masked[boundary:i]
+                match = re.search(r'\b([A-Za-z_]\w*)\s*\((?:[^()]|\([^()]*\))*\)\s*$', signature, re.S)
+                prefix = signature[:match.start(1)] if match else ''
+                if not re.search(r'\b[A-Za-z_]\w*\b', prefix) or re.search(r'[=()]', prefix):
+                    match = None
+                start = boundary + match.start(1) if match else None
+                name = match.group(1) if match else None
+            depth += 1
+        elif ch == '}':
+            if depth > 0:
+                depth -= 1
+                if depth == 0:
+                    if name is not None:
+                        start = boundary + len(masked[boundary:start]) - len(masked[boundary:start].lstrip())
+                        spans.append((masked.count('\n', 0, start) + 1, masked.count('\n', 0, i) + 1, name))
+                    boundary = i + 1
+            else:
+                boundary = i + 1
+        elif ch == ';' and depth == 0:
+            boundary = i + 1
+        i += 1
+    return spans
+
+
+def classify(snapshot: Snapshot, ownership: Ownership) -> tuple[tuple[Evidence, ...], tuple[Gap, ...]]:
+    evidence = []
+    gaps = [Gap('', message) for message in snapshot.gaps]
+    source_cache = {}
+    merge_base = None
+    merge_error = None
+
+    def source(path: str, old: bool) -> str:
+        nonlocal merge_base, merge_error
+        if old and merge_base is None and merge_error is None:
+            try:
+                obj = api_json(f'repos/CUBRID/cubrid/compare/{snapshot.base}...{snapshot.head}')
+                merge_base = obj['merge_base_commit']['sha']
+                if not isinstance(merge_base, str) or not SHA.fullmatch(merge_base):
+                    raise ValueError('invalid merge-base SHA')
+            except (UserError, KeyError, TypeError, ValueError) as exc:
+                merge_error = str(exc)
+        if old and merge_error:
+            raise UserError(f'cannot determine merge base: {merge_error}')
+        sha = merge_base if old else snapshot.head
+        key = (sha, path)
+        if key not in source_cache:
+            source_cache[key] = gh('-H', 'Accept: application/vnd.github.raw+json', f'repos/CUBRID/cubrid/contents/{quote(path, safe="/")}?ref={sha}')
+        return source_cache[key]
+
+    def path_matches(path: str, pattern: str) -> bool:
+        components, patterns = path.split('/'), pattern.split('/')
+        return len(components) == len(patterns) and all(fnmatch.fnmatchcase(part, glob) for part, glob in zip(components, patterns))
+
+    def first_matching_rule(path: str, symbol: str | None) -> Rule | None:
+        return next((r for r in ownership.rules if any(path_matches(path, p) for p in r.paths) and ((symbol is None and r.symbol is None) or (symbol is not None and r.symbol is not None and fnmatch.fnmatchcase(symbol, r.symbol)))), None)
+
+    def add(path: str, lines: list[int], old: bool, check_path: bool = False):
+        if not path.startswith('src/'):
+            return
+        if path not in ownership.shared_paths:
+            rule = first_matching_rule(path, None)
+            if rule:
+                evidence.append(Evidence(path, rule.module, 'path rule'))
+            else:
+                gaps.append(Gap(path, 'no ownership rule for source path'))
+            return
+        if check_path and not lines:
+            gaps.append(Gap(path, 'shared path has no changed lines to classify'))
+        if not lines:
+            return
+        try:
+            spans = definitions(source(path, old))
+        except UserError as exc:
+            gaps.append(Gap(path, f'source unavailable: {exc}'))
+            return
+        grouped = {}
+        for line in lines:
+            names = [name for start, end, name in spans if start <= line <= end]
+            name = names[0] if len(names) == 1 and first_matching_rule(path, names[0]) else None
+            grouped.setdefault(name, []).append(line)
+        for name, positions in grouped.items():
+            ranges = []
+            for _, group in itertools.groupby(enumerate(sorted(set(positions))), lambda item: item[1] - item[0]):
+                values = [item[1] for item in group]
+                ranges.append(str(values[0]) if len(values) == 1 else f'{values[0]}-{values[-1]}')
+            detail = f'{"old" if old else "new"} lines {", ".join(ranges)}'
+            if name is None:
+                gaps.append(Gap(path, f'{detail} have no proven owned definition'))
+            else:
+                evidence.append(Evidence(path, first_matching_rule(path, name).module, f'{detail}, {name}'))
+
+    for f in snapshot.files:
+        old_path = f.previous_path or f.path
+        if not (f.path.startswith('src/') or old_path.startswith('src/')):
+            continue
+        old_lines, new_lines = [], []
+        if f.patch is None:
+            gaps.append(Gap(f.path, 'patch unavailable or binary'))
+        else:
+            try:
+                old_lines, new_lines = patch_lines(f.patch)
+                if len(old_lines) != f.deletions or len(new_lines) != f.additions:
+                    gaps.append(Gap(f.path, 'patch line counts do not match GitHub totals'))
+            except ValueError:
+                gaps.append(Gap(f.path, 'patch is malformed'))
+        if f.previous_path:
+            add(old_path, old_lines, True, True)
+            add(f.path, new_lines, False, True)
+        else:
+            add(f.path, old_lines, True, False) if old_lines else None
+            if new_lines or not old_lines:
+                add(f.path, new_lines, False, not old_lines)
+    return tuple(dict.fromkeys(evidence)), tuple(dict.fromkeys(gaps))
+
+
+def analyze(snapshot: Snapshot, ownership: Ownership, evidence: tuple[Evidence, ...], gaps: tuple[Gap, ...], limit: int) -> Report:
+    people = {p.login.casefold(): p for p in ownership.people}
+    modules = {m.id: m for m in ownership.modules}
+    required = {e.module for e in evidence}
+    author = snapshot.author.casefold()
+    existing = {x.casefold() for x in snapshot.requested if x.casefold() in people and x.casefold() != author}
+    unmapped = tuple(x for x in snapshot.requested if x.casefold() not in people)
+    eligible = sorted((key for key in people if key != author and key not in existing))
+    def roles(person: str):
+        return {m: ('primary' if modules[m].primary.casefold() == person else 'secondary') for m in required if person in (modules[m].primary.casefold(), modules[m].secondary.casefold())}
+    def covers(group):
+        return {m for person in group for m in roles(person)}
+    def primaries(group):
+        return {m for person in group for m, role in roles(person).items() if role == 'primary'}
+    existing_coverage = covers(existing)
+    ranking = []
+    for person in eligible:
+        role_map = roles(person)
+        if role_map:
+            ranking.append({'login': people[person].login, 'name': people[person].name, 'modules': dict(sorted(role_map.items())), 'module_count': len(role_map), 'primary_count': sum(x == 'primary' for x in role_map.values())})
+    ranking.sort(key=lambda x: (-x['module_count'], -x['primary_count'], x['login'].casefold()))
+    uncovered = required - covers(existing | set(eligible))
+    candidates = []
+    if not uncovered and required:
+        for size in range(len(eligible) + 1):
+            candidates = [group for group in itertools.combinations(eligible, size) if covers(existing | set(group)) >= required]
+            if candidates:
+                break
+        candidates.sort(key=lambda group: (-len(primaries(existing | set(group))), tuple(group)))
+    recommendations = tuple({'additional': [people[p].login for p in group], 'primary_modules': sorted(primaries(existing | set(group))), 'secondary_only_modules': sorted(required - primaries(existing | set(group)))} for group in candidates[:limit])
+    relevant = any(f.path.startswith('src/') or (f.previous_path or '').startswith('src/') for f in snapshot.files)
+    verdict = ('provisional' if gaps else 'uncoverable' if uncovered else 'no-source-changes' if not relevant else 'sufficient')
+    return Report(snapshot.url, snapshot.base, snapshot.head, snapshot.author, verdict, snapshot.requested, snapshot.teams, unmapped, tuple(sorted(required)), tuple(sorted(existing_coverage)), tuple(ranking), recommendations, len(candidates), tuple(sorted(uncovered)), evidence, gaps)
+
+
+def text_report(report: Report) -> str:
+    lines = [f'Pull request: {report.url}', f'Head: {report.head}', f'Verdict: {report.verdict}']
+    if report.recommendations:
+        best = report.recommendations[0]['additional']
+        label = 'Provisional recommendation for known modules' if report.gaps else 'Recommendation'
+        if best:
+            noun = 'reviewer' if len(best) == 1 else 'reviewers'
+            lines.append(f'{label}: add {len(best)} {noun}: {", ".join(best)}')
+        else:
+            lines.append(f'{label}: no additional reviewer needed')
+    elif report.verdict == 'no-source-changes':
+        lines.append('No src/ changes to recommend reviewers for')
+    lines.extend([f'Author excluded: {report.author}', f'Requested reviewers: {", ".join(report.requested) or "none"}', f'Requested teams (coverage unknown): {", ".join(report.requested_teams) or "none"}', f'Unmapped requested reviewers: {", ".join(report.unmapped_requested) or "none"}', f'Required modules: {", ".join(report.required_modules) or "none"}', f'Existing reviewer coverage: {", ".join(report.existing_coverage) or "none"}'])
+    if report.recommendations:
+        lines.append('Minimum additional reviewer sets (ranked by primary-covered module count):')
+        for choice in report.recommendations:
+            lines.append(f'  {", ".join(choice["additional"]) or "none"}; primary: {", ".join(choice["primary_modules"]) or "none"}; secondary only: {", ".join(choice["secondary_only_modules"]) or "none"}')
+        if report.alternative_count > len(report.recommendations):
+            lines.append(f'  {report.alternative_count - len(report.recommendations)} more minimum sets omitted')
+    if report.ranking:
+        lines.append('Individual ranking (module count, then primary count; not a probability):')
+        for person in report.ranking:
+            roles = ', '.join(f'{m} ({r})' for m, r in person['modules'].items())
+            lines.append(f'  {person["login"]} ({person["name"]}): {roles}')
+    if report.uncovered_modules:
+        lines.append(f'Uncoverable modules: {", ".join(report.uncovered_modules)}')
+    if report.evidence:
+        lines.append('Evidence:')
+        lines.extend(f'  {e.path}: {e.module}, {e.detail}' for e in report.evidence)
+    if report.gaps:
+        lines.append('Unresolved:')
+        lines.extend(f'  {g.path + ": " if g.path else ""}{g.reason}' for g in report.gaps)
+    return '\n'.join(lines)
+
+
+class ArgumentParser(argparse.ArgumentParser):
+    def error(self, message):
+        raise UserError(message)
+
+
+def main(argv=None) -> int:
+    argv = list(sys.argv[1:] if argv is None else argv)
+    parser = ArgumentParser(description='Recommend minimum additional CUBRID source reviewers. Makes no GitHub changes.')
+    parser.add_argument('url', help='CUBRID/cubrid pull request URL')
+    parser.add_argument('--json', action='store_true', help='print a structured JSON report')
+    parser.add_argument('--config', type=Path, default=ROOT / 'cubrid-review-owners.toml', help='ownership TOML path')
+    parser.add_argument('--alternatives', type=int, default=5, help='maximum minimum-size sets to print (default: 5)')
+    try:
+        args = parser.parse_args(argv)
+        if args.alternatives < 1:
+            raise UserError('--alternatives must be positive')
+        number = pr_number(args.url)
+        ownership = load_config(args.config)
+        snapshot = fetch_snapshot(number)
+        evidence, gaps = classify(snapshot, ownership)
+        try:
+            final = metadata(number)
+            initial = (snapshot.base, snapshot.head, snapshot.author, snapshot.declared_count, snapshot.requested, snapshot.teams)
+            if final != initial and not any('metadata changed' in gap.reason for gap in gaps):
+                gaps += (Gap('', 'pull request metadata changed while reading source'),)
+        except UserError as exc:
+            gaps += (Gap('', f'could not verify final pull request metadata: {exc}'),)
+        report = analyze(snapshot, ownership, evidence, gaps, args.alternatives)
+        print(json.dumps(asdict(report), ensure_ascii=False, indent=2) if args.json else text_report(report))
+        return 2 if report.verdict in ('provisional', 'uncoverable') else 0
+    except UserError as exc:
+        if '--json' in argv:
+            print(json.dumps({'verdict': 'error', 'error': str(exc)}, ensure_ascii=False))
+        else:
+            print(f'error: {exc}', file=sys.stderr)
+        return 1
+
+
+if __name__ == '__main__':
+    raise SystemExit(main())

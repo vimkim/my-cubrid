@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Request reviews from the CUBRID dev2 teammates for a GitHub PR."""
+"""Deprecated. Request reviews from the whole CUBRID dev2 team for a PR."""
 
 from __future__ import annotations
 
@@ -35,7 +35,7 @@ class UserError(RuntimeError):
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
-        description="Request reviews from all dev2 teammates for a GitHub pull request."
+        description="Deprecated: requests the whole dev2 team. Use cubrid-pr-reviewers to recommend reviewers instead."
     )
     parser.add_argument(
         "pr",
@@ -174,6 +174,7 @@ def ensure_pr_is_reviewable(state: str, is_draft: bool) -> None:
 
 
 def main() -> int:
+    print("Warning: cubrid-dev2-add-reviewers.py is deprecated and requests the whole team; use cubrid-pr-reviewers instead.", file=sys.stderr)
     args = parse_args()
     try:
         pr_url = resolve_pr_url(args.pr)

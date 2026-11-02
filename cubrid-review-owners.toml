@@ -1,0 +1,304 @@
+shared_paths = ["src/storage/file_io.c", "src/storage/file_io.h", "src/transaction/log_manager.c", "src/transaction/log_manager.h", "src/transaction/log_page_buffer.c"]
+
+[groups]
+SM = ["lht1199", "vimkim", "YeunjunLee", "InChiJun"]
+DM = ["youngjun9072", "hgryoo", "H2SU"]
+
+[[people]]
+login = "lht1199"
+name = "임형태"
+
+[[people]]
+login = "vimkim"
+name = "김대현"
+
+[[people]]
+login = "YeunjunLee"
+name = "이연준"
+
+[[people]]
+login = "InChiJun"
+name = "인치준"
+
+[[people]]
+login = "hgryoo"
+name = "유형규"
+
+[[people]]
+login = "H2SU"
+name = "김희수"
+
+[[people]]
+login = "hornetmj"
+name = "민준"
+
+[[people]]
+login = "youngjun9072"
+name = "유영준"
+
+[[modules]]
+id = "locator"
+primary = "lht1199"
+secondary = "YeunjunLee"
+
+[[modules]]
+id = "heap"
+primary = "lht1199"
+secondary = "vimkim"
+
+[[modules]]
+id = "btree"
+primary = "lht1199"
+secondary = "YeunjunLee"
+
+[[modules]]
+id = "slotted_page"
+primary = "InChiJun"
+secondary = "vimkim"
+
+[[modules]]
+id = "overflow_file"
+primary = "vimkim"
+secondary = "InChiJun"
+
+[[modules]]
+id = "oos"
+primary = "vimkim"
+secondary = "InChiJun"
+
+[[modules]]
+id = "mvcc"
+primary = "YeunjunLee"
+secondary = "hgryoo"
+
+[[modules]]
+id = "vacuum"
+primary = "YeunjunLee"
+secondary = "hgryoo"
+
+[[modules]]
+id = "lock_manager"
+primary = "hgryoo"
+secondary = "YeunjunLee"
+
+[[modules]]
+id = "buffer_pool"
+primary = "vimkim"
+secondary = "lht1199"
+
+[[modules]]
+id = "dwb"
+primary = "InChiJun"
+secondary = "lht1199"
+
+[[modules]]
+id = "file_manager"
+primary = "InChiJun"
+secondary = "vimkim"
+
+[[modules]]
+id = "disk_manager"
+primary = "InChiJun"
+secondary = "vimkim"
+
+[[modules]]
+id = "tde"
+primary = "InChiJun"
+secondary = "vimkim"
+
+[[modules]]
+id = "file_io"
+primary = "InChiJun"
+secondary = "hornetmj"
+
+[[modules]]
+id = "log_manager"
+primary = "hgryoo"
+secondary = "H2SU"
+
+[[modules]]
+id = "recovery"
+primary = "hgryoo"
+secondary = "H2SU"
+
+[[modules]]
+id = "cdc"
+primary = "H2SU"
+secondary = "hornetmj"
+
+[[modules]]
+id = "flashback"
+primary = "H2SU"
+secondary = "hornetmj"
+
+[[modules]]
+id = "backup"
+primary = "H2SU"
+secondary = "hgryoo"
+
+[[modules]]
+id = "restore"
+primary = "H2SU"
+secondary = "hgryoo"
+
+[[modules]]
+id = "replication"
+primary = "youngjun9072"
+secondary = "H2SU"
+
+[[modules]]
+id = "heartbeat"
+primary = "youngjun9072"
+secondary = "H2SU"
+
+[[modules]]
+id = "connection_pool"
+primary = "hgryoo"
+secondary = "youngjun9072"
+
+[[modules]]
+id = "task_worker_pool"
+primary = "hgryoo"
+secondary = "youngjun9072"
+
+[[rules]]
+module = "locator"
+paths = ["src/transaction/locator*.c", "src/transaction/locator*.h"]
+
+[[rules]]
+module = "heap"
+paths = ["src/storage/heap_file.*", "src/query/heap_attrinfo.h"]
+
+[[rules]]
+module = "btree"
+paths = ["src/storage/btree*.c", "src/storage/btree*.h", "src/storage/btree*.cpp", "src/storage/btree*.hpp"]
+
+[[rules]]
+module = "slotted_page"
+paths = ["src/storage/slotted_page.*"]
+
+[[rules]]
+module = "overflow_file"
+paths = ["src/storage/overflow_file.*"]
+
+[[rules]]
+module = "oos"
+paths = ["src/storage/oos_*.c", "src/storage/oos_*.h", "src/storage/oos_*.cpp", "src/storage/oos_*.hpp"]
+
+[[rules]]
+module = "mvcc"
+paths = ["src/transaction/mvcc*.c", "src/transaction/mvcc*.h", "src/transaction/mvcc*.cpp", "src/transaction/mvcc*.hpp"]
+
+[[rules]]
+module = "vacuum"
+paths = ["src/query/vacuum.*"]
+
+[[rules]]
+module = "lock_manager"
+paths = ["src/transaction/lock_manager.*", "src/transaction/lock_table.*"]
+
+[[rules]]
+module = "buffer_pool"
+paths = ["src/storage/page_buffer.*"]
+
+[[rules]]
+module = "dwb"
+paths = ["src/storage/double_write_buffer.*"]
+
+[[rules]]
+module = "file_manager"
+paths = ["src/storage/file_manager.*"]
+
+[[rules]]
+module = "disk_manager"
+paths = ["src/storage/disk_manager.*"]
+
+[[rules]]
+module = "tde"
+paths = ["src/storage/tde.*"]
+
+[[rules]]
+module = "recovery"
+paths = ["src/transaction/recovery.*"]
+
+[[rules]]
+module = "flashback"
+paths = ["src/transaction/flashback*.c", "src/transaction/flashback*.h"]
+
+[[rules]]
+module = "replication"
+paths = ["src/transaction/replication.*", "src/transaction/log_applier.*", "src/transaction/log_writer.*", "src/transaction/log_applier_sql_log.*"]
+
+[[rules]]
+module = "heartbeat"
+paths = ["src/connection/heartbeat.*", "src/executables/master_heartbeat.*"]
+
+[[rules]]
+module = "connection_pool"
+paths = ["src/connection/connection_pool.*"]
+
+[[rules]]
+module = "task_worker_pool"
+paths = ["src/thread/thread_worker_pool*.hpp", "src/thread/thread_worker_pool*.cpp", "src/thread/thread_task.hpp", "src/thread/thread_entry_task.*"]
+
+[[rules]]
+module = "backup"
+paths = ["src/storage/file_io.c"]
+symbol = "fileio_*backup*"
+
+[[rules]]
+module = "restore"
+paths = ["src/storage/file_io.c"]
+symbol = "fileio_*restore*"
+
+[[rules]]
+module = "file_io"
+paths = ["src/storage/file_io.c"]
+symbol = "fileio_*"
+
+[[rules]]
+module = "cdc"
+paths = ["src/transaction/log_manager.c"]
+symbol = "*cdc*"
+
+[[rules]]
+module = "backup"
+paths = ["src/transaction/log_manager.c"]
+symbol = "*backup*"
+
+[[rules]]
+module = "restore"
+paths = ["src/transaction/log_manager.c"]
+symbol = "*restore*"
+
+[[rules]]
+module = "log_manager"
+paths = ["src/transaction/log_manager.c"]
+symbol = "log_*"
+
+[[rules]]
+module = "cdc"
+paths = ["src/transaction/log_page_buffer.c"]
+symbol = "*cdc*"
+
+[[rules]]
+module = "backup"
+paths = ["src/transaction/log_page_buffer.c"]
+symbol = "*backup*"
+
+[[rules]]
+module = "restore"
+paths = ["src/transaction/log_page_buffer.c"]
+symbol = "*restore*"
+
+[[rules]]
+module = "log_manager"
+paths = ["src/transaction/log_page_buffer.c"]
+symbol = "logpb_*"
+[[rules]]
+module = "recovery"
+paths = ["src/transaction/log_recovery.c", "src/transaction/log_recovery.h", "src/transaction/log_recovery_redo*.cpp", "src/transaction/log_recovery_redo*.hpp"]
+
+[[rules]]
+module = "log_manager"
+paths = ["src/transaction/transaction_*.c", "src/transaction/transaction_*.h", "src/transaction/transaction_*.cpp", "src/transaction/transaction_*.hpp", "src/transaction/log_tran_table.c", "src/transaction/log_2pc.c", "src/transaction/log_2pc.h", "src/transaction/log_append.cpp", "src/transaction/log_append.hpp", "src/transaction/log_system_tran.cpp", "src/transaction/log_system_tran.hpp", "src/transaction/log_prior_inflight*.cpp", "src/transaction/log_prior_inflight*.hpp", "src/transaction/log_postpone_cache.cpp", "src/transaction/log_postpone_cache.hpp"]

@@ -1,13 +1,20 @@
 #!/usr/bin/env python3
+import fcntl
 import json
 import os
+import pty
+import select
+import signal
+import struct
 from pathlib import Path
 import subprocess
 import tempfile
+import termios
+import time
 import unittest
 
 ROOT = Path(__file__).resolve().parent.parent
-CLI = ROOT / 'bin/cubrid-pr-reviewers'
+CLI = ROOT / 'bin/cubrid-dev2-pr-reviewers'
 OLD = ROOT / 'bin/cubrid-dev2-add-reviewers.py'
 BASE = 'a' * 40
 HEAD = 'b' * 40
@@ -88,12 +95,12 @@ class CliTest(unittest.TestCase):
         self.assertEqual(report['required_modules'], ['btree', 'heap'])
         self.assertEqual(report['recommendations'][0]['additional'], ['lht1199'])
         run, report = self.run_cli([heap, changed('src/storage/oos_file.hpp')])
-        self.assertEqual(report['recommendations'][0]['additional'], ['vimkim'])
+        self.assertEqual(report['recommendations'][0]['additional'], ['InChiJun', 'lht1199'])
         run, report = self.run_cli([heap, changed('src/transaction/recovery.c')])
         self.assertEqual(len(report['recommendations'][0]['additional']), 2)
         self.assertEqual(report['recommendations'][0]['additional'], ['hgryoo', 'lht1199'])
         run, report = self.run_cli([heap], author='lht1199')
-        self.assertEqual(report['recommendations'][0]['additional'], ['vimkim'])
+        self.assertEqual((run.returncode, report['verdict']), (2, 'uncoverable'))
         run, report = self.run_cli([heap], reviewers=['vimkim', 'unknown'], teams=['team-a'])
         self.assertEqual(report['recommendations'][0]['additional'], [])
         self.assertEqual(report['unmapped_requested'], ['unknown'])
@@ -101,7 +108,7 @@ class CliTest(unittest.TestCase):
 
     def test_text_recommends_count_and_existing_coverage(self):
         files = [changed('src/storage/heap_file.c')]
-        for reviewers, expected in [((), 'Recommendation: add 1 reviewer: lht1199'), (('vimkim',), 'Recommendation: no additional reviewer needed')]:
+        for reviewers, expected in [((), 'lht1199; 주담당: heap'), (('vimkim',), '추가 요청 없음; 주담당: 없음')]:
             self.data.write_text(json.dumps({'metadata': meta(files, reviewers=reviewers), 'files': files}))
             if self.log.exists():
                 self.log.unlink()
@@ -195,6 +202,9 @@ class CliTest(unittest.TestCase):
         run, report = self.run_cli([f], sources=sources)
         self.assertEqual(run.returncode, 0)
         self.assertEqual(report['required_modules'], ['cdc'])
+        run, report = self.run_cli([f], reviewers=['hornetmj'], sources=sources)
+        self.assertEqual(report['existing_coverage'], ['cdc'])
+        self.assertEqual(report['recommendations'][0]['additional'], [])
         run, report = self.run_cli([f])
         self.assertEqual(run.returncode, 2)
         self.assertIn('source unavailable', report['gaps'][0]['reason'])
@@ -206,6 +216,129 @@ class CliTest(unittest.TestCase):
         run, report = self.run_cli([doc])
         self.assertEqual(run.returncode, 2)
         self.assertEqual(report['required_modules'], [])
+
+    def test_six_people_ranks_states_and_reasons(self):
+        files = [changed('src/storage/heap_file.c')]
+        for author in ('vimkim', 'outside'):
+            run, report = self.run_cli(files, author=author, reviewers=['hgryoo'])
+            self.assertEqual(run.returncode, 0)
+            rows = report['ranking']
+            self.assertEqual(len(rows), 6)
+            self.assertEqual({r['login'] for r in rows}, {'lht1199', 'YeunjunLee', 'InChiJun', 'hgryoo', 'H2SU', 'youngjun9072'})
+            self.assertEqual((rows[0]['login'], rows[0]['rank'], rows[0]['primary_count']), ('lht1199', 1, 1))
+            zeros = [r for r in rows if not r['module_count']]
+            self.assertEqual({r['rank'] for r in zeros}, {2})
+            self.assertTrue(all(r['tied'] and '직접 담당 없음' in r['reason'] for r in zeros))
+            requested = next(r for r in rows if r['login'] == 'hgryoo')
+            self.assertTrue(requested['requested'])
+            self.assertFalse(requested['can_request'])
+            self.assertIn('이미 요청됨', requested['reason'])
+            self.assertTrue(all(not {'vimkim', 'hornetmj'} & set(c['additional']) for c in report['recommendations']))
+        run, report = self.run_cli(files, author='lht1199')
+        self.assertEqual(sum(r['can_request'] for r in report['ranking']), 5)
+        row = report['ranking'][-1]
+        self.assertTrue(row['author'])
+        self.assertIsNone(row['rank'])
+        self.assertIn('작성자', row['reason'])
+        self.assertFalse(any('lht1199' in c['additional'] for c in report['recommendations']))
+        run, report = self.run_cli(files, author='lht1199', reviewers=['lht1199'])
+        self.assertTrue(report['ranking'][-1]['requested'])
+        self.assertFalse(report['ranking'][-1]['can_request'])
+        self.assertIn('이미 요청됨', report['ranking'][-1]['reason'])
+        run, report = self.run_cli([changed('src/mystery.c')])
+        self.assertTrue(all('분석 대기' in r['reason'] for r in report['ranking']))
+        run, report = self.run_cli([changed('README.md')])
+        self.assertTrue(all('src/ 변경이 없어' in r['reason'] for r in report['ranking']))
+        run, report = self.run_cli(files + [changed('src/mystery.c')])
+        self.assertEqual(report['verdict'], 'provisional')
+        self.assertIn('heap (주담당)', report['ranking'][0]['reason'])
+
+    def test_exclusion_config_validation(self):
+        original = (ROOT / 'cubrid-review-owners.toml').read_text()
+        config = self.dir / 'owners.toml'
+        for exclusions in ('["nobody"]', '["vimkim", "VIMKIM"]', '"vimkim"', '[1]'):
+            config.write_text(original.replace('["vimkim", "hornetmj"]', exclusions))
+            run, report = self.run_cli([], args=('--config', str(config)))
+            self.assertEqual(run.returncode, 1)
+            self.assertIn('configuration', report['error'])
+        config.write_text(original.replace('["vimkim", "hornetmj"]', '["lht1199", "vimkim", "YeunjunLee", "InChiJun", "youngjun9072", "hgryoo", "H2SU", "hornetmj"]'))
+        run, report = self.run_cli([], args=('--config', str(config)))
+        self.assertEqual(run.returncode, 1)
+        self.assertIn('candidate', report['error'])
+        config.write_text(original.replace('recommendation_exclusions = ["vimkim", "hornetmj"]\n', ''))
+        run, report = self.run_cli([], args=('--config', str(config)))
+        self.assertEqual(run.returncode, 1)
+
+    def test_tui_navigation_scroll_resize_and_quit(self):
+        files = [changed(f'src/storage/heap_file.case{i}') for i in range(30)]
+        self.data.write_text(json.dumps({'metadata': meta(files), 'files': files}))
+        master, slave = pty.openpty()
+        self.addCleanup(os.close, master)
+        def resize(rows, cols):
+            fcntl.ioctl(master, termios.TIOCSWINSZ, struct.pack('HHHH', rows, cols, 0, 0))
+        resize(24, 80)
+        env = dict(self.env, TERM='xterm-256color', LC_ALL='C.UTF-8')
+        process = subprocess.Popen([str(CLI), URL], stdin=slave, stdout=slave, stderr=slave, env=env, start_new_session=True)
+        os.close(slave)
+        def cleanup_process():
+            if process.poll() is None:
+                process.kill()
+                process.wait()
+        self.addCleanup(cleanup_process)
+
+        def receive(needle):
+            output = b''
+            deadline = time.monotonic() + 15
+            while needle.encode() not in output and time.monotonic() < deadline:
+                if select.select([master], [], [], 0.25)[0]:
+                    try:
+                        output += os.read(master, 65536)
+                    except OSError:
+                        break
+            self.assertIn(needle.encode(), output, output.decode('utf-8', 'replace'))
+            return output.decode('utf-8', 'replace')
+
+        initial = receive('@lht1199')
+        for name in ('임형태', '이연준', '인치준', '유형규', '김희수', '유영준'):
+            self.assertIn(name, initial)
+        os.write(master, b'\x1b[6~')
+        receive('heap_file.case9')
+        os.write(master, b'\x1b[5~')
+        receive('@lht1199')
+        os.write(master, b'\x1bOB')
+        receive('@H2SU')
+        while select.select([master], [], [], 0.2)[0]:
+            os.read(master, 65536)
+        resize(10, 40)
+        os.kill(process.pid, signal.SIGWINCH)
+        receive('화면이 너무 작습니다')
+        resize(24, 80)
+        os.kill(process.pid, signal.SIGWINCH)
+        receive('@H2SU')
+        os.write(master, b'q')
+        self.assertEqual(process.wait(timeout=5), 0)
+
+    def test_plain_and_json_remain_noninteractive_on_tty(self):
+        files = [changed('src/storage/heap_file.c')]
+        self.data.write_text(json.dumps({'metadata': meta(files), 'files': files}))
+        for option, expected in (('--plain', '검토자 순위'), ('--json', '"ranking"')):
+            if self.log.exists():
+                self.log.unlink()
+            master, slave = pty.openpty()
+            try:
+                process = subprocess.Popen([str(CLI), URL, option], stdin=slave, stdout=slave, stderr=slave, env=self.env)
+                os.close(slave)
+                output = b''
+                while select.select([master], [], [], 15)[0]:
+                    try:
+                        output += os.read(master, 65536)
+                    except OSError:
+                        break
+                self.assertEqual(process.wait(timeout=5), 0)
+                self.assertIn(expected, output.decode('utf-8'))
+                self.assertNotIn(b'\x1b[?1049h', output)
+            finally:
+                os.close(master)
 
     def test_json_parse_errors(self):
         run = subprocess.run([str(CLI), '--json', '--alternatives', 'bad', URL], text=True, capture_output=True, env=self.env)
@@ -229,13 +362,14 @@ class CliTest(unittest.TestCase):
         run = subprocess.run([str(CLI), URL, '--json'], text=True, capture_output=True, env=self.env)
         self.assertEqual(run.returncode, 1)
         self.assertIn('permission denied', json.loads(run.stdout)['error'])
+        self.assertFalse((ROOT / 'bin' / ('cubrid-' + 'pr-reviewers')).exists())
         for cli in (CLI, OLD):
             run = subprocess.run([str(cli), '--help'], text=True, capture_output=True, env=self.env)
             self.assertEqual(run.returncode, 0)
             if cli == OLD:
                 self.assertIn('Deprecated', run.stdout)
                 self.assertIn('whole team', run.stderr)
-                self.assertIn('cubrid-pr-reviewers', run.stderr)
+                self.assertIn('cubrid-dev2-pr-reviewers', run.stderr)
 
 
 if __name__ == '__main__':

@@ -1,3 +1,4 @@
+recommendation_exclusions = ["vimkim", "hornetmj"]
 shared_paths = ["src/storage/file_io.c", "src/storage/file_io.h", "src/transaction/log_manager.c", "src/transaction/log_manager.h", "src/transaction/log_page_buffer.c"]
 
 [groups]

@@ -35,7 +35,7 @@ class UserError(RuntimeError):
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
-        description="Deprecated: requests the whole dev2 team. Use cubrid-pr-reviewers to recommend reviewers instead."
+        description="Deprecated: requests the whole dev2 team. Use cubrid-dev2-pr-reviewers to recommend reviewers instead."
     )
     parser.add_argument(
         "pr",
@@ -174,7 +174,7 @@ def ensure_pr_is_reviewable(state: str, is_draft: bool) -> None:
 
 
 def main() -> int:
-    print("Warning: cubrid-dev2-add-reviewers.py is deprecated and requests the whole team; use cubrid-pr-reviewers instead.", file=sys.stderr)
+    print("Warning: cubrid-dev2-add-reviewers.py is deprecated and requests the whole team; use cubrid-dev2-pr-reviewers instead.", file=sys.stderr)
     args = parse_args()
     try:
         pr_url = resolve_pr_url(args.pr)

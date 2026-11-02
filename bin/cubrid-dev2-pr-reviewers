@@ -5,6 +5,7 @@ from __future__ import annotations
 import argparse
 from dataclasses import asdict, dataclass
 import fnmatch
+import curses
 import itertools
 import json
 from pathlib import Path
@@ -12,6 +13,7 @@ import re
 import subprocess
 import sys
 import tomllib
+import unicodedata
 from urllib.parse import quote, urlsplit
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -50,6 +52,7 @@ class Ownership:
     modules: tuple[ModuleOwnership, ...]
     rules: tuple[Rule, ...]
     shared_paths: frozenset[str]
+    exclusions: frozenset[str]
 
 
 @dataclass(frozen=True)
@@ -90,6 +93,22 @@ class Gap:
 
 
 @dataclass(frozen=True)
+class RankingRow:
+    login: str
+    name: str
+    modules: dict[str, str]
+    module_count: int
+    primary_count: int
+    secondary_count: int
+    rank: int | None
+    tied: bool
+    can_request: bool
+    requested: bool
+    author: bool
+    reason: str
+
+
+@dataclass(frozen=True)
 class Report:
     url: str
     base: str
@@ -101,7 +120,7 @@ class Report:
     unmapped_requested: tuple[str, ...]
     required_modules: tuple[str, ...]
     existing_coverage: tuple[str, ...]
-    ranking: tuple[dict, ...]
+    ranking: tuple[RankingRow, ...]
     recommendations: tuple[dict, ...]
     alternative_count: int
     uncovered_modules: tuple[str, ...]
@@ -126,6 +145,14 @@ def load_config(path: Path) -> Ownership:
         logins = {p.login.casefold() for p in people}
         if len(logins) != len(people):
             raise ValueError('duplicate login')
+        exclusions = data['recommendation_exclusions']
+        if not isinstance(exclusions, list) or any(not isinstance(x, str) or x.casefold() not in logins for x in exclusions):
+            raise ValueError('recommendation_exclusions must reference configured people')
+        excluded = frozenset(x.casefold() for x in exclusions)
+        if len(excluded) != len(exclusions):
+            raise ValueError('duplicate recommendation exclusion')
+        if excluded == logins:
+            raise ValueError('at least one recommendation candidate is required')
         ids = {m.id for m in modules}
         if len(ids) != len(modules) or any(not isinstance(m.id, str) or not re.fullmatch(r'[a-z][a-z0-9_]*', m.id) or m.primary.casefold() not in logins or m.secondary.casefold() not in logins or m.primary.casefold() == m.secondary.casefold() for m in modules):
             raise ValueError('invalid module ownership')
@@ -136,7 +163,7 @@ def load_config(path: Path) -> Ownership:
                 raise ValueError('shared paths require symbol rules')
             if r.symbol is not None and any(p not in shared for p in r.paths):
                 raise ValueError('symbol rules require literal shared paths')
-        return Ownership(people, modules, rules, frozenset(shared))
+        return Ownership(people, modules, rules, frozenset(shared), excluded)
     except (OSError, tomllib.TOMLDecodeError, KeyError, TypeError, AttributeError, ValueError) as exc:
         raise UserError(f'invalid configuration {path}: {exc}') from exc
 
@@ -393,20 +420,45 @@ def analyze(snapshot: Snapshot, ownership: Ownership, evidence: tuple[Evidence, 
     author = snapshot.author.casefold()
     existing = {x.casefold() for x in snapshot.requested if x.casefold() in people and x.casefold() != author}
     unmapped = tuple(x for x in snapshot.requested if x.casefold() not in people)
-    eligible = sorted((key for key in people if key != author and key not in existing))
+    visible = set(people) - ownership.exclusions
+    eligible = sorted(visible - existing - {author})
+
     def roles(person: str):
-        return {m: ('primary' if modules[m].primary.casefold() == person else 'secondary') for m in required if person in (modules[m].primary.casefold(), modules[m].secondary.casefold())}
+        return {m: ('primary' if modules[m].primary.casefold() == person else 'secondary') for m in sorted(required) if person in (modules[m].primary.casefold(), modules[m].secondary.casefold())}
+
     def covers(group):
         return {m for person in group for m in roles(person)}
+
     def primaries(group):
         return {m for person in group for m, role in roles(person).items() if role == 'primary'}
-    existing_coverage = covers(existing)
+
+    relevant = any(f.path.startswith('src/') or (f.previous_path or '').startswith('src/') for f in snapshot.files)
+    ordered = sorted(visible, key=lambda p: (p == author, -len(roles(p)), -sum(r == 'primary' for r in roles(p).values()), p))
+    scores = [(len(roles(p)), sum(r == 'primary' for r in roles(p).values())) for p in ordered if p != author]
     ranking = []
-    for person in eligible:
+    for person in ordered:
         role_map = roles(person)
-        if role_map:
-            ranking.append({'login': people[person].login, 'name': people[person].name, 'modules': dict(sorted(role_map.items())), 'module_count': len(role_map), 'primary_count': sum(x == 'primary' for x in role_map.values())})
-    ranking.sort(key=lambda x: (-x['module_count'], -x['primary_count'], x['login'].casefold()))
+        primary = sum(role == 'primary' for role in role_map.values())
+        score = (len(role_map), primary)
+        is_author = person == author
+        is_requested = any(x.casefold() == person for x in snapshot.requested)
+        if not required and gaps:
+            reason = '분류된 모듈이 없어 분석 대기 중'
+        elif not relevant:
+            reason = 'src/ 변경이 없어 직접 담당 모듈 없음'
+        elif not role_map:
+            reason = '확인된 변경 모듈의 직접 담당 없음'
+        else:
+            reason = ', '.join(f'{module} ({"주담당" if role == "primary" else "보조담당"})' for module, role in role_map.items())
+        if is_author:
+            reason += '; PR 작성자로 요청 불가'
+        if is_requested:
+            reason += '; 이미 요청됨'
+        ranking.append(RankingRow(people[person].login, people[person].name, role_map, len(role_map), primary,
+                                  len(role_map) - primary, None if is_author else scores.index(score) + 1,
+                                  False if is_author else scores.count(score) > 1,
+                                  not is_author and not is_requested, is_requested, is_author, reason))
+    existing_coverage = covers(existing)
     uncovered = required - covers(existing | set(eligible))
     candidates = []
     if not uncovered and required:
@@ -416,44 +468,237 @@ def analyze(snapshot: Snapshot, ownership: Ownership, evidence: tuple[Evidence, 
                 break
         candidates.sort(key=lambda group: (-len(primaries(existing | set(group))), tuple(group)))
     recommendations = tuple({'additional': [people[p].login for p in group], 'primary_modules': sorted(primaries(existing | set(group))), 'secondary_only_modules': sorted(required - primaries(existing | set(group)))} for group in candidates[:limit])
-    relevant = any(f.path.startswith('src/') or (f.previous_path or '').startswith('src/') for f in snapshot.files)
     verdict = ('provisional' if gaps else 'uncoverable' if uncovered else 'no-source-changes' if not relevant else 'sufficient')
     return Report(snapshot.url, snapshot.base, snapshot.head, snapshot.author, verdict, snapshot.requested, snapshot.teams, unmapped, tuple(sorted(required)), tuple(sorted(existing_coverage)), tuple(ranking), recommendations, len(candidates), tuple(sorted(uncovered)), evidence, gaps)
 
 
+def display_width(value: str) -> int:
+    return sum(0 if unicodedata.category(c).startswith('M') else 2 if unicodedata.east_asian_width(c) in ('W', 'F') else 1 for c in value)
+
+
+def pad(value: str, width: int) -> str:
+    return value + ' ' * max(0, width - display_width(value))
+
+
+def rank_label(row: RankingRow) -> str:
+    return '-' if row.rank is None else f'{row.rank}{" (공동)" if row.tied else ""}'
+
+
+def heading(report: Report) -> str:
+    return '검토자 순위 (잠정, 확인된 모듈 기준)' if report.gaps else '검토자 순위'
+
+
 def text_report(report: Report) -> str:
-    lines = [f'Pull request: {report.url}', f'Head: {report.head}', f'Verdict: {report.verdict}']
+    lines = [f'Pull request: {report.url}', f'Head: {report.head}', f'상태: {status_label(report)}', '']
+    if report.gaps:
+        lines.append('주의: 미분류 변경이 있어 확인된 모듈만 반영합니다.')
+    lines += [heading(report), f'확인된 모듈 {len(report.required_modules)}개 기준. 주담당 ■, 보조담당 ▪.']
+    headers = ('순위', '검토자', '담당 모듈', '사유')
+    rows = []
+    for row in report.ranking:
+        bar = '■' * row.primary_count + '▪' * row.secondary_count
+        rows.append((rank_label(row), f'{row.name} (@{row.login})', f'{bar or "-"} {row.module_count}개', row.reason))
+    widths = [max(display_width(headers[i]), *(display_width(row[i]) for row in rows)) for i in range(3)]
+    lines.append('  '.join(pad(headers[i], widths[i]) for i in range(3)) + '  ' + headers[3])
+    for row in rows:
+        lines.append('  '.join(pad(row[i], widths[i]) for i in range(3)) + '  ' + row[3])
+    lines += ['', f'작성자: @{report.author}', f'기존 요청: {", ".join(report.requested) or "없음"}',
+              f'요청된 팀 (담당 범위 미확인): {", ".join(report.requested_teams) or "없음"}',
+              f'설정에 없는 요청: {", ".join(report.unmapped_requested) or "없음"}',
+              f'확인된 모듈: {", ".join(report.required_modules) or "없음"}',
+              f'기존 요청의 담당 모듈: {", ".join(report.existing_coverage) or "없음"}']
     if report.recommendations:
-        best = report.recommendations[0]['additional']
-        label = 'Provisional recommendation for known modules' if report.gaps else 'Recommendation'
-        if best:
-            noun = 'reviewer' if len(best) == 1 else 'reviewers'
-            lines.append(f'{label}: add {len(best)} {noun}: {", ".join(best)}')
-        else:
-            lines.append(f'{label}: no additional reviewer needed')
-    elif report.verdict == 'no-source-changes':
-        lines.append('No src/ changes to recommend reviewers for')
-    lines.extend([f'Author excluded: {report.author}', f'Requested reviewers: {", ".join(report.requested) or "none"}', f'Requested teams (coverage unknown): {", ".join(report.requested_teams) or "none"}', f'Unmapped requested reviewers: {", ".join(report.unmapped_requested) or "none"}', f'Required modules: {", ".join(report.required_modules) or "none"}', f'Existing reviewer coverage: {", ".join(report.existing_coverage) or "none"}'])
-    if report.recommendations:
-        lines.append('Minimum additional reviewer sets (ranked by primary-covered module count):')
+        lines.append('최소 추가 요청 조합 (주담당 모듈 수 순):')
         for choice in report.recommendations:
-            lines.append(f'  {", ".join(choice["additional"]) or "none"}; primary: {", ".join(choice["primary_modules"]) or "none"}; secondary only: {", ".join(choice["secondary_only_modules"]) or "none"}')
+            lines.append(f'  {", ".join(choice["additional"]) or "추가 요청 없음"}; 주담당: {", ".join(choice["primary_modules"]) or "없음"}; 보조담당만: {", ".join(choice["secondary_only_modules"]) or "없음"}')
         if report.alternative_count > len(report.recommendations):
-            lines.append(f'  {report.alternative_count - len(report.recommendations)} more minimum sets omitted')
-    if report.ranking:
-        lines.append('Individual ranking (module count, then primary count; not a probability):')
-        for person in report.ranking:
-            roles = ', '.join(f'{m} ({r})' for m, r in person['modules'].items())
-            lines.append(f'  {person["login"]} ({person["name"]}): {roles}')
+            lines.append(f'  그 외 {report.alternative_count - len(report.recommendations)}개 조합 생략')
     if report.uncovered_modules:
-        lines.append(f'Uncoverable modules: {", ".join(report.uncovered_modules)}')
+        lines.append(f'담당자를 찾을 수 없는 모듈: {", ".join(report.uncovered_modules)}')
     if report.evidence:
-        lines.append('Evidence:')
+        lines.append('근거:')
         lines.extend(f'  {e.path}: {e.module}, {e.detail}' for e in report.evidence)
     if report.gaps:
-        lines.append('Unresolved:')
+        lines.append('미분류:')
         lines.extend(f'  {g.path + ": " if g.path else ""}{g.reason}' for g in report.gaps)
     return '\n'.join(lines)
+
+
+def status_label(report: Report) -> str:
+    return {
+        'provisional': '잠정 (미분류 변경 있음)',
+        'uncoverable': '담당자를 찾지 못한 모듈 있음',
+        'no-source-changes': 'src/ 변경 없음',
+        'sufficient': '분류 완료',
+    }[report.verdict]
+
+
+@dataclass
+class TuiState:
+    selected: int = 0
+    detail_offset: int = 0
+
+
+def printable(value: str) -> str:
+    return ''.join(' ' if unicodedata.category(c).startswith('C') else c for c in value)
+
+
+def text_clusters(value: str) -> list[str]:
+    result = []
+    for c in printable(value):
+        if unicodedata.category(c).startswith('M') and result:
+            result[-1] += c
+        elif not unicodedata.category(c).startswith('M'):
+            result.append(c)
+    return result
+
+
+def clip_cells(value: str, width: int) -> str:
+    result = []
+    used = 0
+    for cluster in text_clusters(value):
+        size = display_width(cluster)
+        if used + size > width:
+            break
+        result.append(cluster)
+        used += size
+    return ''.join(result)
+
+
+def wrap_cells(value: str, width: int) -> list[str]:
+    lines = []
+    line = ''
+    used = 0
+    for cluster in text_clusters(value):
+        size = display_width(cluster)
+        if used + size > width:
+            if line:
+                lines.append(line)
+            line = ''
+            used = 0
+        if size <= width:
+            line += cluster
+            used += size
+    if line:
+        lines.append(line)
+    return lines or ['']
+
+
+def detail_lines(report: Report, row: RankingRow, width: int) -> list[str]:
+    lines = [f'{row.name} (@{row.login})  {rank_label(row)}위' if row.rank is not None else f'{row.name} (@{row.login})  순위 없음',
+             f'사유: {row.reason}',
+             f'주담당 {row.primary_count}개  보조담당 {row.secondary_count}개',
+             f'확인된 모듈: {", ".join(report.required_modules) or "없음"}',
+             '분류 근거:']
+    evidence = [e for e in report.evidence if e.module in row.modules]
+    lines.extend(f'  {e.module}: {e.path} ({e.detail})' for e in evidence)
+    if not evidence:
+        lines.append('  해당 담당 모듈의 근거 없음')
+    if report.gaps:
+        lines.append('미분류 변경:')
+        lines.extend(f'  {g.path + ": " if g.path else ""}{g.reason}' for g in report.gaps)
+    if report.recommendations:
+        lines.append('최소 추가 요청 조합:')
+        lines.extend('  ' + (', '.join(c['additional']) or '추가 요청 없음') for c in report.recommendations)
+        if report.alternative_count > len(report.recommendations):
+            lines.append(f'  그 외 {report.alternative_count - len(report.recommendations)}개 조합 생략')
+    if report.uncovered_modules:
+        lines.append(f'담당자를 찾을 수 없는 모듈: {", ".join(report.uncovered_modules)}')
+    lines.append(f'기존 요청: {", ".join(report.requested) or "없음"}')
+    if report.requested_teams:
+        lines.append(f'요청된 팀 (담당 범위 미확인): {", ".join(report.requested_teams)}')
+    if report.unmapped_requested:
+        lines.append(f'설정에 없는 요청: {", ".join(report.unmapped_requested)}')
+    return [part for line in lines for part in wrap_cells(line, width)]
+
+
+def run_tui(report: Report) -> None:
+    def screen(window):
+        state = TuiState()
+        try:
+            curses.curs_set(0)
+        except curses.error:
+            pass
+        primary_attr = secondary_attr = 0
+        try:
+            if curses.has_colors():
+                curses.start_color()
+                background = curses.COLOR_BLACK
+                try:
+                    curses.use_default_colors()
+                    background = -1
+                except curses.error:
+                    pass
+                curses.init_pair(1, curses.COLOR_GREEN, background)
+                curses.init_pair(2, curses.COLOR_YELLOW, background)
+                primary_attr = curses.color_pair(1)
+                secondary_attr = curses.color_pair(2)
+        except curses.error:
+            pass
+        window.keypad(True)
+        while True:
+            height, width = window.getmaxyx()
+            window.erase()
+
+            def draw(y, x, value, attr=0):
+                if y < 0 or y >= height or x < 0 or x >= width:
+                    return
+                value = clip_cells(value, width - x - (1 if y == height - 1 else 0))
+                if value:
+                    try:
+                        window.addstr(y, x, value, attr)
+                    except curses.error:
+                        pass
+
+            if height < 18 or width < 65:
+                draw(0, 0, '화면이 너무 작습니다. 65열, 18행 이상으로 늘려 주세요.')
+                draw(1, 0, 'q 또는 Esc 종료')
+                page = 1
+                max_offset = 0
+            else:
+                draw(0, 0, f'cubrid-dev2-pr-reviewers  PR #{report.url.rstrip("/").rsplit("/", 1)[-1]}  @{report.author}', curses.A_BOLD)
+                draw(1, 0, f'{status_label(report)}  |  확인된 모듈 {len(report.required_modules)}개  |  Head {report.head[:12]}')
+                draw(2, 0, '주담당 ■  보조담당 ▪  (확인된 모듈 수)')
+                draw(3, 0, '순위      검토자              담당       사유')
+                for i, row in enumerate(report.ranking):
+                    primary_bar = '■' * row.primary_count
+                    secondary_bar = '▪' * row.secondary_count
+                    bar = primary_bar + secondary_bar
+                    counts = f'{bar or "-"} {row.module_count}개'
+                    prefix = pad(rank_label(row), 8) + '  ' + pad(row.name, 18) + '  '
+                    line = prefix + pad(counts, 9) + '  ' + row.reason
+                    selected_attr = curses.A_REVERSE if i == state.selected else 0
+                    draw(4 + i, 0, line, selected_attr)
+                    bar_column = display_width(prefix)
+                    if primary_attr:
+                        draw(4 + i, bar_column, primary_bar, primary_attr | selected_attr)
+                    if secondary_attr:
+                        draw(4 + i, bar_column + display_width(primary_bar), secondary_bar, secondary_attr | selected_attr)
+                draw(11, 0, '선택한 검토자 상세', curses.A_BOLD)
+                page = height - 14
+                details = detail_lines(report, report.ranking[state.selected], width)
+                max_offset = max(0, len(details) - page)
+                state.detail_offset = min(state.detail_offset, max_offset)
+                for i, line in enumerate(details[state.detail_offset:state.detail_offset + page]):
+                    draw(12 + i, 0, line)
+                draw(height - 2, 0, f'상세 {state.detail_offset + 1}-{min(state.detail_offset + page, len(details))}/{len(details)}')
+                draw(height - 1, 0, '↑/↓ 또는 j/k 선택  PgUp/PgDn 상세 이동  q/Esc 종료')
+            window.refresh()
+            key = window.getch()
+            if key in (ord('q'), 27):
+                return
+            if key in (curses.KEY_DOWN, ord('j')) and state.selected < len(report.ranking) - 1:
+                state.selected += 1
+                state.detail_offset = 0
+            elif key in (curses.KEY_UP, ord('k')) and state.selected > 0:
+                state.selected -= 1
+                state.detail_offset = 0
+            elif key == curses.KEY_NPAGE:
+                state.detail_offset = min(max_offset, state.detail_offset + page)
+            elif key == curses.KEY_PPAGE:
+                state.detail_offset = max(0, state.detail_offset - page)
+
+    curses.wrapper(screen)
 
 
 class ArgumentParser(argparse.ArgumentParser):
@@ -463,9 +708,10 @@ class ArgumentParser(argparse.ArgumentParser):
 
 def main(argv=None) -> int:
     argv = list(sys.argv[1:] if argv is None else argv)
-    parser = ArgumentParser(description='Recommend minimum additional CUBRID source reviewers. Makes no GitHub changes.')
+    parser = ArgumentParser(description='Rank dev2 CUBRID source reviewers and show minimum additional sets. Makes no GitHub changes.')
     parser.add_argument('url', help='CUBRID/cubrid pull request URL')
     parser.add_argument('--json', action='store_true', help='print a structured JSON report')
+    parser.add_argument('--plain', action='store_true', help='print a plain text report')
     parser.add_argument('--config', type=Path, default=ROOT / 'cubrid-review-owners.toml', help='ownership TOML path')
     parser.add_argument('--alternatives', type=int, default=5, help='maximum minimum-size sets to print (default: 5)')
     try:
@@ -484,7 +730,15 @@ def main(argv=None) -> int:
         except UserError as exc:
             gaps += (Gap('', f'could not verify final pull request metadata: {exc}'),)
         report = analyze(snapshot, ownership, evidence, gaps, args.alternatives)
-        print(json.dumps(asdict(report), ensure_ascii=False, indent=2) if args.json else text_report(report))
+        if args.json:
+            print(json.dumps(asdict(report), ensure_ascii=False, indent=2))
+        elif args.plain or not (sys.stdin.isatty() and sys.stdout.isatty()):
+            print(text_report(report))
+        else:
+            try:
+                run_tui(report)
+            except curses.error as exc:
+                raise UserError(f'could not open terminal interface: {exc}') from exc
         return 2 if report.verdict in ('provisional', 'uncoverable') else 0
     except UserError as exc:
         if '--json' in argv:

@@ -1,0 +1,359 @@
+#!/usr/bin/env python3
+"""Track caller-identified CUBRID CI requests without controlling CI."""
+import argparse
+import datetime as dt
+import fcntl
+import json
+import os
+from pathlib import Path
+import re
+import sqlite3
+import subprocess
+import sys
+import time
+
+REPO = 'CUBRID/cubrid'
+BASE = 'https://github.com/' + REPO
+CONTEXTS = {'build (debug)': 'build status', 'build (release)': 'build status',
+            'test_shell': 'status shell', 'test_sql': 'status sql', 'test_medium': 'status medium'}
+FAILURES = {'FAILURE'}
+NO_VERDICT = {'ERROR', 'TIMED_OUT', 'CANCELLED', 'ACTION_REQUIRED', 'STARTUP_FAILURE'}
+TERMINAL = FAILURES | NO_VERDICT | {'SUCCESS'}
+
+
+def now():
+    return dt.datetime.now(dt.timezone.utc).timestamp()
+
+
+def timestamp(value):
+    if not isinstance(value, str):
+        raise ValueError('timestamp must be a string')
+    parsed = dt.datetime.fromisoformat(value.replace('Z', '+00:00'))
+    if parsed.tzinfo is None:
+        raise ValueError('timestamp must include a timezone')
+    return parsed.timestamp()
+
+
+def iso(value):
+    return dt.datetime.fromtimestamp(value, dt.timezone.utc).isoformat(timespec='seconds').replace('+00:00', 'Z')
+
+
+def encode(value):
+    return json.dumps(value, separators=(',', ':'), sort_keys=True)
+
+
+def connect(path):
+    path.mkdir(mode=0o700, parents=True, exist_ok=True)
+    db = sqlite3.connect(path / 'watch.sqlite3', timeout=30)
+    db.row_factory = sqlite3.Row
+    with open(path / 'init.lock', 'a') as lock:
+        fcntl.flock(lock, fcntl.LOCK_EX)
+        db.executescript('''
+    PRAGMA journal_mode=WAL;
+    CREATE TABLE IF NOT EXISTS requests (
+      id INTEGER PRIMARY KEY, receipt TEXT UNIQUE NOT NULL, pr INTEGER NOT NULL,
+      head TEXT NOT NULL, suites TEXT NOT NULL, triggered REAL NOT NULL, kind TEXT NOT NULL,
+      run_id INTEGER, attempt INTEGER, revision INTEGER NOT NULL DEFAULT 0,
+      phase TEXT NOT NULL DEFAULT 'active', outcome TEXT, next_poll REAL NOT NULL,
+      observation TEXT, last_error TEXT);
+    CREATE TABLE IF NOT EXISTS events (
+      id INTEGER PRIMARY KEY AUTOINCREMENT, request_id INTEGER NOT NULL,
+      key TEXT NOT NULL, kind TEXT NOT NULL, occurred REAL NOT NULL, payload TEXT NOT NULL,
+      UNIQUE(request_id, key));
+    ''')
+    return db
+
+
+def event(db, request_id, key, kind, when, payload):
+    db.execute('INSERT OR IGNORE INTO events(request_id,key,kind,occurred,payload) VALUES(?,?,?,?,?)',
+               (request_id, key, kind, when, encode(payload)))
+
+
+def pr_number(value):
+    match = re.fullmatch(r'(?:https://github\.com/CUBRID/cubrid/pull/)?([1-9][0-9]*)', value)
+    if not match:
+        raise argparse.ArgumentTypeError('use a positive PR number or canonical CUBRID PR URL')
+    return int(match.group(1))
+
+
+def register(db, args):
+    if args.pr <= 0 or not re.fullmatch(r'[0-9a-fA-F]{40}', args.head):
+        raise ValueError('PR must be positive and head must be a full 40-character SHA')
+    if not args.receipt.strip():
+        raise ValueError('receipt must not be empty')
+    suites = sorted(set(s.removeprefix('test_') for s in args.suite))
+    if not suites or any(s not in ('shell', 'sql', 'medium') for s in suites):
+        raise ValueError('select shell, sql, or medium with --suite')
+    if (args.run_id is None) != (args.attempt is None) or (args.run_id is not None and (args.run_id <= 0 or args.attempt <= 0)):
+        raise ValueError('--run-id and --attempt must be positive and supplied together')
+    if args.kind == 'rerun-failed' and args.run_id is None:
+        raise ValueError('rerun-failed requires --run-id and --attempt')
+    triggered = timestamp(args.triggered_at)
+    if triggered > now() + 60:
+        raise ValueError('triggered-at must not be in the future')
+    facts = (args.pr, args.head.lower(), encode(suites), triggered, args.kind)
+    db.execute("BEGIN IMMEDIATE")
+    with db:
+        row = db.execute('SELECT * FROM requests WHERE receipt=?', (args.receipt,)).fetchone()
+        if row:
+            if tuple(row[k] for k in ('pr', 'head', 'suites', 'triggered', 'kind')) != facts:
+                raise ValueError('receipt already registered with different request facts')
+            if args.run_id is not None:
+                if row['run_id'] is None:
+                    if row['phase'] != 'active':
+                        raise ValueError('cannot bind a closed request')
+                    db.execute('UPDATE requests SET run_id=?, attempt=?, revision=revision+1, next_poll=? WHERE id=?',
+                               (args.run_id, args.attempt, now(), row['id']))
+                    event(db, row['id'], 'binding', 'binding', now(), {'run_id': args.run_id, 'attempt': args.attempt, 'source': 'caller'})
+                elif (row['run_id'], row['attempt']) != (args.run_id, args.attempt):
+                    raise ValueError('receipt already has a different run binding')
+            request_id = row['id']
+        else:
+            cursor = db.execute('INSERT INTO requests(receipt,pr,head,suites,triggered,kind,run_id,attempt,next_poll) VALUES(?,?,?,?,?,?,?,?,?)',
+                                (args.receipt, *facts, args.run_id, args.attempt, now()))
+            request_id = cursor.lastrowid
+            event(db, request_id, 'registered', 'registered', now(), {'receipt': args.receipt})
+            if args.run_id is not None:
+                event(db, request_id, 'binding', 'binding', now(), {'run_id': args.run_id, 'attempt': args.attempt, 'source': 'caller'})
+    print(encode({'schema_version': 1, 'request_id': request_id}))
+
+
+def command_json(argv):
+    try:
+        p = subprocess.run(argv, capture_output=True, text=True, timeout=120, check=False)
+        if p.returncode:
+            raise ValueError(f'{argv[0]} exited {p.returncode}: {p.stderr.strip()[:300]}')
+        return json.loads(p.stdout)
+    except (OSError, subprocess.TimeoutExpired, json.JSONDecodeError) as exc:
+        raise ValueError(f'{argv[0]}: {exc}') from exc
+
+
+def get_run(run_id):
+    gh = os.environ.get('CUBRID_CI_WATCH_GH', 'gh')
+    data = command_json([gh, 'api', f'repos/{REPO}/actions/runs/{run_id}'])
+    if not isinstance(data, dict) or type(data.get('id')) is not int or type(data.get('run_attempt')) is not int or data['id'] != run_id or data['run_attempt'] < 1 or not isinstance(data.get('path'), str) or data['path'].split('@')[0] != '.github/workflows/gha-ci.yml':
+        raise ValueError('invalid run metadata')
+    try:
+        created = timestamp(data['created_at'])
+    except (KeyError, ValueError, TypeError, OverflowError) as exc:
+        raise ValueError('invalid run creation time') from exc
+    if created > now():
+        raise ValueError('run creation time is in the future')
+    return data
+
+
+def collect(row):
+    target = f'{BASE}/pull/{row["pr"]}'
+    executable = os.environ.get('CUBRID_CI_WATCH_SNAPSHOT', str(Path(__file__).resolve().with_name('cubrid-pr-status')))
+    snap = command_json([executable, '--json', '--history', '0', target])
+    if not isinstance(snap, dict) or snap.get('schema_version') != 1 or snap.get('repository') != REPO or snap.get('complete') is not True or snap.get('errors') != []:
+        raise ValueError('invalid or incomplete snapshot')
+    pr = snap.get('pr')
+    if not isinstance(pr, dict) or pr.get('number') != row['pr'] or pr.get('url') != target or not isinstance(pr.get('head_sha'), str) or not re.fullmatch('[0-9a-fA-F]{40}', pr['head_sha']):
+        raise ValueError('invalid PR identity in snapshot')
+    if pr['head_sha'].lower() != row['head']:
+        return {'close': 'head_changed', 'head': pr['head_sha']}
+    checks = snap.get('checks')
+    if not isinstance(checks, list):
+        raise ValueError('invalid checks in snapshot')
+    selected = ['build (debug)', 'build (release)'] + ['test_' + s for s in json.loads(row['suites'])]
+    found = {}
+    for check in checks:
+        if not isinstance(check, dict) or not isinstance(check.get('name'), str) or 'current' not in check:
+            raise ValueError('invalid check row')
+        name = check['name']
+        if name not in ['gha-ci: ' + c for c in selected]:
+            continue
+        name = name[len('gha-ci: '):]
+        if name in found:
+            raise ValueError('duplicate selected check')
+        current = check['current']
+        if current is not None:
+            if not isinstance(current, dict) or not isinstance(current.get('state'), str) or not isinstance(current.get('reported_for_sha'), str) or current['reported_for_sha'].lower() != row['head'] or any(current.get(k) is not None and not isinstance(current[k], str) for k in ('detail_url', 'reported_at')):
+                raise ValueError('invalid selected check result')
+        found[name] = current
+    candidates = set()
+    for current in found.values():
+        if current and current.get('detail_url'):
+            match = re.fullmatch(re.escape(BASE) + r'/actions/runs/(\d+)(?:/.*)?', current['detail_url'])
+            if match:
+                candidates.add(int(match.group(1)))
+    observations = {name: {'state': found.get(name, {}).get('state') if found.get(name) else None,
+                           'attributed': False, 'reason': 'unbound' if row['run_id'] is None else 'publisher evidence missing'} for name in selected}
+    if row['run_id'] is None:
+        return {'contexts': observations, 'candidates': sorted(candidates)}
+    run = get_run(row['run_id'])
+    if run['run_attempt'] != row['attempt']:
+        if run['run_attempt'] > row['attempt']:
+            return {'close': 'superseded', 'run_id': row['run_id'], 'attempt': run['run_attempt']}
+        raise ValueError('bound attempt is not available yet')
+    created = timestamp(run['created_at'])
+    for candidate in sorted(candidates - {row['run_id']}):
+        replacement = get_run(candidate)
+        if timestamp(replacement['created_at']) > created:
+            return {'close': 'superseded', 'run_id': candidate, 'attempt': replacement['run_attempt'],
+                    'created_at': replacement['created_at'], 'replaces_run_id': row['run_id']}
+    if row['kind'] == 'run' and created < row['triggered']:
+        raise ValueError('bound run was created before trigger')
+    gh = os.environ.get('CUBRID_CI_WATCH_GH', 'gh')
+    pages = command_json([gh, 'api', '--paginate', '--slurp', f'repos/{REPO}/actions/runs/{row["run_id"]}/attempts/{row["attempt"]}/jobs?per_page=100'])
+    if not isinstance(pages, list) or any(not isinstance(page, dict) or not isinstance(page.get('jobs'), list) for page in pages):
+        raise ValueError('invalid attempt jobs metadata')
+    jobs = [job for page in pages for job in page['jobs']]
+    if any(not isinstance(j, dict) or not isinstance(j.get('name'), str) or any(j.get(k) is not None and not isinstance(j[k], str) for k in ('started_at', 'completed_at')) for j in jobs):
+        raise ValueError('invalid job metadata')
+    if get_run(row['run_id'])['run_attempt'] != row['attempt']:
+        raise ValueError('run attempt changed during collection')
+    for name in selected:
+        current = found.get(name)
+        matches = [j for j in jobs if j['name'] == CONTEXTS[name]]
+        if not current or len(matches) != 1:
+            continue
+        job = matches[0]
+        try:
+            report, start, end = (timestamp(current['reported_at']), timestamp(job['started_at']), timestamp(job['completed_at']))
+        except (KeyError, ValueError, TypeError):
+            continue
+        if (job.get('status') == 'completed' and job.get('conclusion') == 'success'
+                and created <= start <= report <= end <= now() and report >= row['triggered']
+                and current.get('detail_url') == f'{BASE}/actions/runs/{row["run_id"]}'):
+            observations[name]['attributed'] = True
+            observations[name]['reason'] = None
+    return {'contexts': observations}
+
+
+def poll_one(db, row, interval):
+    try:
+        observation = collect(row)
+        error = None
+    except (ValueError, TypeError, KeyError, OverflowError) as exc:
+        observation, error = None, str(exc)
+    current = now()
+    db.execute('BEGIN IMMEDIATE')
+    with db:
+        fresh = db.execute('SELECT * FROM requests WHERE id=?', (row['id'],)).fetchone()
+        if fresh['revision'] != row['revision'] or fresh['phase'] != 'active':
+            return False
+        db.execute('UPDATE requests SET next_poll=?, last_error=? WHERE id=?', (min(current + interval, row['triggered'] + 172800) if current < row['triggered'] + 172800 else current + interval, error, row['id']))
+        if observation is not None:
+            if 'close' not in observation:
+                db.execute('UPDATE requests SET observation=? WHERE id=?', (encode(observation), row['id']))
+            for candidate in observation.get('candidates', []):
+                if candidate != row['run_id']:
+                    event(db, row['id'], f'pickup_candidate:{candidate}', 'pickup_candidate', current, {'run_id': candidate})
+            if 'close' in observation:
+                event(db, row['id'], observation['close'], observation['close'], current, observation)
+                db.execute('UPDATE requests SET phase=?, outcome=? WHERE id=?', ('closed', observation['close'], row['id']))
+                return False
+            contexts = observation['contexts']
+            for name, result in contexts.items():
+                if result['attributed'] and result['state'] in FAILURES:
+                    event(db, row['id'], 'failure:' + name, 'failure', current, {'context': name, 'state': result['state']})
+                if result['attributed'] and result['state'] in NO_VERDICT:
+                    event(db, row['id'], 'no_verdict:' + name, 'no_verdict', current, {'context': name, 'state': result['state']})
+            if all(r['attributed'] and r['state'] in TERMINAL for r in contexts.values()):
+                outcome = ('failure' if any(r['state'] in FAILURES for r in contexts.values()) else
+                           'no_verdict' if any(r['state'] in NO_VERDICT for r in contexts.values()) else 'success')
+                event(db, row['id'], 'complete', 'complete', current, {'outcome': outcome})
+                db.execute('UPDATE requests SET phase=?, outcome=? WHERE id=?', ('closed', outcome, row['id']))
+                return False
+        if current >= row['triggered'] + 86400:
+            event(db, row['id'], 'delay', 'delay', current, {})
+        if current >= row['triggered'] + 172800:
+            event(db, row['id'], 'deadline', 'deadline', current, {'last_error': error})
+            db.execute('UPDATE requests SET phase=?, outcome=? WHERE id=?', ('closed', 'deadline', row['id']))
+    return error is not None
+
+
+def poll(db, path, args):
+    with open(path / 'poll.lock', 'a') as lock:
+        try:
+            fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        except BlockingIOError:
+            raise ValueError('another poller owns the state directory')
+        cursor = db.execute('SELECT COALESCE(MAX(id),0) FROM events').fetchone()[0]
+        while True:
+            rows = db.execute('SELECT * FROM requests WHERE phase=? AND (? OR next_poll<=?) ORDER BY id', ('active', args.force, now())).fetchall()
+            errors = any([poll_one(db, row, args.interval) for row in rows])
+            cursor = events(db, cursor)
+            if args.once:
+                return 2 if errors else 0
+            time.sleep(min(args.interval, 10))
+
+
+def status(db, as_json):
+    rows = []
+    for row in db.execute('SELECT * FROM requests ORDER BY id'):
+        d = dict(row)
+        d['suites'] = json.loads(d['suites'])
+        d['observation'] = json.loads(d['observation']) if d['observation'] else None
+        d['triggered_at'] = iso(d.pop('triggered'))
+        d['deadline_at'] = iso(timestamp(d['triggered_at']) + 172800)
+        d['next_poll'] = iso(d['next_poll'])
+        rows.append(d)
+    if as_json:
+        print(encode({'schema_version': 1, 'requests': rows}))
+    else:
+        for row in rows:
+            print(f"#{row['id']} PR {row['pr']} {row['phase']} {row['outcome'] or ''} suites={','.join(row['suites'])} deadline={row['deadline_at']}")
+            if row['last_error']:
+                print('  observation error: ' + row['last_error'])
+            if row['observation']:
+                for name, result in row['observation'].get('contexts', {}).items():
+                    print(f"  {name}: {result['state'] or 'not observed'} ({'attributed' if result['attributed'] else result['reason']})")
+
+
+def events(db, after):
+    cursor = after
+    for row in db.execute('SELECT * FROM events WHERE id>? ORDER BY id', (after,)):
+        print(encode({'schema_version': 1, 'id': row['id'], 'request_id': row['request_id'], 'key': row['key'], 'kind': row['kind'], 'occurred_at': iso(row['occurred']), 'payload': json.loads(row['payload'])}), flush=True)
+        cursor = row['id']
+    return cursor
+
+
+def main():
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument('--state-dir', type=Path, default=Path(os.environ.get('XDG_STATE_HOME', Path.home() / '.local/state')) / 'cubrid-ci-watch')
+    sub = parser.add_subparsers(dest='command', required=True)
+    reg = sub.add_parser('register')
+    reg.add_argument('pr', type=pr_number)
+    reg.add_argument('--head', required=True)
+    reg.add_argument('--suite', action='append', required=True)
+    reg.add_argument('--triggered-at', required=True)
+    reg.add_argument('--receipt', required=True)
+    reg.add_argument('--kind', choices=['run', 'rerun-failed'], default='run')
+    reg.add_argument('--run-id', type=int)
+    reg.add_argument('--attempt', type=int)
+    p = sub.add_parser('poll')
+    p.add_argument('--once', action='store_true')
+    p.add_argument('--force', action='store_true', help='refresh all active requests, ignoring next poll time')
+    p.add_argument('--interval', type=int, default=900)
+    s = sub.add_parser('status')
+    s.add_argument('--json', action='store_true')
+    e = sub.add_parser('events')
+    e.add_argument('--after', type=int, default=0)
+    args = parser.parse_args()
+    try:
+        if args.command == 'poll' and (args.interval <= 0 or (args.force and not args.once)):
+            raise ValueError('--interval must be positive; --force requires --once')
+        if args.command == 'events' and args.after < 0:
+            raise ValueError('--after must be nonnegative')
+        db = connect(args.state_dir)
+        if args.command == 'register':
+            register(db, args)
+        elif args.command == 'poll':
+            return poll(db, args.state_dir, args)
+        elif args.command == 'status':
+            status(db, args.json)
+        else:
+            events(db, args.after)
+        return 0
+    except (ValueError, sqlite3.Error, OSError) as exc:
+        print(f'cubrid-ci-watch: {exc}', file=sys.stderr)
+        return 2
+    except KeyboardInterrupt:
+        return 0
+
+
+if __name__ == '__main__':
+    sys.exit(main())

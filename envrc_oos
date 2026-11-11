@@ -1,5 +1,8 @@
 # .envrc
 
+# Load the per-worktree preset (.env) relative to this .envrc, not the caller's cwd.
+dotenv_if_exists .env
+
 ##############################################################################
 # Variable
 ##############################################################################

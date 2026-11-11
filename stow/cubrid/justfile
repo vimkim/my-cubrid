@@ -61,7 +61,7 @@ preset mode: (core::preset-set mode)
 # Select the commonly used GCC debug preset.
 preset-debug-gcc: (core::preset-set "debug_gcc")
 
-# Select the commonly used GCC release preset.
+# Select the GCC release preset for benchmarks, with unit tests disabled.
 preset-release-gcc: (core::preset-set "release_gcc")
 
 # Build artifacts and capture the complete log without installing.

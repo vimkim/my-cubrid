@@ -61,7 +61,20 @@
       "hidden": true,
       "cacheVariables": {
         "UNIT_TESTS": "OFF",
+        "UNIT_TEST_MEMORY_ALLOC": "OFF",
+        "UNIT_TEST_STRING_BUFFER": "OFF",
+        "UNIT_TEST_LOCKFREE": "OFF",
+        "UNIT_TEST_LOG_PRIOR_INFLIGHT": "OFF",
+        "UNIT_TEST_THREAD": "OFF",
+        "UNIT_TEST_PACKING": "OFF",
+        "UNIT_TEST_RESOURCE_TRACKER": "OFF",
+        "UNIT_TEST_MONITOR": "OFF",
+        "UNIT_TEST_LOADDB": "OFF",
+        "UNIT_TEST_MEMORY_MONITOR": "OFF",
+        "UNIT_TEST_DOUBLE_WRITE_BUFFER": "OFF",
         "UNIT_TEST_OOS": "OFF",
+        "UNIT_TEST_JSON_BUILDER": "OFF",
+        "UNIT_TEST_OBJECT_FACTORY": "OFF",
         "UNIT_TEST_SPAGE": "OFF",
         "UNIT_TEST_PAGE_BUFFER": "OFF"
       }
@@ -82,14 +95,25 @@
     },
     {
       "name": "release_gcc",
-      "description": "GCC RelWithDebInfo with O2 optimization",
-      "inherits": "user_gcc",
+      "description": "GCC RelWithDebInfo for benchmarks, with unit tests disabled",
+      "inherits": ["user_no_unit_tests", "user_gcc"],
       "cacheVariables": {
         "CMAKE_BUILD_TYPE": "RelWithDebInfo",
         "CMAKE_C_FLAGS": "-fdiagnostics-color=always",
         "CMAKE_CXX_FLAGS": "-fdiagnostics-color=always",
         "CMAKE_C_FLAGS_RELWITHDEBINFO": "-O2 -ggdb3 -DNDEBUG -finline-functions",
         "CMAKE_CXX_FLAGS_RELWITHDEBINFO": "-O2 -ggdb3 -DNDEBUG -finline-functions -Wno-error=stringop-truncation -Wno-error=maybe-uninitialized -Wno-error=format-overflow -Wno-error=format-truncation"
+      }
+    },
+    {
+      "name": "release_gcc_unit",
+      "description": "GCC RelWithDebInfo with unit tests enabled",
+      "inherits": "release_gcc",
+      "cacheVariables": {
+        "UNIT_TESTS": "ON",
+        "UNIT_TEST_OOS": "ON",
+        "UNIT_TEST_SPAGE": "ON",
+        "UNIT_TEST_PAGE_BUFFER": "ON"
       }
     },
     {
@@ -163,8 +187,8 @@
     },
     {
       "name": "release_clang",
-      "description": "Clang RelWithDebInfo with O2 optimization",
-      "inherits": "user_clang",
+      "description": "Clang RelWithDebInfo for benchmarks, with unit tests disabled",
+      "inherits": ["user_no_unit_tests", "user_clang"],
       "cacheVariables": {
         "CMAKE_BUILD_TYPE": "RelWithDebInfo",
         "CMAKE_C_FLAGS": "-fcolor-diagnostics -Xclang -fno-validate-pch -Xclang -fno-pch-timestamp",
@@ -182,6 +206,10 @@
     {
       "name": "release_gcc",
       "configurePreset": "release_gcc"
+    },
+    {
+      "name": "release_gcc_unit",
+      "configurePreset": "release_gcc_unit"
     },
     {
       "name": "asan_debug_gcc",

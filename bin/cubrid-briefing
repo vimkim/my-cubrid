@@ -16,6 +16,10 @@ import tempfile
 from urllib.parse import quote
 
 
+EVENT_KINDS = frozenset(('pickup_candidate', 'failure', 'no_verdict', 'complete', 'delay', 'deadline', 'head_changed', 'superseded'))
+TERMINAL_REPLACEMENTS = frozenset(('head_changed', 'superseded'))
+
+
 @dataclasses.dataclass(frozen=True)
 class Route:
     request_id: int
@@ -136,7 +140,10 @@ def setstate(db, sink, source, state, reason=''):
 def send(cfg, db, sink, row):
     event = json.loads(row['event'])
     route = Route(**json.loads(row['route'])) if row['route'] else None
-    if route:
+    if event.get('kind') in TERMINAL_REPLACEMENTS and sink == 'herdr':
+        setstate(db, sink, row['source'], 'suppressed', 'superseded event')
+        return
+    if route and event.get('kind') not in TERMINAL_REPLACEMENTS:
         try:
             if sink == 'herdr':
                 state, reason = check_route(cfg, route)
@@ -152,13 +159,11 @@ def send(cfg, db, sink, row):
                 with db:
                     db.execute('INSERT OR IGNORE INTO delivery(sink,source,event,route,state) VALUES(?,?,?,?,?)', ('discord', 'notice:' + row['source'], json.dumps(notice), None, 'pending'))
             return
-    if sink == 'herdr' and event.get('kind') in ('head_changed', 'superseded'):
-        setstate(db, sink, row['source'], 'suppressed', 'superseded event')
-        notice = {'kind': 'notice', 'summary': f'CI 요청 {route.request_id}, PR {route.pr}: 변경된 head 또는 대체된 요청으로 전달이 중단되었습니다.'}
-        with db:
-            db.execute('INSERT OR IGNORE INTO delivery(sink,source,event,route,state) VALUES(?,?,?,?,?)', ('discord', 'notice:' + row['source'], json.dumps(notice), None, 'pending'))
-        return
-    if event.get('kind') in ('daily', 'notice'):
+    if event.get('kind') in TERMINAL_REPLACEMENTS:
+        text = (f"CI 요청 {route.request_id}, PR {route.pr}, 기존 head {route.head}: "
+                f"{event['kind']}로 종료되었습니다. 대체 관찰: "
+                + json.dumps(event['payload'], ensure_ascii=False, sort_keys=True))
+    elif event.get('kind') in ('daily', 'notice'):
         text = event['summary']
     else:
         facts = json.dumps(event, ensure_ascii=False, sort_keys=True)
@@ -196,6 +201,8 @@ def tick(cfg, db, state, sink):
         incoming = events(cfg, cur[0])
         with db:
             for e in incoming:
+                if e['kind'] not in EVENT_KINDS:
+                    continue
                 row = db.execute('SELECT data FROM route WHERE request_id=?', (e['request_id'],)).fetchone()
                 if row:
                     db.execute('INSERT OR IGNORE INTO delivery(sink,source,event,route,state) VALUES(?,?,?,?,?)',
@@ -215,6 +222,7 @@ def main():
     t = sub.add_parser('tick'); t.add_argument('--sink', choices=['herdr', 'discord'], required=True)
     br = sub.add_parser('brief'); br.add_argument('--date', default=dt.date.today().isoformat()); br.add_argument('--send', action='store_true')
     sub.add_parser('status')
+    res = sub.add_parser('resolve'); res.add_argument('--sink', choices=['herdr', 'discord'], required=True); res.add_argument('--source', required=True); res.add_argument('--outcome', choices=['sent', 'pending'], required=True); res.add_argument('--reason', required=True)
     a = p.parse_args(); state = Path(a.state_dir).expanduser().resolve()
     state.mkdir(parents=True, exist_ok=True, mode=0o700)
     if a.cmd == 'init':
@@ -234,17 +242,25 @@ def main():
             print(json.dumps({'baseline': latest})); return
     cfg = json.loads((state / 'config.json').read_text()); db = dbopen(state)
     if a.cmd == 'bind':
-        r = Route(**json.loads(Path(a.route).read_text()))
-        if not re.fullmatch('[0-9a-f]{40}', r.head) or not os.path.isabs(r.cwd) or os.path.realpath(r.cwd) != r.cwd:
-            raise ValueError('route requires full head and canonical absolute cwd')
-        state_result, reason = check_route(cfg, r)
-        if state_result == 'suppressed': raise ValueError(reason)
-        with db:
-            old = db.execute('SELECT data FROM route WHERE request_id=?', (r.request_id,)).fetchone()
-            if old and json.loads(old[0]) != dataclasses.asdict(r):
-                db.execute("UPDATE delivery SET state='suppressed',reason='route replaced' WHERE route=? AND state IN ('pending','deferred')", (old[0],))
-            db.execute('INSERT OR REPLACE INTO route VALUES(?,?)', (r.request_id, json.dumps(dataclasses.asdict(r))))
-        print(json.dumps({'binding': dataclasses.asdict(r), 'readiness': state_result, 'reason': reason})); return
+        with lock(state, 'herdr'), lock(state, 'discord'):
+            r = Route(**json.loads(Path(a.route).read_text()))
+            if not re.fullmatch('[0-9a-f]{40}', r.head) or not os.path.isabs(r.cwd) or os.path.realpath(r.cwd) != r.cwd:
+                raise ValueError('route requires full head and canonical absolute cwd')
+            state_result, reason = check_route(cfg, r)
+            if state_result == 'suppressed': raise ValueError(reason)
+            with db:
+                old = db.execute('SELECT data FROM route WHERE request_id=?', (r.request_id,)).fetchone()
+                if old and json.loads(old[0]) != dataclasses.asdict(r):
+                    db.execute("UPDATE delivery SET state='suppressed',reason='route replaced' WHERE route=? AND state IN ('pending','deferred')", (old[0],))
+                db.execute('INSERT OR REPLACE INTO route VALUES(?,?)', (r.request_id, json.dumps(dataclasses.asdict(r))))
+            print(json.dumps({'binding': dataclasses.asdict(r), 'readiness': state_result, 'reason': reason})); return
+    if a.cmd == 'resolve':
+        if not a.reason.strip(): raise ValueError('resolution reason is required')
+        with lock(state, a.sink), db:
+            result = db.execute("UPDATE delivery SET state=?, reason=? WHERE sink=? AND source=? AND state='unknown'",
+                                (a.outcome, 'operator resolution: ' + a.reason.strip(), a.sink, a.source))
+            if result.rowcount != 1: raise ValueError('unknown delivery not found')
+        print(json.dumps({'sink': a.sink, 'source': a.source, 'state': a.outcome})); return
     if a.cmd == 'tick':
         tick(cfg, db, state, a.sink); print(json.dumps({'sink': a.sink, 'ok': True})); return
     if a.cmd == 'status':

@@ -87,6 +87,16 @@ class BridgeTest(unittest.TestCase):
    self.assertNotEqual(result.returncode,0); self.assertIn('already running',result.stderr)
   self.runcli('bind','--route',str(self.p/'route')); self.runcli('tick','--sink','herdr')
   self.assertEqual(self.states()[0]['state'],'suppressed'); self.assertEqual(self.calls(),[])
+ def test_unknown_requires_explicit_resolution(self):
+  self.write('events',[self.event(1),self.event(2),self.event(3)]); (self.p/'hermes-fail').touch(); self.runcli('tick','--sink','discord'); self.runcli('tick','--sink','discord')
+  self.assertEqual(self.calls(),['hermes','hermes']); self.assertEqual([x['state'] for x in self.states()],['unknown','unknown'])
+  self.runcli('resolve','--sink','discord','--source','event:2','--outcome','pending','--reason','Discord history checked')
+  self.assertEqual([x['state'] for x in self.states()],['pending','unknown']); self.assertEqual(self.calls(),['hermes','hermes'])
+  (self.p/'hermes-fail').unlink(); self.runcli('tick','--sink','discord'); self.assertEqual(self.calls(),['hermes','hermes','hermes'])
+  self.runcli('resolve','--sink','discord','--source','event:3','--outcome','sent','--reason','receipt found')
+  self.assertEqual([x['state'] for x in self.states()],['sent','sent']); self.assertEqual(len(self.calls()),3)
+  result=subprocess.run([str(CLI),'--state-dir',str(self.state),'resolve','--sink','discord','--source','event:2','--outcome','pending','--reason','checked'],env=self.env,text=True,capture_output=True)
+  self.assertNotEqual(result.returncode,0); self.assertEqual(self.states()[0]['state'],'sent')
  def test_brief_preview_and_idempotent_send(self):
   preview=self.runcli('brief','--date','2026-01-01'); self.assertLessEqual(len(preview['summary']),1500); self.assertIn(preview['url'],preview['summary']); self.assertTrue(Path(preview['path']).exists()); self.assertEqual(self.calls(),[])
   self.runcli('brief','--date','2026-01-01','--send'); self.runcli('brief','--date','2026-01-01','--send'); self.assertEqual(self.calls(),['hermes'])

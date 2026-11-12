@@ -2,6 +2,12 @@ set minimum-version := "1.55.0"
 set no-cd
 set shell := ["sh", "-cu"]
 
+# Running the module name alone lists its recipes instead of running the first one.
+[private]
+[working-directory(justfile_directory())]
+default:
+    @just --list ctp
+
 # Run one CTP shell test directory against the active local build.
 [working-directory(justfile_directory())]
 shell-debug TEST_DIR:

@@ -2,6 +2,12 @@ set minimum-version := "1.55.0"
 set no-cd
 set shell := ["sh", "-cu"]
 
+# Running the module name alone lists its recipes instead of running the first one.
+[private]
+[working-directory(justfile_directory())]
+default:
+    @just --list debug
+
 # Debug csql connected to testdb.
 [working-directory(justfile_directory())]
 csql-cs:

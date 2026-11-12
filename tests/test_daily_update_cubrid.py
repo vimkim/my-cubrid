@@ -130,6 +130,7 @@ class DailyUpdateTest(unittest.TestCase):
             str(self.home / "gh/cubrid-ci"),
             str(self.home / "gh/cubrid-qahome-fetcher"),
             str(self.home / "gh/csql-future"),
+            str(self.home / "gh/my-cubrid-hermes"),
         ])
         self.assertFalse(self.log.exists())
         self.assertFalse(self.dotfiles_log.exists())
@@ -143,12 +144,18 @@ class DailyUpdateTest(unittest.TestCase):
             "cubrid-ci": "gh/cubrid-ci",
             "cubrid-qahome": "gh/cubrid-qahome-fetcher",
             "csql-future": "gh/csql-future",
+            "my-cubrid-hermes": "gh/my-cubrid-hermes",
         }
         for tool, relative in tools.items():
-            self.project(tool, relative=relative)
-        result = self.run_cli()
+            project = self.project(tool, relative=relative)
+            self.advance(project)
+        result = self.run_cli(env=dict(self.env, DAILY_UPDATE_TEST_REVISION="after"))
         self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
         self.assertEqual(self.log.read_text().splitlines(), list(tools))
+        for relative in tools.values():
+            project = self.home / relative
+            self.assertEqual(self.git(project, "rev-parse", "HEAD"),
+                             self.git(self.seeds[project], "rev-parse", "HEAD"))
         self.assertEqual(self.dotfiles_log.read_text(), "--dotfiles-only\n")
         self.assertLess(result.stdout.index("TEST: dotfiles attempted"),
                         result.stdout.index("── cubrid-conf-tui ──"))

@@ -4,10 +4,11 @@
 | --- | --- |
 | `release_gcc` | GCC RelWithDebInfo for benchmarks. Known unit-test options are off. |
 | `release_clang` | Clang RelWithDebInfo for benchmarks. Known unit-test options are off. |
-| `release_gcc_unit` | GCC RelWithDebInfo with `UNIT_TESTS`, `UNIT_TEST_OOS`, `UNIT_TEST_SPAGE`, and `UNIT_TEST_PAGE_BUFFER` on. Use it for unit tests. |
+| `release_gcc_unit` | GCC RelWithDebInfo with only `UNIT_TEST_OOS`, `UNIT_TEST_SPAGE`, and `UNIT_TEST_PAGE_BUFFER` on. `UNIT_TESTS` and the other known test options stay off. |
 | `release_gcc_nounit` | GCC RelWithDebInfo with known unit-test options off. Its existing build directory is retained. |
 
 The `unit` suffix identifies the test-enabled build while retaining the compiler and build family in its name. Debug and sanitizer presets keep their existing unit-test settings.
+Available unit-test modules depend on the CUBRID source revision. These options do not add missing test directories.
 
 ## Reconfigure an existing build
 

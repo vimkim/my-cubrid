@@ -107,10 +107,9 @@
     },
     {
       "name": "release_gcc_unit",
-      "description": "GCC RelWithDebInfo with unit tests enabled",
+      "description": "GCC RelWithDebInfo with only UNIT_TEST_OOS, UNIT_TEST_SPAGE, and UNIT_TEST_PAGE_BUFFER enabled",
       "inherits": "release_gcc",
       "cacheVariables": {
-        "UNIT_TESTS": "ON",
         "UNIT_TEST_OOS": "ON",
         "UNIT_TEST_SPAGE": "ON",
         "UNIT_TEST_PAGE_BUFFER": "ON"

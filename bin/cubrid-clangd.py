@@ -271,7 +271,8 @@ def main():
             raise ValueError(f'No compilation database for {preset}: {database}; run just configure')
         target = snapshot(root, preset, mode, database.read_bytes())
         changed = (root / 'compile_commands.json').resolve() != target.resolve()
-        activate(root, target)
+        if changed:
+            activate(root, target)
         receipt = json.loads((target.parent / 'receipt.json').read_text())
         print(f'Selected {mode} for {preset}; {len(receipt["fallback"])} fallback sources')
         if changed:

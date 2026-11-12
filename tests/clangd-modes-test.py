@@ -131,6 +131,9 @@ class ClangdModesTest(unittest.TestCase):
         link = self.root / 'compile_commands.json'; link.symlink_to(self.db.relative_to(self.root))
         self.run_cli('select', 'sa')
         self.assertIn('Restart running clangd', self.run_cli('select', 'server').stdout)
+        swapped = os.lstat(link).st_mtime_ns
+        self.assertNotIn('Restart running clangd', self.run_cli('select', 'server').stdout)
+        self.assertEqual(os.lstat(link).st_mtime_ns, swapped)
         self.run_cli('select', 'sa'); first = os.readlink(link)
         self.assertNotIn('Restart running clangd', self.run_cli('refresh').stdout)
         self.assertEqual(os.readlink(link), first)

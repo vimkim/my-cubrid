@@ -18,7 +18,9 @@ if name == 'watcher':
    if e['id'] > int(args[2]): print(json.dumps(e))
  else: print(json.dumps({'requests':[read('request')]}))
 elif name == 'tracker': print(json.dumps(read('work')))
-elif name == 'herdr' and 'get' in args: print(json.dumps({'result':{'agent':read('agent')}}))
+elif name == 'herdr' and 'get' in args:
+ agents = read('agents') if (p/'agents').exists() else {}
+ print(json.dumps({'result':{'agent':agents.get(args[-1], read('agent'))}}))
 else:
  with (p/'calls').open('a') as f: f.write(name+'\\n')
  if name == 'hermes': (p/'message').write_text(pathlib.Path(args[args.index('--file')+1]).read_text())
@@ -87,6 +89,21 @@ class BridgeTest(unittest.TestCase):
    self.assertNotEqual(result.returncode,0); self.assertIn('already running',result.stderr)
   self.runcli('bind','--route',str(self.p/'route')); self.runcli('tick','--sink','herdr')
   self.assertEqual(self.states()[0]['state'],'suppressed'); self.assertEqual(self.calls(),[])
+ def test_resolved_unknown_cannot_send_to_replaced_route(self):
+  old=json.loads((self.p/'agent').read_text()); new=dict(old,pane_id='w:new',agent_session={'value':'new'})
+  self.write('agents',{'w:p':old,'w:new':new}); self.add(); (self.p/'herdr-fail').touch()
+  self.runcli('tick','--sink','herdr'); self.assertEqual(self.states()[0]['state'],'unknown')
+  self.write('route',dict(self.route,pane_id='w:new',agent_session='new')); self.runcli('bind','--route',str(self.p/'route'))
+  self.assertEqual(self.states()[0]['state'],'unknown')
+  self.runcli('resolve','--sink','herdr','--source','event:2','--outcome','pending','--reason','receipt not found')
+  (self.p/'herdr-fail').unlink(); self.runcli('tick','--sink','herdr')
+  self.assertEqual(self.calls(),['herdr'])
+  self.assertEqual(self.states()[0]['state'],'suppressed'); self.assertIn('route',self.states()[0]['reason'])
+  self.assertEqual(self.states()[1]['source'],'notice:event:2')
+  self.write('events',[self.event(1),self.event(2),self.event(3)]); (self.p/'herdr-fail').touch()
+  self.runcli('tick','--sink','herdr'); self.runcli('resolve','--sink','herdr','--source','event:3','--outcome','pending','--reason','receipt not found')
+  (self.p/'herdr-fail').unlink(); self.runcli('tick','--sink','herdr')
+  self.assertEqual(self.states()[2]['state'],'sent'); self.assertEqual(self.calls(),['herdr','herdr','herdr'])
  def test_unknown_requires_explicit_resolution(self):
   self.write('events',[self.event(1),self.event(2),self.event(3)]); (self.p/'hermes-fail').touch(); self.runcli('tick','--sink','discord'); self.runcli('tick','--sink','discord')
   self.assertEqual(self.calls(),['hermes','hermes']); self.assertEqual([x['state'] for x in self.states()],['unknown','unknown'])

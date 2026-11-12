@@ -146,7 +146,11 @@ def send(cfg, db, sink, row):
     if route and event.get('kind') not in TERMINAL_REPLACEMENTS:
         try:
             if sink == 'herdr':
-                state, reason = check_route(cfg, route)
+                current = db.execute('SELECT data FROM route WHERE request_id=?', (route.request_id,)).fetchone()
+                if current is None or Route(**json.loads(current[0])) != route:
+                    state, reason = 'suppressed', 'route replaced'
+                else:
+                    state, reason = check_route(cfg, route)
             else:
                 state, reason = ('pending', '') if valid_request(request(cfg, route), route) else ('suppressed', 'watch request, PR, or head changed')
         except (ValueError, KeyError, TypeError):

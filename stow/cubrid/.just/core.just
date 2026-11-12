@@ -82,6 +82,7 @@ configure: ensure-build-jdk
     #!/usr/bin/env bash
     set -euo pipefail
     direnv exec . "${MY_CUBRID:-$HOME/my-cubrid}/bin/cubrid-build-coordinator.sh" configure
+    direnv exec . "${MY_CUBRID:-$HOME/my-cubrid}/bin/cubrid-clangd.py" auto-refresh
 
 # Select a preset interactively. Autonomous workflows should use the bootstrap script instead.
 [working-directory(justfile_directory())]
@@ -134,34 +135,22 @@ preset-set $preset:
         exit 2
     fi
 
-    umask 077
-    environment_file=.env
-    temporary_file="$(mktemp .env.XXXXXX)"
-    trap 'rm -f -- "$temporary_file"' EXIT
-    if [[ -e "$environment_file" ]]; then
-        awk -v preset="$preset" '
-            BEGIN { replaced = 0 }
-            /^[[:space:]]*(export[[:space:]]+)?PRESET_MODE[[:space:]]*=/ {
-                if (!replaced) {
-                    print "PRESET_MODE=" preset
-                    replaced = 1
-                }
-                next
-            }
-            { print }
-            END {
-                if (!replaced) {
-                    print "PRESET_MODE=" preset
-                }
-            }
-        ' "$environment_file" >"$temporary_file"
-        chmod --reference="$environment_file" "$temporary_file"
-    else
-        printf 'PRESET_MODE=%s\n' "$preset" >"$temporary_file"
-    fi
-    mv -f -- "$temporary_file" "$environment_file"
-    trap - EXIT
-    printf 'Selected preset: %s\n' "$preset"
+    "${MY_CUBRID:-$HOME/my-cubrid}/bin/cubrid-clangd.py" preset "$preset"
+
+# Select the native command mode for clangd.
+[working-directory(justfile_directory())]
+clangd mode:
+    direnv exec . "${MY_CUBRID:-$HOME/my-cubrid}/bin/cubrid-clangd.py" select "{{mode}}"
+
+# Refresh the selected mode after an external configure.
+[working-directory(justfile_directory())]
+clangd-refresh:
+    direnv exec . "${MY_CUBRID:-$HOME/my-cubrid}/bin/cubrid-clangd.py" refresh
+
+# Show the selected mode and database freshness.
+[working-directory(justfile_directory())]
+clangd-status:
+    direnv exec . "${MY_CUBRID:-$HOME/my-cubrid}/bin/cubrid-clangd.py" status
 
 # Build artifacts and capture the complete log without installing.
 [working-directory(justfile_directory())]

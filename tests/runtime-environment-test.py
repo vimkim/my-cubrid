@@ -118,7 +118,7 @@ exit "$status"
                 "printf '%s\\n' 'Available configure presets:' '  \"debug_gcc\"' '  \"release_gcc\"'\n"
             )
             cmake.chmod(0o755)
-            environment = dict(os.environ, PATH=f"{command_bin}:{os.environ['PATH']}")
+            environment = dict(os.environ, MY_CUBRID=str(REPOSITORY), PATH=f"{command_bin}:{os.environ['PATH']}")
 
             result = subprocess.run(
                 ["just", "--justfile", str(root / "justfile"), "core::preset-set", "release_gcc"],

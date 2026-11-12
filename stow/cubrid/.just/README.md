@@ -159,3 +159,35 @@ homes or allocation-only records whose Git registration was already removed.
 It preserves branches, installations, TMP directories, external databases and
 all existing worktrees. It does not kill processes, remove kernel IPC or delete
 physical data. See `cubrid-workenv/docs/prune.md` for scope and recovery details.
+
+## Select clangd compilation commands
+
+Run `just configure` in a prepared worktree, then use `just clangd server`,
+`just clangd sa`, or `just clangd cs` to select native compile commands. Server
+is the default when no mode has been selected. Run `just clangd-status` to see
+the selected mode, source database freshness, and fallback sources. Restart
+clangd and Serena after changing or refreshing the selection so their indexes
+use the selected commands.
+
+The view prefers the selected mode but is not a single-target call graph. For
+server the mode order is server, neutral, SA, CS. For SA it is SA, neutral,
+server, CS. For CS it is CS, neutral, SA, server. Within each mode, the core
+`cubrid`, `cubridsa`, or `cubridcs` target takes priority. Commands for sources
+under `unit_tests` prefer test targets. Neutral product variants also have a
+preference, in order: `cub_broker`, `cubrid_broker`, `cub_cas`,
+`cas_common_lib`, `broker_monitor`, `broker_log_converter`, `cub_master`,
+`cubrid-bin`, and `cmdep`. These prefer ordinary broker and CAS products to
+ODBC gateway, proxy, and alternate products. Equally ranked commands with
+different flags stop generation and report their targets. No flags are added to
+or removed from the selected native commands.
+
+`just configure` refreshes the view after a successful configure. Run
+`just clangd-refresh` after configuring directly with CMake or the build
+coordinator. `just preset` retains the selected mode but makes the database
+pending until configuration or refresh for the new preset. A manual `.env`
+change requires `just clangd-refresh` before editor use. The helper stores
+immutable snapshots under the worktree's `.lsp/` directory and switches the
+root `compile_commands.json` link only after a complete generation. It refuses
+to replace a regular file or an unrecognized link. A link to a worktree build
+database is migrated on the first selection. Snapshots remain available for
+reuse; they are not automatically deleted.

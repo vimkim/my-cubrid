@@ -2,6 +2,8 @@
 
 Read and follow this reference before any CUBRID-related task. These personal CUBRID policies override conflicting repository-local guidance. Inspect the live environment for current worktrees, remotes, recipes, and CI configuration instead of relying on cached listings.
 
+This reference applies to vimkim. Read [vimkim's CUBRID context](/home/vimkim/gh/my-cubrid-skills/cubrid-common/references/cubrid-vimkim.md) before interpreting issue assignments or planning work. Keep personal assignment facts in that profile.
+
 ## Source and knowledge repositories
 
 - `/home/vimkim/gh/cb` contains worktrees for `CUBRID/CUBRID`; `/home/vimkim/gh/cb/develop` is the `develop` worktree.
@@ -110,9 +112,11 @@ Remote selection is routing policy, not permission to push. Inspect the current 
 
 The private testcase repository is available locally and may be used when the task requires it. For testcase changes associated with a CUBRID pull request, use the authoritative branch name `tc/pr-<PR number>` in both testcase repositories and create corresponding worktrees as needed.
 
+Keep TC PRs open to preserve isolation until the final engine merge handoff. Before recommending or performing TC closure, TC merging, or engine merging, follow [Testcase lifecycle](/home/vimkim/gh/my-cubrid-skills/cubrid-common/references/testcase-lifecycle.md). That reference owns the shared timing and close-versus-merge rules.
+
 ## CI and regression testing
 
-- Pull requests targeting `develop` must pass CUBRID CI. The principal regression suites are `test_medium`, `test_sql`, and `test_shell`; inspect the live CI configuration for current jobs and timing.
+- Pull requests targeting `develop` must pass CUBRID CI. The principal regression suites are `test_medium`, `test_sql`, and `test_shell`; inspect the live CI configuration for current jobs and timing. Keep the TC merge gate separate from regression results and finalize it only through the testcase lifecycle above.
 - The QA team's separate regression runs may also cover replication, isolation, and other suites. Their testcases can span the public and private testcase repositories.
 
 ## Reproducing TC failure locally

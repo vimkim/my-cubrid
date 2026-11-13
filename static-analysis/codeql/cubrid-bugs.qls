@@ -1,0 +1,126 @@
+# CUBRID bug suite for codeql/cpp-queries 1.10.0 on a --build-mode=none DB of src/.
+# Selection and measurements are in README.md. Do not add queries that use global
+# data flow or remote taint sources; they exhausted memory on this code base.
+- description: CUBRID low-noise bug queries
+
+# Queries with real bugs on CUBRID at e64a04a79a.
+- query: 'Likely Bugs/Likely Typos/AmbiguousAssignmentOfComparison.ql'
+  from: codeql/cpp-queries
+- query: 'Likely Bugs/NestedLoopSameVar.ql'
+  from: codeql/cpp-queries
+- query: 'Likely Bugs/Format/WrongNumberOfFormatArguments.ql'
+  from: codeql/cpp-queries
+- query: 'Likely Bugs/Format/WrongTypeFormatArguments.ql'
+  from: codeql/cpp-queries
+- query: 'Likely Bugs/Format/TooManyFormatArguments.ql'
+  from: codeql/cpp-queries
+- query: 'Likely Bugs/Format/SnprintfOverflow.ql'
+  from: codeql/cpp-queries
+- query: 'Likely Bugs/Memory Management/SuspiciousSizeof.ql'
+  from: codeql/cpp-queries
+- query: 'Likely Bugs/Memory Management/SuspiciousCallToMemset.ql'
+  from: codeql/cpp-queries
+- query: 'Critical/NewArrayDeleteMismatch.ql'
+  from: codeql/cpp-queries
+- query: 'Security/CWE/CWE-120/OverrunWrite.ql'
+  from: codeql/cpp-queries
+
+# Precise queries with no hits at e64a04a79a. They guard new code.
+- query: 'Likely Bugs/Memory Management/UsingExpiredStackAddress.ql'
+  from: codeql/cpp-queries
+- query: 'Critical/DoubleFree.ql'
+  from: codeql/cpp-queries
+- query: 'Critical/UseAfterFree.ql'
+  from: codeql/cpp-queries
+- query: 'Likely Bugs/Memory Management/ReturnStackAllocatedMemory.ql'
+  from: codeql/cpp-queries
+- query: 'Likely Bugs/OO/UnsafeUseOfThis.ql'
+  from: codeql/cpp-queries
+- query: 'Likely Bugs/Conversion/CastArrayPointerArithmetic.ql'
+  from: codeql/cpp-queries
+- query: 'Security/CWE/CWE-416/IteratorToExpiredContainer.ql'
+  from: codeql/cpp-queries
+- query: 'Likely Bugs/Likely Typos/AssignWhereCompareMeant.ql'
+  from: codeql/cpp-queries
+- query: 'Likely Bugs/Likely Typos/CompareWhereAssignMeant.ql'
+  from: codeql/cpp-queries
+- query: 'Likely Bugs/Likely Typos/inconsistentLoopDirection.ql'
+  from: codeql/cpp-queries
+- query: 'Likely Bugs/Likely Typos/UsingStrcpyAsBoolean.ql'
+  from: codeql/cpp-queries
+- query: 'Likely Bugs/Likely Typos/ShortCircuitBitMask.ql'
+  from: codeql/cpp-queries
+- query: 'Likely Bugs/Likely Typos/DubiousNullCheck.ql'
+  from: codeql/cpp-queries
+- query: 'Likely Bugs/Likely Typos/IncorrectNotOperatorUsage.ql'
+  from: codeql/cpp-queries
+- query: 'Likely Bugs/ContinueInFalseLoop.ql'
+  from: codeql/cpp-queries
+- query: 'Likely Bugs/UseInOwnInitializer.ql'
+  from: codeql/cpp-queries
+- query: 'Likely Bugs/Memory Management/SuspiciousCallToStrncat.ql'
+  from: codeql/cpp-queries
+- query: 'Likely Bugs/Memory Management/AllocaInLoop.ql'
+  from: codeql/cpp-queries
+- query: 'Likely Bugs/Memory Management/ReturnCstrOfLocalStdString.ql'
+  from: codeql/cpp-queries
+- query: 'Likely Bugs/Memory Management/StrncpyFlippedArgs.ql'
+  from: codeql/cpp-queries
+- query: 'Likely Bugs/Arithmetic/BadAdditionOverflowCheck.ql'
+  from: codeql/cpp-queries
+- query: 'Likely Bugs/Arithmetic/ComparisonPrecedence.ql'
+  from: codeql/cpp-queries
+- query: 'Likely Bugs/Arithmetic/BitwiseSignCheck.ql'
+  from: codeql/cpp-queries
+- query: 'Likely Bugs/Arithmetic/PointlessSelfComparison.ql'
+  from: codeql/cpp-queries
+- query: 'Likely Bugs/Arithmetic/UnsignedGEZero.ql'
+  from: codeql/cpp-queries
+- query: 'Likely Bugs/Arithmetic/BadCheckOdd.ql'
+  from: codeql/cpp-queries
+- query: 'Likely Bugs/Conversion/ArrayArgSizeMismatch.ql'
+  from: codeql/cpp-queries
+- query: 'Likely Bugs/Conversion/ImplicitDowncastFromBitfield.ql'
+  from: codeql/cpp-queries
+- query: 'Likely Bugs/Underspecified Functions/TooFewArguments.ql'
+  from: codeql/cpp-queries
+- query: 'Likely Bugs/Underspecified Functions/TooManyArguments.ql'
+  from: codeql/cpp-queries
+- query: 'Likely Bugs/Underspecified Functions/ImplicitFunctionDeclaration.ql'
+  from: codeql/cpp-queries
+- query: 'Likely Bugs/OO/IncorrectConstructorDelegation.ql'
+  from: codeql/cpp-queries
+- query: 'Likely Bugs/OO/ThrowInDestructor.ql'
+  from: codeql/cpp-queries
+- query: 'Critical/IncorrectCheckScanf.ql'
+  from: codeql/cpp-queries
+- query: 'Critical/NewDeleteArrayMismatch.ql'
+  from: codeql/cpp-queries
+- query: 'Critical/NewFreeMismatch.ql'
+  from: codeql/cpp-queries
+- query: 'Critical/OverflowStatic.ql'
+  from: codeql/cpp-queries
+- query: 'Critical/SizeCheck.ql'
+  from: codeql/cpp-queries
+- query: 'Security/CWE/CWE-120/BadlyBoundedWrite.ql'
+  from: codeql/cpp-queries
+- query: 'Security/CWE/CWE-120/VeryLikelyOverrunWrite.ql'
+  from: codeql/cpp-queries
+- query: 'Security/CWE/CWE-131/NoSpaceForZeroTerminator.ql'
+  from: codeql/cpp-queries
+- query: 'Security/CWE/CWE-468/SuspiciousAddWithSizeof.ql'
+  from: codeql/cpp-queries
+- query: 'Security/CWE/CWE-468/IncorrectPointerScaling.ql'
+  from: codeql/cpp-queries
+- query: 'Security/CWE/CWE-468/IncorrectPointerScalingVoid.ql'
+  from: codeql/cpp-queries
+- query: 'Security/CWE/CWE-416/UseOfStringAfterLifetimeEnds.ql'
+  from: codeql/cpp-queries
+- query: 'Security/CWE/CWE-416/UseOfUniquePointerAfterLifetimeEnds.ql'
+  from: codeql/cpp-queries
+- query: 'Security/CWE/CWE-676/DangerousFunctionOverflow.ql'
+  from: codeql/cpp-queries
+- query: 'Security/CWE/CWE-732/OpenCallMissingModeArgument.ql'
+  from: codeql/cpp-queries
+- query: 'Security/CWE/CWE-014/MemsetMayBeDeleted.ql'
+  from: codeql/cpp-queries

@@ -2,7 +2,7 @@
 default:
     @just --list
 
-# Install the daily CUBRID updater into the user command directory.
+# Install the daily CUBRID updater and cubrid-static-check into the user command directory.
 sync:
     #!/usr/bin/env bash
     set -euo pipefail
@@ -11,3 +11,6 @@ sync:
     install -m 755 -- daily-update-cubrid.py "$install_dir/daily-update-cubrid"
     "$install_dir/daily-update-cubrid" --help >/dev/null
     printf 'Installed %s/daily-update-cubrid\n' "$install_dir"
+    install -m 755 -- static-analysis/static-check/cubrid-static-check "$install_dir/cubrid-static-check"
+    "$install_dir/cubrid-static-check" --help >/dev/null
+    printf 'Installed %s/cubrid-static-check\n' "$install_dir"

@@ -1,0 +1,658 @@
+#!/usr/bin/env python3
+"""Report only the static-analysis findings that a CUBRID change introduces.
+
+Usage: cubrid-static-check [options] <base-ref> [<head-ref>]
+
+Run it from a CUBRID worktree. It compares the merge base of <base-ref> and <head-ref>
+(default HEAD) with <head-ref>, over the C/C++ files under src/ that the change touches.
+Markdown goes to stdout, progress to stderr.
+Exit status: 0 nothing new, 1 new findings or flagged functions, 2 usage or setup error,
+3 nothing new but some file was not fully analyzed (timeout, parse failure, no compile entry)
+or an analyzer is missing.
+"""
+
+import argparse
+import collections
+import concurrent.futures as cf
+import csv
+import hashlib
+import io
+import json
+import os
+import re
+import shutil
+import subprocess
+import sys
+import tempfile
+import time
+import xml.etree.ElementTree as ET
+from dataclasses import dataclass, field, replace
+
+SOURCE_EXT = (".c", ".cpp", ".cc")
+HEADER_EXT = (".h", ".hpp", ".hh")
+CPD_EXCLUDE = {"src/base/jisx0212.h", "src/base/ksc5601.h", "src/base/CRC.h"}
+
+# cppcheck ids kept in the report. Everything else is dropped, because the full tree at
+# e64a04a79a has 831 hits and most of them are noise (uninitMemberVarNoCtor alone is 390).
+CPPCHECK_RULES = {
+    "nullPointer", "ctunullpointer", "uninitvar", "nullPointerRedundantCheck",
+    "nullPointerArithmeticRedundantCheck", "nullPointerOutOfMemory", "nullPointerOutOfResources",
+    "negativeIndex",
+}
+CPPCHECK_RULE_PREFIXES = ("invalidPrintfArgType_", "invalidScanfArgType_")
+# Error severity is kept as a class. On the full tree its hits are mostly memleakOnRealloc (7, all
+# the real unchecked-realloc pattern); the two false positives there are in unchanged code.
+# These error ids report analysis or configuration failures, not defects in the code.
+CPPCHECK_CONFIG_ERRORS = {
+    "syntaxError", "preprocessorErrorDirective", "unknownMacro", "internalAstError",
+    "internalError", "cppcheckError", "missingInclude", "missingIncludeSystem", "missingFile",
+    "noValidConfiguration", "ctuOneDefinitionRuleViolation",
+}
+
+# cppcheck does not predefine compiler macros. Without these, the #error guards in
+# query/numeric_opfunc.h and the TBB and RapidJSON headers abort the translation unit.
+CPPCHECK_DEFINES = ["-D__GNUC__=11", "-D__GNUC_MINOR__=5", "-D__SIZEOF_INT128__=16",
+                    "-D__x86_64__=1", "-D__LP64__=1", "-D__linux__=1", "-D__unix__=1"]
+
+# The first six disabled checks made 820 of the 830 main-file hits in storage/btree.c.
+CLANG_TIDY_CHECKS = ",".join([
+    "-*", "bugprone-*",
+    "-bugprone-signed-bitwise", "-bugprone-narrowing-conversions",
+    "-bugprone-implicit-widening-of-multiplication-result",
+    "-bugprone-easily-swappable-parameters", "-bugprone-macro-parentheses",
+    "-bugprone-reserved-identifier",
+    # In PR 8196 (309265e6d5) these two made 26 of 31 new hits: memset/free on a T ** and
+    # CUBRID's `if ((error = f ()) != NO_ERROR)` idiom.
+    "-bugprone-multi-level-implicit-pointer-conversion", "-bugprone-assignment-in-if-condition",
+])
+
+CCN_DELTA = 5         # flag a function whose CCN grows by this much
+NEW_FUNC_CCN = 15     # flag a new function at or above this CCN
+LENGTH_DELTA = 100    # flag a function that grows by this many lines
+CPD_MIN_TOKENS = 100
+CPD_NEW_SHARE = 0.5   # a clone occurrence is new when this share of its lines was added
+MAX_ROWS = 30
+
+
+@dataclass(frozen=True)
+class Finding:
+    tool: str
+    rule: str
+    path: str
+    line: int
+    message: str
+
+    def key(self):
+        return (self.tool, self.rule, self.path, re.sub(r"\d+", "N", self.message))
+
+
+@dataclass
+class Change:
+    """The files a change touches. Paths are repository-relative head paths."""
+    base_path: dict          # head path -> base path, None for an added file
+    added: dict              # head path -> set of added line numbers
+    touched: dict            # head path -> added lines plus deletion points
+
+
+@dataclass
+class Section:
+    title: str
+    count: int = 0
+    seconds: float = 0.0
+    lines: list = field(default_factory=list)
+    notes: list = field(default_factory=list)
+    incomplete: list = field(default_factory=list)   # files not fully analyzed, with the reason
+    skipped: str = ""
+
+
+def log(msg):
+    print(f"cubrid-static-check: {msg}", file=sys.stderr, flush=True)
+
+
+def git(*args, cwd=None):
+    return subprocess.run(["git", *args], cwd=cwd, check=True, capture_output=True,
+                          text=True).stdout
+
+
+def export_tree(commit, dest):
+    os.makedirs(dest)
+    archive = subprocess.Popen(["git", "archive", commit, "src", "include"],
+                               stdout=subprocess.PIPE)
+    subprocess.run(["tar", "-x", "-C", dest], stdin=archive.stdout, check=True)
+    if archive.wait() != 0:
+        raise RuntimeError(f"git archive {commit} failed")
+
+
+DIFF = ["-c", "core.quotePath=false", "diff", "--no-ext-diff", "--no-textconv", "--no-color",
+        "-M", "-l100000", "--src-prefix=a/", "--dst-prefix=b/"]
+
+
+def read_change(base, head):
+    status = git(*DIFF, "--name-status", "-z", base, head, "--", "src").split("\0")
+    base_path = {}
+    i = 0
+    while i < len(status) - 1:
+        code = status[i]
+        if code.startswith(("R", "C")):
+            old, new = status[i + 1], status[i + 2]
+            i += 3
+        else:
+            old = new = status[i + 1]
+            i += 2
+        if code.startswith("D") or not new.endswith(SOURCE_EXT + HEADER_EXT):
+            continue
+        base_path[new] = None if code.startswith("A") else old
+    added = collections.defaultdict(set)
+    touched = collections.defaultdict(set)
+    if base_path:
+        # Old paths stay in the pathspec, or git loses the rename pair and diffs against /dev/null.
+        paths = sorted(set(base_path) | {b for b in base_path.values() if b})
+        path, in_header = None, False
+        for line in git(*DIFF, "-U0", base, head, "--", *paths).splitlines():
+            if line.startswith("diff --git "):
+                path, in_header = None, True
+            elif in_header and line.startswith("+++ "):
+                name = line[4:].rstrip("\t")
+                path = name[2:] if name.startswith("b/") else None
+            elif line.startswith("@@") and path:
+                in_header = False
+                m = re.match(r"@@ -\d+(?:,\d+)? \+(\d+)(?:,(\d+))? @@", line)
+                start, count = int(m.group(1)), int(m.group(2) or 1)
+                lines = set(range(start, start + count))
+                added[path] |= lines
+                touched[path] |= lines or {start}
+    return Change(base_path, dict(added), dict(touched))
+
+
+def new_findings(base, head, added):
+    """head minus base as multisets. Head findings on unchanged lines absorb the base count
+    first, so a duplicate on an added line is the one reported."""
+    remaining = collections.Counter(f.key() for f in base)
+    fresh = []
+    for f in sorted(head, key=lambda f: (f.line in added.get(f.path, ()), f.path, f.line)):
+        if remaining[f.key()] > 0:
+            remaining[f.key()] -= 1
+        else:
+            fresh.append(f)
+    return sorted(set(fresh), key=lambda f: (f.path, f.line, f.rule))
+
+
+# ---------------------------------------------------------------- compile database
+
+def find_compile_db(top, explicit):
+    if explicit:
+        return explicit
+    candidates = [os.path.join(top, "compile_commands.json")]
+    candidates += sorted((os.path.join(top, d, "compile_commands.json")
+                          for d in os.listdir(top) if d.startswith("build_preset_")),
+                         key=lambda p: os.path.getmtime(p) if os.path.exists(p) else 0,
+                         reverse=True)
+    return next((p for p in candidates if os.path.exists(p)), None)
+
+
+def db_root(entries, top):
+    """The checkout the database was generated for. cubrid-cci/src entries share the marker."""
+    if any(e["file"].startswith(top + "/src/") for e in entries):
+        return top
+    roots = collections.Counter(e["file"].rsplit("/src/", 1)[0] for e in entries if "/src/" in e["file"])
+    if not roots:
+        raise RuntimeError("compile database has no entry under src/")
+    return roots.most_common(1)[0][0]
+
+
+def entry_command(e):
+    return e["command"] if "command" in e else " ".join(e["arguments"])
+
+
+class CompileDb:
+    """The worktree's compile database, re-rooted per exported tree."""
+
+    def __init__(self, path, head_tree, top):
+        with open(path) as f:
+            self.entries = json.load(f)
+        self.root = db_root(self.entries, top)
+        self.by_rel = {}
+        stale = []
+        for e in self.entries:
+            if not e["file"].startswith(self.root + "/src/"):
+                continue
+            rel = os.path.relpath(e["file"], self.root)
+            self.by_rel[rel] = e
+            if not os.path.exists(os.path.join(head_tree, rel)):
+                stale.append(rel)
+        self.stale = sorted(stale)
+        self.path = path
+
+    def template_for(self, rel, counterpart):
+        """The entry for rel, else for its path on the other side of a rename, else a sibling's."""
+        if rel in self.by_rel:
+            return self.by_rel[rel], None
+        if counterpart in self.by_rel:
+            return self.by_rel[counterpart], counterpart
+        d = os.path.dirname(rel)
+        while d:
+            sibling = next((r for r in sorted(self.by_rel) if os.path.dirname(r) == d), None)
+            if sibling:
+                return self.by_rel[sibling], sibling
+            d = os.path.dirname(d)
+        return None, None
+
+    def write_for(self, side, tree, pairs, out_dir):
+        """Writes out_dir/compile_commands.json for each (rel, counterpart) inside tree.
+        Returns the rels that got an entry, and notes on borrowed flags."""
+        pattern = re.compile(re.escape(self.root) + r"/(src|include)(?=[/\s\"]|$)")
+        entries, borrowed, compiled = [], [], set()
+        for rel, counterpart in pairs:
+            template, sibling = self.template_for(rel, counterpart)
+            if template is None:
+                continue
+            cmd = entry_command(template)
+            if sibling:
+                cmd = cmd.replace(os.path.join(self.root, sibling), os.path.join(self.root, rel))
+                borrowed.append(f"{side} `{rel}` is not in the compile database, flags borrowed "
+                                f"from `{sibling}`")
+            entries.append({"directory": template["directory"],
+                            "file": os.path.join(tree, rel),
+                            "command": pattern.sub(lambda m: f"{tree}/{m.group(1)}", cmd)})
+            compiled.add(rel)
+        os.makedirs(out_dir, exist_ok=True)
+        with open(os.path.join(out_dir, "compile_commands.json"), "w") as f:
+            json.dump(entries, f)
+        return compiled, borrowed
+
+
+# ---------------------------------------------------------------- tools
+
+def rel_to(tree, path):
+    path = os.path.normpath(path)
+    return os.path.relpath(path, tree) if path.startswith(tree + "/") else None
+
+
+def cppcheck_keep(rule, severity):
+    if rule in CPPCHECK_RULES or rule.startswith(CPPCHECK_RULE_PREFIXES):
+        return True
+    return severity == "error" and rule not in CPPCHECK_CONFIG_ERRORS
+
+
+def run_cppcheck(tree, db_dir, rel, out_dir, timeout):
+    """Returns (findings in rel, problem). A problem means rel was not fully analyzed."""
+    out = os.path.join(out_dir, hashlib.sha1(rel.encode()).hexdigest() + ".xml")
+    try:
+        subprocess.run(["cppcheck", f"--project={db_dir}/compile_commands.json",
+                        f"--file-filter={os.path.join(tree, rel)}", "--language=c++",
+                        *CPPCHECK_DEFINES, "--enable=warning,performance,portability",
+                        "--inline-suppr", "--quiet", "--xml", f"--output-file={out}"],
+                       check=True, capture_output=True, text=True, timeout=timeout)
+    except subprocess.TimeoutExpired:
+        return [], f"timed out after {timeout} s"
+    except subprocess.CalledProcessError as e:
+        return [], f"cppcheck exited {e.returncode}: {e.stderr.strip()[:300]}"
+    findings, problems = [], []
+    for err in ET.parse(out).getroot().iter("error"):
+        loc = err.find("location")
+        if loc is None:
+            continue
+        rule = err.get("id")
+        where = rel_to(tree, loc.get("file")) or os.path.basename(loc.get("file"))
+        if rule in CPPCHECK_CONFIG_ERRORS and rule != "ctuOneDefinitionRuleViolation":
+            problems.append(f"{rule} at `{where}:{loc.get('line')}`: {err.get('msg')}")
+        elif where == rel and cppcheck_keep(rule, err.get("severity")):
+            findings.append(Finding("cppcheck", rule, rel, int(loc.get("line")), err.get("msg")))
+    return findings, "; ".join(problems)
+
+
+TIDY_LINE = re.compile(r"^(/[^:]+):(\d+):\d+: (warning|error): (.*?)(?: \[([\w.,-]+)\])?$")
+
+
+def run_clang_tidy(tree, db_dir, rel, out_dir, timeout):
+    """Returns (findings in rel, problem). A problem means rel was not fully analyzed."""
+    try:
+        p = subprocess.run(["clang-tidy", "-p", db_dir, f"--checks={CLANG_TIDY_CHECKS}",
+                            "--quiet", os.path.join(tree, rel)],
+                           capture_output=True, text=True, timeout=timeout)
+    except subprocess.TimeoutExpired:
+        return [], f"timed out after {timeout} s"
+    findings, errors = [], []
+    for line in p.stdout.splitlines():
+        m = TIDY_LINE.match(line)
+        if not m:
+            continue
+        if m.group(3) == "error":
+            errors.append(f"`{rel_to(tree, m.group(1)) or m.group(1)}:{m.group(2)}`: {m.group(4)}")
+        elif rel_to(tree, m.group(1)) == rel and (m.group(5) or "").startswith("bugprone-"):
+            findings.append(Finding("clang-tidy", m.group(5), rel, int(m.group(2)), m.group(4)))
+    if errors:
+        return findings, f"{len(errors)} compile errors, first {errors[0]}"
+    if p.returncode != 0:
+        return findings, f"clang-tidy exited {p.returncode}: {p.stderr.strip()[-300:]}"
+    return findings, ""
+
+
+@dataclass(frozen=True)
+class FunctionMetric:
+    path: str
+    name: str
+    long_name: str
+    ccn: int
+    length: int
+    start: int
+    end: int
+
+
+def run_lizard(tree, rels):
+    rels = [r for r in rels if r and os.path.exists(os.path.join(tree, r))]
+    if not rels:
+        return []
+    out = subprocess.run(["lizard", "-l", "cpp", "--csv", *rels], cwd=tree, check=True,
+                         capture_output=True, text=True).stdout
+    # Columns: nloc, ccn, token, param, length, location, file, name, long_name, start, end
+    return [FunctionMetric(row[6], row[7], row[8], int(row[1]), int(row[4]), int(row[9]),
+                           int(row[10]))
+            for row in csv.reader(io.StringIO(out)) if len(row) == 11]
+
+
+def match_functions(base, head):
+    """Pairs each head function with its base version, by signature, then by unique name."""
+    by_long = collections.defaultdict(list)
+    by_name = collections.defaultdict(list)
+    for f in base:
+        by_long[f.long_name].append(f)
+        by_name[f.name].append(f)
+    unique_head_names = collections.Counter(f.name for f in head)
+    pairs = []
+    for f in head:
+        if by_long[f.long_name]:
+            old = by_long[f.long_name].pop(0)
+        elif unique_head_names[f.name] == 1 and len(by_name[f.name]) == 1:
+            old = by_name[f.name][0]
+        else:
+            old = None
+        pairs.append((old, f))
+    return pairs
+
+
+def lizard_section(base_tree, head_tree, change):
+    section = Section("Function complexity (lizard)")
+    start = time.monotonic()
+    head = run_lizard(head_tree, list(change.base_path))
+    base_rels = {b: h for h, b in change.base_path.items() if b}
+    base = [replace(f, path=base_rels[f.path]) for f in run_lizard(base_tree, list(base_rels))]
+    base_by_path = collections.defaultdict(list)
+    for f in base:
+        base_by_path[f.path].append(f)
+    head_by_path = collections.defaultdict(list)
+    for f in head:
+        head_by_path[f.path].append(f)
+    rows = []
+    for path, funcs in head_by_path.items():
+        touched = change.touched.get(path, set())
+        for old, new in match_functions(base_by_path[path], funcs):
+            if not any(new.start <= n <= new.end for n in touched):
+                continue
+            if old is None:
+                flag = new.ccn >= NEW_FUNC_CCN
+                ccn, length = f"new, {new.ccn}", f"new, {new.length}"
+            else:
+                dc, dl = new.ccn - old.ccn, new.length - old.length
+                flag = dc >= CCN_DELTA or dl >= LENGTH_DELTA
+                ccn = f"{old.ccn} → {new.ccn} ({dc:+d})" if dc else str(new.ccn)
+                length = f"{old.length} → {new.length} ({dl:+d})" if dl else str(new.length)
+            rows.append((not flag, -new.ccn, f"| `{new.name}` | `{path}:{new.start}` | {ccn} | "
+                                             f"{length} | {'**large increase**' if flag else ''} |"))
+    rows.sort()
+    section.count = sum(1 for r in rows if not r[0])
+    if rows:
+        section.lines = ["| Function | Location | CCN | Length | |", "| --- | --- | --- | --- | --- |"]
+        section.lines += [r[2] for r in rows[:MAX_ROWS]]
+        if len(rows) > MAX_ROWS:
+            section.notes.append(f"{len(rows) - MAX_ROWS} more changed functions not shown")
+    section.notes.insert(0, f"{len(rows)} changed functions. Flag: CCN +{CCN_DELTA}, length "
+                            f"+{LENGTH_DELTA} lines, or a new function with CCN ≥ {NEW_FUNC_CCN}.")
+    section.seconds = time.monotonic() - start
+    return section
+
+
+def cpd_section(title, head_tree, change, work):
+    section = Section(title)
+    start = time.monotonic()
+    files = []
+    for d, _, names in os.walk(os.path.join(head_tree, "src")):
+        for n in names:
+            rel = os.path.relpath(os.path.join(d, n), head_tree)
+            if n.endswith(SOURCE_EXT + HEADER_EXT) and rel not in CPD_EXCLUDE:
+                files.append(os.path.join(d, n))
+    file_list = os.path.join(work, "cpd-files.txt")
+    with open(file_list, "w") as f:
+        f.write("\n".join(sorted(files)) + "\n")
+    out = os.path.join(work, "cpd.xml")
+    with open(out, "w") as f:
+        p = subprocess.run(["pmd", "cpd", "--file-list", file_list, "--language", "cpp",
+                            "--minimum-tokens", str(CPD_MIN_TOKENS), "--format", "xml",
+                            "--no-fail-on-violation", "--no-fail-on-error"],
+                           stdout=f, stderr=subprocess.PIPE, text=True, check=True)
+    # CPD skips a file it cannot lex and only says so on stderr.
+    section.incomplete = [f"head `{rel}`: CPD could not process it" for rel in change.base_path
+                          if os.path.join(head_tree, rel) in p.stderr]
+    for dup in ET.parse(out).getroot():
+        if not dup.tag.endswith("duplication"):
+            continue
+        occurrences, new = [], False
+        for occ in dup:
+            if not occ.tag.endswith("file"):
+                continue
+            rel = rel_to(head_tree, occ.get("path"))
+            first, last = int(occ.get("line")), int(occ.get("endline"))
+            share = len(change.added.get(rel, set()) & set(range(first, last + 1))) / (last - first + 1)
+            is_new = share >= CPD_NEW_SHARE
+            new |= is_new
+            occurrences.append(f"`{rel}:{first}-{last}`" + (" (new)" if is_new else ""))
+        if new:
+            section.count += 1
+            if section.count <= MAX_ROWS:
+                section.lines.append(f"- {dup.get('tokens')} tokens, {dup.get('lines')} lines: "
+                                     + " ↔ ".join(occurrences))
+    if section.count > MAX_ROWS:
+        section.notes.append(f"{section.count - MAX_ROWS} more not shown")
+    section.seconds = time.monotonic() - start
+    return section
+
+
+def map_to_head(f, change):
+    to_head = {b: h for h, b in change.base_path.items() if b}
+    return replace(f, path=to_head.get(f.path, f.path))
+
+
+def comparable(base_problem, head_problem):
+    """Base and head findings of a file can be diffed only if both sides ran under the same
+    handicap. A base that failed alone would make every head finding look new."""
+    if base_problem is None:
+        return True
+    norm = lambda p: re.sub(r"\d+", "N", p or "")
+    return "timed out" not in base_problem and norm(base_problem) == norm(head_problem)
+
+
+def per_file_section(title, runner, trees, compiled, change, work, jobs, timeout):
+    """Runs runner on the base and head version of each changed source and keeps new findings."""
+    start = time.monotonic()
+    heads = [p for p in change.base_path if p.endswith(SOURCE_EXT)]
+    tasks = [("head", p, p) for p in heads] + [("base", p, change.base_path[p]) for p in heads
+                                               if change.base_path[p]]
+    found = {"base": [], "head": []}
+    problems = {}                          # (side, head path) -> why the file was not fully analyzed
+    for side in found:
+        os.makedirs(os.path.join(work, runner.__name__, side), exist_ok=True)
+    for side, head, rel in tasks:
+        if rel not in compiled[side]:
+            problems[side, head] = "no compile entry, not analyzed"
+    with cf.ThreadPoolExecutor(max_workers=max(1, min(jobs, len(tasks)))) as pool:
+        futures = {pool.submit(runner, trees[side], os.path.join(work, f"db-{side}"), rel,
+                               os.path.join(work, runner.__name__, side), timeout): (side, head)
+                   for side, head, rel in tasks if (side, head) not in problems}
+        for fut in cf.as_completed(futures):
+            side, head = futures[fut]
+            findings, problem = fut.result()
+            found[side] += findings
+            if problem:
+                problems[side, head] = problem
+    skipped = {h for h in heads if not comparable(problems.get(("base", h)), problems.get(("head", h)))}
+    fresh = new_findings([map_to_head(f, change) for f in found["base"]],
+                         [f for f in found["head"] if f.path not in skipped], change.added)
+    incomplete = [f"{side} `{head}`: {problem}" for (side, head), problem in sorted(problems.items())]
+    for h in sorted(skipped):
+        n = sum(f.path == h for f in found["head"])
+        incomplete.append(f"`{h}`: base side not comparable, {n} head findings not compared")
+    section = Section(title, count=len(fresh), seconds=time.monotonic() - start,
+                      incomplete=incomplete)
+    section.lines = [f"- `{f.path}:{f.line}` **{f.rule}**: {f.message}" for f in fresh[:MAX_ROWS]]
+    if len(fresh) > MAX_ROWS:
+        section.notes.append(f"{len(fresh) - MAX_ROWS} more not shown")
+    return section
+
+
+# ---------------------------------------------------------------- main
+
+def render(sections, header, notes, total):
+    out = [header, "", "| Check | New | Time |", "| --- | --- | --- |"]
+    for s in sections:
+        new = "skipped" if s.skipped else str(s.count)
+        if s.incomplete:
+            new += ", **incomplete**"
+        out.append(f"| {s.title} | {new} | {s.seconds:.0f} s |")
+    out.append(f"| Total wall time | | {total:.0f} s |")
+    for s in sections:
+        if s.skipped:
+            out += ["", f"## {s.title}", "", f"Skipped: {s.skipped}"]
+            continue
+        if not s.lines and not s.notes and not s.incomplete:
+            continue
+        out += ["", f"## {s.title}", ""]
+        out += s.lines or ["Nothing new."]
+        out += [""] + [f"- {n}" for n in s.notes] if s.notes else []
+        out += ["", "Not fully analyzed, so findings there can be missing:", ""] + \
+            [f"- {n}" for n in s.incomplete] if s.incomplete else []
+    if notes:
+        out += ["", "## Setup notes", ""] + [f"- {n}" for n in notes]
+    return "\n".join(out)
+
+
+def unavailable(title, tool, opt_out):
+    """A section that did not run. A missing tool counts as incomplete; an opt-out does not."""
+    if opt_out:
+        return Section(title, skipped=opt_out)
+    return Section(title, skipped=f"{tool} not on PATH", incomplete=[f"{tool} not on PATH"])
+
+
+def main():
+    try:
+        return run(parse_args())
+    except Exception as e:  # every unexpected failure is a setup error, never "new findings"
+        log(f"{type(e).__name__}: {e}")
+        return 2
+
+
+def parse_args():
+    parser = argparse.ArgumentParser(description=__doc__.split("\n\n")[0],
+                                     formatter_class=argparse.RawDescriptionHelpFormatter)
+    parser.add_argument("base", help="base ref; the merge base with head is used")
+    parser.add_argument("head", nargs="?", default="HEAD", help="head ref (default HEAD)")
+    parser.add_argument("--compile-db", help="compile_commands.json (default: the worktree's "
+                        "compile_commands.json, then the newest build_preset_*/)")
+    parser.add_argument("--no-clang-tidy", action="store_true", help="skip clang-tidy")
+    parser.add_argument("--no-cpd", action="store_true", help="skip PMD CPD")
+    parser.add_argument("--file-timeout", type=int, default=180,
+                        help="seconds per file for cppcheck and clang-tidy (default 180)")
+    parser.add_argument("--jobs", type=int, default=max(1, (os.cpu_count() or 2) // 2))
+    parser.add_argument("--keep", action="store_true", help="keep the work directory")
+    return parser.parse_args()
+
+
+def run(args):
+    began = time.monotonic()
+    try:
+        top = git("rev-parse", "--show-toplevel").strip()
+        head = git("rev-parse", "--verify", f"{args.head}^{{commit}}").strip()
+        base = git("merge-base", args.base, head).strip()
+    except subprocess.CalledProcessError as e:
+        log(e.stderr.strip())
+        return 2
+    os.chdir(top)
+    missing = [t for t in ("lizard",) if not shutil.which(t)]
+    if missing:
+        log(f"not on PATH: {', '.join(missing)}")
+        return 2
+
+    change = read_change(base, head)
+    header = (f"# cubrid-static-check `{base[:10]}`..`{head[:10]}`\n\n"
+              f"Base is the merge base of `{args.base}` and `{args.head}`. "
+              f"{len(change.base_path)} changed C/C++ files under src/, "
+              f"{sum(p.endswith(SOURCE_EXT) for p in change.base_path)} of them .c/.cpp.")
+    if not change.base_path:
+        print(header + "\n\nNothing to check.")
+        return 0
+
+    work = tempfile.mkdtemp(prefix="cubrid-static-check-")
+    try:
+        trees = {"base": os.path.join(work, "base"), "head": os.path.join(work, "head")}
+        export_tree(base, trees["base"])
+        export_tree(head, trees["head"])
+
+        notes = []
+        db_path = find_compile_db(top, args.compile_db)
+        if db_path is None:
+            log("no compile_commands.json; pass --compile-db or run `just configure`")
+            return 2
+        db = CompileDb(db_path, trees["head"], top)
+        notes.append(f"Compile database: `{os.path.realpath(db_path)}`, generated for `{db.root}`.")
+        if db.stale:
+            notes.append(f"**Stale compile database**: {len(db.stale)} entries name files that do not "
+                         f"exist at head (for example `{db.stale[0]}`). Reconfigure the build to refresh it.")
+        sources = [p for p in change.base_path if p.endswith(SOURCE_EXT)]
+        compiled = {}
+        compiled["head"], borrowed = db.write_for(
+            "head", trees["head"], [(p, change.base_path[p]) for p in sources],
+            os.path.join(work, "db-head"))
+        notes += borrowed
+        compiled["base"], borrowed = db.write_for(
+            "base", trees["base"], [(change.base_path[p], p) for p in sources if change.base_path[p]],
+            os.path.join(work, "db-base"))
+        notes += borrowed
+        headers = [p for p in change.base_path if p.endswith(HEADER_EXT)]
+        if headers:
+            notes.append(f"{len(headers)} changed headers. cppcheck and clang-tidy see them only "
+                         "through the changed .c/.cpp files that include them.")
+
+        log(f"analyzing {len(change.base_path)} files in {work}")
+        jobs = max(1, args.jobs // 2)     # cppcheck and clang-tidy share the job budget
+        with cf.ThreadPoolExecutor(max_workers=4) as pool:
+            def per_file(title, runner, tool, disabled):
+                if disabled or not shutil.which(tool):
+                    return None, unavailable(title, tool, disabled and f"--no-{tool}")
+                return pool.submit(per_file_section, title, runner, trees, compiled, change, work,
+                                   jobs, args.file_timeout), None
+            cpd_title = f"Duplicated code (PMD CPD, {CPD_MIN_TOKENS}+ tokens, against all of src)"
+            pending = [
+                per_file("cppcheck (high-signal rules)", run_cppcheck, "cppcheck", False),
+                per_file("clang-tidy (bugprone-*)", run_clang_tidy, "clang-tidy", args.no_clang_tidy),
+                (None, unavailable(cpd_title, "pmd", args.no_cpd and "--no-cpd"))
+                if args.no_cpd or not shutil.which("pmd")
+                else (pool.submit(cpd_section, cpd_title, trees["head"], change, work), None),
+                (pool.submit(lizard_section, trees["base"], trees["head"], change), None),
+            ]
+            sections = [fut.result() if fut else skipped for fut, skipped in pending]
+    except subprocess.CalledProcessError as e:
+        log(f"{e.cmd[0]} failed with status {e.returncode}: {(e.stderr or '').strip()[:2000]}")
+        return 2
+    finally:
+        if args.keep:
+            log(f"kept {work}")
+        else:
+            shutil.rmtree(work, ignore_errors=True)
+
+    print(render(sections, header, notes, time.monotonic() - began))
+    if any(s.count for s in sections):
+        return 1
+    return 3 if any(s.incomplete for s in sections) else 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())

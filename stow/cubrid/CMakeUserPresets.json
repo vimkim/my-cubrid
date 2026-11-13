@@ -128,6 +128,15 @@
       }
     },
     {
+      "name": "asan_noscope_debug_gcc",
+      "description": "GCC Debug with AddressSanitizer, stack use-after-scope checks off",
+      "inherits": "asan_debug_gcc",
+      "cacheVariables": {
+        "CMAKE_C_FLAGS_DEBUG": "-O1 -ggdb3 -fsanitize=address -fno-sanitize-address-use-after-scope -fno-omit-frame-pointer -fno-optimize-sibling-calls",
+        "CMAKE_CXX_FLAGS_DEBUG": "-O1 -ggdb3 -fsanitize=address -fno-sanitize-address-use-after-scope -fno-omit-frame-pointer -fno-optimize-sibling-calls"
+      }
+    },
+    {
       "name": "asan_ubsan_debug_gcc",
       "description": "GCC Debug with AddressSanitizer and UndefinedBehaviorSanitizer",
       "inherits": "user_gcc_debug",
@@ -213,6 +222,10 @@
     {
       "name": "asan_debug_gcc",
       "configurePreset": "asan_debug_gcc"
+    },
+    {
+      "name": "asan_noscope_debug_gcc",
+      "configurePreset": "asan_noscope_debug_gcc"
     },
     {
       "name": "asan_ubsan_debug_gcc",

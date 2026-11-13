@@ -1,0 +1,288 @@
+file	line	category	flag	macro	message
+src/api/cubrid_log.c	659	real	-Werror=format=		format ‘%d’ expects argument of type ‘int’, but argument 9 has type ‘long unsigned int’
+src/api/cubrid_log.c	768	real	-Werror=format=		format ‘%d’ expects argument of type ‘int’, but argument 7 has type ‘long unsigned int’
+src/api/cubrid_log.c	812	real	-Werror=format=		format ‘%d’ expects argument of type ‘int’, but argument 9 has type ‘long unsigned int’
+src/api/cubrid_log.c	1012	real	-Werror=format=		format ‘%d’ expects argument of type ‘int’, but argument 7 has type ‘long unsigned int’
+src/api/cubrid_log.c	1172	real	-Werror=format=		format ‘%d’ expects argument of type ‘int’, but argument 7 has type ‘long unsigned int’
+src/api/cubrid_log.c	1403	width	-Werror=format=		format ‘%lld’ expects argument of type ‘long long int’, but argument 7 has type ‘time_t’ {aka ‘long int’}
+src/api/cubrid_log.c	1460	width	-Werror=format=		format ‘%lld’ expects argument of type ‘long long int’, but argument 7 has type ‘time_t’ {aka ‘long int’}
+src/api/cubrid_log.c	1465	width	-Werror=format=		format ‘%lld’ expects argument of type ‘long long int’, but argument 7 has type ‘time_t’ {aka ‘long int’}
+src/api/cubrid_log.c	1465	width	-Werror=format=		format ‘%lld’ expects argument of type ‘long long int’, but argument 8 has type ‘long int’
+src/api/cubrid_log.c	1528	width	-Werror=format=		format ‘%lld’ expects argument of type ‘long long int’, but argument 7 has type ‘time_t’ {aka ‘long int’}
+src/api/cubrid_log.c	1528	real	-Werror=format=		format ‘%lld’ expects argument of type ‘long long int’, but argument 8 has type ‘LOG_LSA’ {aka ‘log_lsa’}
+src/api/cubrid_log.c	1559	width	-Werror=format=		format ‘%lld’ expects argument of type ‘long long int’, but argument 7 has type ‘long int’
+src/api/cubrid_log.c	1600	width	-Werror=format=		format ‘%lld’ expects argument of type ‘long long int’, but argument 7 has type ‘long int’
+src/api/cubrid_log.c	1635	width	-Werror=format=		format ‘%lld’ expects argument of type ‘long long int’, but argument 7 has type ‘long int’
+src/api/cubrid_log.c	1647	real	-Werror=format=		format ‘%d’ expects argument of type ‘int’, but argument 7 has type ‘long unsigned int’
+src/api/cubrid_log.c	1767	real	-Werror=format=		format ‘%d’ expects argument of type ‘int’, but argument 7 has type ‘long unsigned int’
+src/api/cubrid_log.c	1780	real	-Werror=format=		format ‘%d’ expects argument of type ‘int’, but argument 7 has type ‘long unsigned int’
+src/api/cubrid_log.c	1788	real	-Werror=format=		format ‘%d’ expects argument of type ‘int’, but argument 7 has type ‘long unsigned int’
+src/api/cubrid_log.c	1871	real	-Werror=format=		format ‘%d’ expects argument of type ‘int’, but argument 7 has type ‘long unsigned int’
+src/api/cubrid_log.c	1883	real	-Werror=format=		format ‘%d’ expects argument of type ‘int’, but argument 7 has type ‘long unsigned int’
+src/api/cubrid_log.c	1891	real	-Werror=format=		format ‘%d’ expects argument of type ‘int’, but argument 7 has type ‘long unsigned int’
+src/api/cubrid_log.c	2137	real	-Werror=format=		format ‘%d’ expects argument of type ‘int’, but argument 7 has type ‘long unsigned int’
+src/api/cubrid_log.c	2218	width	-Werror=format=		format ‘%lld’ expects argument of type ‘long long int’, but argument 8 has type ‘uint64_t’ {aka ‘long unsigned int’}
+src/api/cubrid_log.c	2247	width	-Werror=format=		format ‘%lld’ expects argument of type ‘long long int’, but argument 7 has type ‘uint64_t’ {aka ‘long unsigned int’}
+src/base/bit.h	38	width	-Werror=format=	disk_log	format ‘%llx’ expects argument of type ‘long long unsigned int’, but argument 10 has type ‘DISK_STAB_UNIT’ {aka ‘long unsigned int’}
+src/base/bit.h	38	width	-Werror=format=	disk_log	format ‘%llx’ expects argument of type ‘long long unsigned int’, but argument 11 has type ‘DISK_STAB_UNIT’ {aka ‘long unsigned int’}
+src/base/bit.h	38	width	-Werror=format=		format ‘%llx’ expects argument of type ‘long long unsigned int’, but argument 12 has type ‘DISK_STAB_UNIT’ {aka ‘long unsigned int’}
+src/base/error_manager.c	940	nonliteral	-Werror=format-security		format not a string literal and no format arguments
+src/base/resource_tracker.cpp	79	nonliteral	-Werror=format-security		format not a string literal and no format arguments
+src/base/resources.cpp	168	real	-Werror=format=		format ‘%d’ expects argument of type ‘int’, but argument 4 has type ‘std::size_t’ {aka ‘long unsigned int’}
+src/broker/broker_admin_pub.c	1719	real	-Wformat-overflow=		‘%s’ directive writing up to 4095 bytes into a region of size 2033
+src/broker/broker_admin_pub.c	1722	real	-Wformat-overflow=		‘%s’ directive writing up to 4095 bytes into a region of size 2032
+src/broker/cas.c	733	nonliteral	-Werror=format-security		format not a string literal and no format arguments
+src/broker/cas.c	936	nonliteral	-Werror=format-security		format not a string literal and no format arguments
+src/broker/cas.c	996	nonliteral	-Werror=format-security		format not a string literal and no format arguments
+src/broker/cas.c	1029	nonliteral	-Werror=format-security		format not a string literal and no format arguments
+src/broker/cas_cgw.c	518	nonliteral	-Werror=format-security		format not a string literal and no format arguments
+src/broker/cas_cgw.c	551	nonliteral	-Werror=format-security		format not a string literal and no format arguments
+src/broker/cas_common_main.c	385	nonliteral	-Werror=format-security		format not a string literal and no format arguments
+src/broker/cas_execute.c	2043	empty	-Werror=format-zero-length		zero-length gnu_printf format string
+src/broker/cas_execute.c	2065	empty	-Werror=format-zero-length		zero-length gnu_printf format string
+src/broker/cas_execute.c	2072	empty	-Werror=format-zero-length		zero-length gnu_printf format string
+src/broker/cas_execute.c	2082	empty	-Werror=format-zero-length		zero-length gnu_printf format string
+src/broker/cas_execute.c	10361	nonliteral	-Werror=format-security		format not a string literal and no format arguments
+src/broker/cas_execute.c	10377	nonliteral	-Werror=format-security		format not a string literal and no format arguments
+src/broker/cas_execute.c	10393	nonliteral	-Werror=format-security		format not a string literal and no format arguments
+src/broker/cas_execute.c	10424	nonliteral	-Werror=format-security		format not a string literal and no format arguments
+src/broker/cas_function.c	2379	width	-Werror=format=		format ‘%lld’ expects argument of type ‘long long int’, but argument 5 has type ‘INT64’ {aka ‘long int’}
+src/broker/cas_function.c	2420	width	-Werror=format=		format ‘%lld’ expects argument of type ‘long long int’, but argument 5 has type ‘INT64’ {aka ‘long int’}
+src/broker/cas_log.c	302	real	-Wformat-truncation=		‘%s’ directive output may be truncated writing up to 4095 bytes into a region of size between 0 and 4095
+src/broker/shard_parser.c	67	real	-Werror=format=	PROXY_LOG	format ‘%d’ expects argument of type ‘int’, but argument 6 has type ‘long unsigned int’
+src/broker/shard_parser.c	350	real	-Werror=format=	PROXY_LOG	format ‘%d’ expects argument of type ‘int’, but argument 6 has type ‘long unsigned int’
+src/broker/shard_proxy_function.c	1082	real	-Werror=format=	PROXY_DEBUG_LOG	format ‘%d’ expects argument of type ‘int’, but argument 6 has type ‘INT64’ {aka ‘long int’}
+src/broker/shard_proxy_handler.c	224	real	-Werror=format=	PROXY_DEBUG_LOG	format ‘%d’ expects argument of type ‘int’, but argument 6 has type ‘INT64’ {aka ‘long int’}
+src/broker/shard_proxy_io.c	3510	real	-Werror=format=	PROXY_LOG	format ‘%S’ expects argument of type ‘wchar_t*’, but argument 8 has type ‘char*’
+src/broker/shard_proxy_io.c	3600	real	-Werror=format=	PROXY_LOG	format ‘%S’ expects argument of type ‘wchar_t*’, but argument 8 has type ‘char*’
+src/broker/shard_proxy_io.c	3739	real	-Werror=format=	PROXY_LOG	format ‘%S’ expects argument of type ‘wchar_t*’, but argument 8 has type ‘char*’
+src/broker/shard_proxy_io.c	3803	real	-Werror=format=	PROXY_DEBUG_LOG	format ‘%d’ expects argument of type ‘int’, but argument 6 has type ‘INT64’ {aka ‘long int’}
+src/broker/shard_proxy_io.c	3831	real	-Werror=format=	PROXY_DEBUG_LOG	format ‘%d’ expects argument of type ‘int’, but argument 6 has type ‘INT64’ {aka ‘long int’}
+src/broker/shard_proxy_queue.c	277	real	-Werror=format=	PROXY_LOG	format ‘%d’ expects argument of type ‘int’, but argument 7 has type ‘long unsigned int’
+src/broker/shard_statement.c	380	real	-Werror=format=	PROXY_DEBUG_LOG	format ‘%d’ expects argument of type ‘int’, but argument 7 has type ‘INT64’ {aka ‘long int’}
+src/communication/network_interface_cl.c	9975	width	-Werror=format=		format ‘%lld’ expects argument of type ‘long long int’, but argument 4 has type ‘LOG_PAGEID’ {aka ‘long int’}
+src/communication/network_interface_sr.cpp	8299	width	-Werror=format=		format ‘%lld’ expects argument of type ‘long long int’, but argument 4 has type ‘LOG_PAGEID’ {aka ‘long int’}
+src/communication/network_interface_sr.cpp	12261	width	-Werror=format=	cdc_log	format ‘%lld’ expects argument of type ‘long long int’, but argument 5 has type ‘time_t’ {aka ‘long int’}
+src/communication/network_interface_sr.cpp	12291	width	-Werror=format=	cdc_log	format ‘%lld’ expects argument of type ‘long long int’, but argument 7 has type ‘time_t’ {aka ‘long int’}
+src/connection/connection_sr.c	145	real	-Werror=format=		format ‘%d’ expects argument of type ‘int’, but argument 6 has type ‘long int’
+src/connection/connection_sr.c	148	real	-Werror=format=		format ‘%d’ expects argument of type ‘int’, but argument 6 has type ‘long int’
+src/connection/connection_sr.c	598	real	-Werror=format=		format ‘%d’ expects argument of type ‘int’, but argument 4 has type ‘long int’
+src/connection/connection_sr.c	635	real	-Werror=format=		format ‘%d’ expects argument of type ‘int’, but argument 4 has type ‘long int’
+src/connection/connection_sr.c	661	real	-Werror=format=		format ‘%d’ expects argument of type ‘int’, but argument 4 has type ‘long int’
+src/connection/connection_sr.c	905	real	-Werror=format=		format ‘%d’ expects argument of type ‘int’, but argument 4 has type ‘long int’
+src/connection/server_support.c	2728	width	-Werror=format=		format ‘%lld’ expects argument of type ‘long long int’, but argument 5 has type ‘std::chrono::duration<long int, std::ratio<1, 1000000> >::rep’ {aka ‘long int’}
+src/executables/csql.c	2602	empty	-Werror=format-zero-length		zero-length gnu_printf format string
+src/executables/master.c	1473	nonliteral	-Werror=format-security		format not a string literal and no format arguments
+src/executables/master_heartbeat.c	1826	real	-Werror=format=	MASTER_ER_LOG_DEBUG	format ‘%d’ expects argument of type ‘int’, but argument 5 has type ‘long unsigned int’
+src/executables/master_heartbeat.c	4376	real	-Wformat-truncation=		‘%s’ directive output may be truncated writing up to 3959 bytes into a region of size 2019
+src/executables/master_heartbeat.c	4388	real	-Wformat-truncation=		‘%s’ directive output may be truncated writing up to 3959 bytes into a region of size 2002
+src/executables/util_cs.c	271	nonliteral	-Werror=format-security		format not a string literal and no format arguments
+src/executables/util_cs.c	276	nonliteral	-Werror=format-security		format not a string literal and no format arguments
+src/loaddb/load_db.c	137	nonliteral	-Werror=format-security		format not a string literal and no format arguments
+src/loaddb/load_db.c	768	nonliteral	-Werror=format-security		format not a string literal and no format arguments
+src/loaddb/load_db.c	849	nonliteral	-Werror=format-security		format not a string literal and no format arguments
+src/loaddb/load_db.c	883	nonliteral	-Werror=format-security		format not a string literal and no format arguments
+src/loaddb/load_db.c	905	nonliteral	-Werror=format-security		format not a string literal and no format arguments
+src/loaddb/load_db.c	1272	nonliteral	-Werror=format-security		format not a string literal and no format arguments
+src/loaddb/load_db.c	1287	nonliteral	-Werror=format-security		format not a string literal and no format arguments
+src/loaddb/load_db.c	1420	nonliteral	-Werror=format-security		format not a string literal and no format arguments
+src/loaddb/load_db.c	1451	nonliteral	-Werror=format-security		format not a string literal and no format arguments
+src/loaddb/load_db.c	1468	nonliteral	-Werror=format-security		format not a string literal and no format arguments
+src/loaddb/load_db.c	1809	nonliteral	-Werror=format-security		format not a string literal and no format arguments
+src/loaddb/load_sa_loader.cpp	4782	nonliteral	-Werror=format-security		format not a string literal and no format arguments
+src/loaddb/load_sa_loader.cpp	6413	nonliteral	-Werror=format-security		format not a string literal and no format arguments
+src/loaddb/load_sa_loader.cpp	6451	nonliteral	-Werror=format-security		format not a string literal and no format arguments
+src/loaddb/load_sa_loader.cpp	6462	nonliteral	-Werror=format-security		format not a string literal and no format arguments
+src/loaddb/load_sa_loader.cpp	6535	nonliteral	-Werror=format-security		format not a string literal and no format arguments
+src/loaddb/load_sa_loader.cpp	6545	nonliteral	-Werror=format-security		format not a string literal and no format arguments
+src/loaddb/load_sa_loader.cpp	6556	nonliteral	-Werror=format-security		format not a string literal and no format arguments
+src/loaddb/load_sa_loader.cpp	6882	nonliteral	-Werror=format-security		format not a string literal and no format arguments
+src/object/authenticate_password.cpp	223	real	-Wformat-truncation=		‘%s’ directive output may be truncated writing up to 2050 bytes into a region of size between 1988 and 2052
+src/query/query_manager.c	2443	real	-Werror=format=		format ‘%d’ expects argument of type ‘int’, but argument 4 has type ‘QUERY_ID’ {aka ‘long unsigned int’}
+src/query/query_manager.c	2447	real	-Werror=format=		format ‘%d’ expects argument of type ‘int’, but argument 4 has type ‘QUERY_ID’ {aka ‘long unsigned int’}
+src/query/vacuum.c	2289	width	-Werror=format=	vacuum_er_log_error	format ‘%llu’ expects argument of type ‘long long unsigned int’, but argument 8 has type ‘MVCCID’ {aka ‘long unsigned int’}
+src/query/vacuum.c	2289	width	-Werror=format=	vacuum_er_log_error	format ‘%llu’ expects argument of type ‘long long unsigned int’, but argument 9 has type ‘MVCCID’ {aka ‘long unsigned int’}
+src/query/vacuum.c	2290	width	-Werror=format=	vacuum_er_log_error	format ‘%llu’ expects argument of type ‘long long unsigned int’, but argument 10 has type ‘MVCCID’ {aka ‘long unsigned int’}
+src/query/vacuum.c	2290	width	-Werror=format=	vacuum_er_log_error	format ‘%llu’ expects argument of type ‘long long unsigned int’, but argument 9 has type ‘MVCCID’ {aka ‘long unsigned int’}
+src/query/vacuum.c	3149	real	-Werror=format=	vacuum_er_log	format ‘%d’ expects argument of type ‘int’, but argument 12 has type ‘long long int’
+src/query/vacuum.c	4668	width	-Werror=format=	vacuum_er_log	format ‘%lld’ expects argument of type ‘long long int’, but argument 6 has type ‘long unsigned int’
+src/query/vacuum.c	4668	width	-Werror=format=	vacuum_er_log	format ‘%lld’ expects argument of type ‘long long int’, but argument 7 has type ‘long unsigned int’
+src/query/vacuum.c	4912	real	-Werror=format-extra-args	vacuum_er_log_error	too many arguments for format
+src/query/vacuum.c	5330	width	-Werror=format=	vacuum_er_log	format ‘%lld’ expects argument of type ‘long long int’, but argument 5 has type ‘VACUUM_LOG_BLOCKID’ {aka ‘long int’}
+src/query/vacuum.c	5330	width	-Werror=format=	vacuum_er_log	format ‘%lld’ expects argument of type ‘long long int’, but argument 6 has type ‘VACUUM_LOG_BLOCKID’ {aka ‘long int’}
+src/query/vacuum.c	6321	real	-Werror=format=	vacuum_er_log_error	format ‘%d’ expects argument of type ‘int’, but argument 10 has type ‘long long unsigned int’
+src/query/vacuum.c	6321	real	-Werror=format=	vacuum_er_log_error	format ‘%d’ expects argument of type ‘int’, but argument 11 has type ‘long long unsigned int’
+src/query/vacuum.c	6380	width	-Werror=format=	vacuum_er_log	format ‘%llu’ expects argument of type ‘long long unsigned int’, but argument 8 has type ‘MVCCID’ {aka ‘long unsigned int’}
+src/query/vacuum.c	6706	real	-Werror=format=	vacuum_er_log	format ‘%d’ expects argument of type ‘int’, but argument 10 has type ‘long int’
+src/query/vacuum.c	6706	real	-Werror=format=	vacuum_er_log	format ‘%d’ expects argument of type ‘int’, but argument 11 has type ‘long int’
+src/query/vacuum.c	6721	real	-Werror=format=	vacuum_er_log	format ‘%d’ expects argument of type ‘int’, but argument 10 has type ‘long int’
+src/query/vacuum.c	6721	real	-Werror=format=	vacuum_er_log	format ‘%d’ expects argument of type ‘int’, but argument 11 has type ‘long int’
+src/query/vacuum.c	6818	width	-Werror=format=	vacuum_er_log	format ‘%llu’ expects argument of type ‘long long unsigned int’, but argument 7 has type ‘MVCCID’ {aka ‘long unsigned int’}
+src/query/vacuum.c	6818	width	-Werror=format=	vacuum_er_log	format ‘%llu’ expects argument of type ‘long long unsigned int’, but argument 8 has type ‘MVCCID’ {aka ‘long unsigned int’}
+src/query/vacuum.c	7228	real	-Werror=format=	vacuum_er_log_error	format ‘%d’ expects argument of type ‘int’, but argument 5 has type ‘LOG_PAGEID’ {aka ‘long int’}
+src/query/vacuum.c	7228	real	-Werror=format=	vacuum_er_log_error	format ‘%d’ expects argument of type ‘int’, but argument 6 has type ‘LOG_PAGEID’ {aka ‘long int’}
+src/query/vacuum.c	7235	real	-Werror=format=	vacuum_er_log	format ‘%d’ expects argument of type ‘int’, but argument 5 has type ‘size_t’ {aka ‘long unsigned int’}
+src/query/vacuum.c	7235	real	-Werror=format=	vacuum_er_log	format ‘%d’ expects argument of type ‘int’, but argument 6 has type ‘size_t’ {aka ‘long unsigned int’}
+src/query/vacuum.c	7282	width	-Werror=format=	vacuum_er_log	format ‘%lld’ expects argument of type ‘long long int’, but argument 5 has type ‘LOG_PAGEID’ {aka ‘long int’}
+src/query/vacuum.c	7282	width	-Werror=format=	vacuum_er_log	format ‘%lld’ expects argument of type ‘long long int’, but argument 6 has type ‘LOG_PAGEID’ {aka ‘long int’}
+src/query/vacuum.c	7282	width	-Werror=format=	vacuum_er_log	format ‘%lld’ expects argument of type ‘long long int’, but argument 7 has type ‘LOG_PAGEID’ {aka ‘long int’}
+src/query/vacuum.c	7282	width	-Werror=format=	vacuum_er_log	format ‘%lld’ expects argument of type ‘long long int’, but argument 8 has type ‘LOG_PAGEID’ {aka ‘long int’}
+src/query/vacuum.c	7379	nonliteral	-Werror=format-security		format not a string literal and no format arguments
+src/sp/pl_connection.cpp	121	width	-Werror=format=		format ‘%lld’ expects argument of type ‘long long int’, but argument 4 has type ‘size_t’ {aka ‘long unsigned int’}
+src/sp/pl_connection.cpp	121	width	-Werror=format=		format ‘%lld’ expects argument of type ‘long long int’, but argument 5 has type ‘size_t’ {aka ‘long unsigned int’}
+src/storage/btree.c	23324	nonliteral	-Werror=format-security	er_log_debug	format not a string literal and no format arguments
+src/storage/btree.c	25955	width	-Werror=format=	btree_insert_log	format ‘%llu’ expects argument of type ‘long long unsigned int’, but argument 5 has type ‘MVCCID’ {aka ‘long unsigned int’}
+src/storage/btree.c	25955	width	-Werror=format=	btree_insert_log	format ‘%llu’ expects argument of type ‘long long unsigned int’, but argument 6 has type ‘MVCCID’ {aka ‘long unsigned int’}
+src/storage/btree.c	30974	width	-Werror=format=		format ‘%llu’ expects argument of type ‘long long unsigned int’, but argument 10 has type ‘MVCCID’ {aka ‘long unsigned int’}
+src/storage/btree.c	30974	width	-Werror=format=		format ‘%llu’ expects argument of type ‘long long unsigned int’, but argument 11 has type ‘MVCCID’ {aka ‘long unsigned int’}
+src/storage/btree.c	31021	width	-Werror=format=		format ‘%llu’ expects argument of type ‘long long unsigned int’, but argument 10 has type ‘MVCCID’ {aka ‘long unsigned int’}
+src/storage/btree.c	31066	width	-Werror=format=		format ‘%llu’ expects argument of type ‘long long unsigned int’, but argument 10 has type ‘MVCCID’ {aka ‘long unsigned int’}
+src/storage/btree.c	31245	width	-Werror=format=	btree_insert_log	format ‘%lld’ expects argument of type ‘long long int’, but argument 26 has type ‘btree_unique_stats::stat_type’ {aka ‘long int’}
+src/storage/btree.c	31245	width	-Werror=format=	btree_insert_log	format ‘%lld’ expects argument of type ‘long long int’, but argument 27 has type ‘btree_unique_stats::stat_type’ {aka ‘long int’}
+src/storage/btree.c	31245	width	-Werror=format=	btree_insert_log	format ‘%lld’ expects argument of type ‘long long int’, but argument 28 has type ‘btree_unique_stats::stat_type’ {aka ‘long int’}
+src/storage/btree.c	31245	width	-Werror=format=	btree_insert_log	format ‘%lld’ expects argument of type ‘long long int’, but argument 29 has type ‘btree_unique_stats::stat_type’ {aka ‘long int’}
+src/storage/btree_load.c	3961	width	-Werror=format=		format ‘%llu’ expects argument of type ‘long long unsigned int’, but argument 13 has type ‘MVCCID’ {aka ‘long unsigned int’}
+src/storage/btree_load.c	3961	width	-Werror=format=		format ‘%llu’ expects argument of type ‘long long unsigned int’, but argument 14 has type ‘long unsigned int’
+src/storage/btree_load.c	4081	width	-Werror=format=		format ‘%llu’ expects argument of type ‘long long unsigned int’, but argument 13 has type ‘MVCCID’ {aka ‘long unsigned int’}
+src/storage/btree_load.c	4081	width	-Werror=format=		format ‘%llu’ expects argument of type ‘long long unsigned int’, but argument 14 has type ‘MVCCID’ {aka ‘long unsigned int’}
+src/storage/btree_load.c	4732	width	-Werror=format=		format ‘%llu’ expects argument of type ‘long long unsigned int’, but argument 13 has type ‘MVCCID’ {aka ‘long unsigned int’}
+src/storage/btree_load.c	4732	width	-Werror=format=		format ‘%llu’ expects argument of type ‘long long unsigned int’, but argument 14 has type ‘MVCCID’ {aka ‘long unsigned int’}
+src/storage/btree_load.c	4761	width	-Werror=format=		format ‘%llu’ expects argument of type ‘long long unsigned int’, but argument 13 has type ‘MVCCID’ {aka ‘long unsigned int’}
+src/storage/btree_load.c	4761	width	-Werror=format=		format ‘%llu’ expects argument of type ‘long long unsigned int’, but argument 14 has type ‘MVCCID’ {aka ‘long unsigned int’}
+src/storage/double_write_buffer.cpp	862	width	-Werror=format=	dwb_log	format ‘%lld’ expects argument of type ‘long long int’, but argument 5 has type ‘long unsigned int’
+src/storage/double_write_buffer.cpp	896	width	-Werror=format=	dwb_log_error	format ‘%lld’ expects argument of type ‘long long int’, but argument 5 has type ‘long unsigned int’
+src/storage/double_write_buffer.cpp	902	width	-Werror=format=	dwb_log_error	format ‘%lld’ expects argument of type ‘long long int’, but argument 5 has type ‘long unsigned int’
+src/storage/double_write_buffer.cpp	1405	width	-Werror=format=	dwb_log	format ‘%lld’ expects argument of type ‘long long int’, but argument 6 has type ‘long int’
+src/storage/double_write_buffer.cpp	1405	width	-Werror=format=	dwb_log	format ‘%lld’ expects argument of type ‘long long int’, but argument 8 has type ‘long int’
+src/storage/double_write_buffer.cpp	1426	real	-Werror=format=	dwb_log	format ‘%d’ expects a matching ‘int’ argument
+src/storage/double_write_buffer.cpp	1454	width	-Werror=format=	dwb_log	format ‘%lld’ expects argument of type ‘long long int’, but argument 6 has type ‘long int’
+src/storage/double_write_buffer.cpp	1454	width	-Werror=format=	dwb_log	format ‘%lld’ expects argument of type ‘long long int’, but argument 8 has type ‘long int’
+src/storage/double_write_buffer.cpp	1460	width	-Werror=format=	dwb_log	format ‘%lld’ expects argument of type ‘long long int’, but argument 6 has type ‘long int’
+src/storage/double_write_buffer.cpp	2095	width	-Werror=format=	dwb_log_error	format ‘%lld’ expects argument of type ‘long long int’, but argument 6 has type ‘long int’
+src/storage/double_write_buffer.cpp	2103	width	-Werror=format=	dwb_log	format ‘%lld’ expects argument of type ‘long long int’, but argument 6 has type ‘long int’
+src/storage/double_write_buffer.cpp	2546	width	-Werror=format=	dwb_log	format ‘%lld’ expects argument of type ‘long long int’, but argument 5 has type ‘long unsigned int’
+src/storage/double_write_buffer.cpp	2562	width	-Werror=format=	dwb_log_error	format ‘%lld’ expects argument of type ‘long long int’, but argument 6 has type ‘long unsigned int’
+src/storage/double_write_buffer.cpp	2826	width	-Werror=format=	dwb_log_error	format ‘%lld’ expects argument of type ‘long long int’, but argument 5 has type ‘long unsigned int’
+src/storage/double_write_buffer.cpp	2831	width	-Werror=format=	dwb_log	format ‘%lld’ expects argument of type ‘long long int’, but argument 5 has type ‘long unsigned int’
+src/storage/double_write_buffer.cpp	3290	real	-Werror=format=	dwb_log	format ‘%d’ expects a matching ‘int’ argument
+src/storage/double_write_buffer.cpp	3505	width	-Werror=format=	dwb_log_error	format ‘%lld’ expects argument of type ‘long long int’, but argument 5 has type ‘long unsigned int’
+src/storage/double_write_buffer.cpp	3510	width	-Werror=format=	dwb_log	format ‘%lld’ expects argument of type ‘long long int’, but argument 5 has type ‘long unsigned int’
+src/storage/double_write_buffer.cpp	3551	width	-Werror=format=	dwb_log	format ‘%lld’ expects argument of type ‘long long int’, but argument 4 has type ‘UINT64’ {aka ‘long unsigned int’}
+src/storage/double_write_buffer.cpp	3585	width	-Werror=format=	dwb_log_error	format ‘%lld’ expects argument of type ‘long long int’, but argument 5 has type ‘long unsigned int’
+src/storage/double_write_buffer.cpp	3636	width	-Werror=format=	dwb_log	format ‘%lld’ expects argument of type ‘long long int’, but argument 5 has type ‘UINT64’ {aka ‘long unsigned int’}
+src/storage/double_write_buffer.cpp	3657	width	-Werror=format=	dwb_log_error	format ‘%lld’ expects argument of type ‘long long int’, but argument 5 has type ‘long unsigned int’
+src/storage/double_write_buffer.cpp	3689	width	-Werror=format=	dwb_log_error	format ‘%lld’ expects argument of type ‘long long int’, but argument 5 has type ‘long unsigned int’
+src/storage/double_write_buffer.cpp	3724	width	-Werror=format=	dwb_log_error	format ‘%lld’ expects argument of type ‘long long int’, but argument 5 has type ‘long unsigned int’
+src/storage/double_write_buffer.cpp	3733	width	-Werror=format=	dwb_log	format ‘%lld’ expects argument of type ‘long long int’, but argument 4 has type ‘long unsigned int’
+src/storage/double_write_buffer.cpp	3746	width	-Werror=format=	dwb_log	format ‘%lld’ expects argument of type ‘long long int’, but argument 4 has type ‘long unsigned int’
+src/storage/double_write_buffer.cpp	3760	width	-Werror=format=	dwb_log	format ‘%lld’ expects argument of type ‘long long int’, but argument 4 has type ‘long unsigned int’
+src/storage/es.c	213	real	-Werror=format=		format ‘%d’ expects argument of type ‘int’, but argument 5 has type ‘size_t’ {aka ‘long unsigned int’}
+src/storage/es.c	213	real	-Werror=format=		format ‘%d’ expects argument of type ‘int’, but argument 7 has type ‘ssize_t’ {aka ‘long int’}
+src/storage/es.c	220	real	-Werror=format=		format ‘%d’ expects argument of type ‘int’, but argument 5 has type ‘size_t’ {aka ‘long unsigned int’}
+src/storage/es.c	220	real	-Werror=format=		format ‘%d’ expects argument of type ‘int’, but argument 7 has type ‘ssize_t’ {aka ‘long int’}
+src/storage/es.c	223	real	-Werror=format=		format ‘%d’ expects argument of type ‘int’, but argument 5 has type ‘size_t’ {aka ‘long unsigned int’}
+src/storage/es.c	223	real	-Werror=format=		format ‘%d’ expects argument of type ‘int’, but argument 7 has type ‘ssize_t’ {aka ‘long int’}
+src/storage/es.c	269	real	-Werror=format=		format ‘%d’ expects argument of type ‘int’, but argument 5 has type ‘size_t’ {aka ‘long unsigned int’}
+src/storage/es.c	269	real	-Werror=format=		format ‘%d’ expects argument of type ‘int’, but argument 7 has type ‘ssize_t’ {aka ‘long int’}
+src/storage/es.c	276	real	-Werror=format=		format ‘%d’ expects argument of type ‘int’, but argument 5 has type ‘size_t’ {aka ‘long unsigned int’}
+src/storage/es.c	276	real	-Werror=format=		format ‘%d’ expects argument of type ‘int’, but argument 7 has type ‘ssize_t’ {aka ‘long int’}
+src/storage/es.c	279	real	-Werror=format=		format ‘%d’ expects argument of type ‘int’, but argument 5 has type ‘size_t’ {aka ‘long unsigned int’}
+src/storage/es.c	279	real	-Werror=format=		format ‘%d’ expects argument of type ‘int’, but argument 7 has type ‘ssize_t’ {aka ‘long int’}
+src/storage/es.c	285	real	-Werror=format=		format ‘%d’ expects argument of type ‘int’, but argument 5 has type ‘size_t’ {aka ‘long unsigned int’}
+src/storage/es.c	285	real	-Werror=format=		format ‘%d’ expects argument of type ‘int’, but argument 7 has type ‘ssize_t’ {aka ‘long int’}
+src/storage/es.c	618	real	-Werror=format=		format ‘%d’ expects argument of type ‘int’, but argument 5 has type ‘off_t’ {aka ‘long int’}
+src/storage/es.c	625	real	-Werror=format=		format ‘%d’ expects argument of type ‘int’, but argument 5 has type ‘off_t’ {aka ‘long int’}
+src/storage/es.c	628	real	-Werror=format=		format ‘%d’ expects argument of type ‘int’, but argument 5 has type ‘off_t’ {aka ‘long int’}
+src/storage/es.c	634	real	-Werror=format=		format ‘%d’ expects argument of type ‘int’, but argument 5 has type ‘off_t’ {aka ‘long int’}
+src/storage/es_posix.c	407	real	-Werror=format=		format ‘%d’ expects argument of type ‘int’, but argument 5 has type ‘size_t’ {aka ‘long unsigned int’}
+src/storage/es_posix.c	488	real	-Werror=format=		format ‘%d’ expects argument of type ‘int’, but argument 5 has type ‘size_t’ {aka ‘long unsigned int’}
+src/storage/es_posix.c	948	real	-Werror=format=		format ‘%d’ expects argument of type ‘int’, but argument 5 has type ‘size_t’ {aka ‘long unsigned int’}
+src/storage/file_io.c	8655	real	-Werror=format=		format ‘%d’ expects argument of type ‘int’, but argument 4 has type ‘INT64’ {aka ‘long int’}
+src/storage/file_manager.c	285	real	-Werror=format-extra-args		too many arguments for format
+src/storage/file_manager.c	6260	real	-Werror=format=		unknown conversion type character ‘|’ in format
+src/storage/page_buffer.c	4099	real	-Werror=format=		format ‘%d’ expects argument of type ‘int’, but argument 7 has type ‘UINT64’ {aka ‘long unsigned int’}
+src/storage/page_buffer.c	4100	real	-Werror=format=		format ‘%d’ expects argument of type ‘int’, but argument 8 has type ‘UINT64’ {aka ‘long unsigned int’}
+src/storage/page_buffer.c	4101	real	-Werror=format=		format ‘%d’ expects argument of type ‘int’, but argument 9 has type ‘UINT64’ {aka ‘long unsigned int’}
+src/storage/page_buffer.c	4138	real	-Werror=format=		format ‘%d’ expects argument of type ‘int’, but argument 4 has type ‘long int’
+src/storage/page_buffer.c	4138	real	-Werror=format=		format ‘%d’ expects argument of type ‘int’, but argument 5 has type ‘long int’
+src/storage/page_buffer.c	4447	real	-Werror=format=		format ‘%d’ expects argument of type ‘int’, but argument 7 has type ‘long int’
+src/thread/critical_section.c	652	real	-Werror=format=		format ‘%d’ expects argument of type ‘int’, but argument 4 has type ‘__time_t’ {aka ‘long int’}
+src/thread/critical_section.c	652	real	-Werror=format=		format ‘%d’ expects argument of type ‘int’, but argument 5 has type ‘__suseconds_t’ {aka ‘long int’}
+src/thread/critical_section.c	652	real	-Werror=format-extra-args		too many arguments for format
+src/thread/critical_section.c	653	real	-Werror=format=		format ‘%d’ expects argument of type ‘int’, but argument 10 has type ‘__suseconds_t’ {aka ‘long int’}
+src/thread/critical_section.c	653	real	-Werror=format=		format ‘%d’ expects argument of type ‘int’, but argument 11 has type ‘__time_t’ {aka ‘long int’}
+src/thread/critical_section.c	653	real	-Werror=format=		format ‘%d’ expects argument of type ‘int’, but argument 9 has type ‘__time_t’ {aka ‘long int’}
+src/thread/critical_section.c	871	real	-Werror=format=		format ‘%d’ expects argument of type ‘int’, but argument 10 has type ‘__suseconds_t’ {aka ‘long int’}
+src/thread/critical_section.c	871	real	-Werror=format=		format ‘%d’ expects argument of type ‘int’, but argument 4 has type ‘__time_t’ {aka ‘long int’}
+src/thread/critical_section.c	871	real	-Werror=format=		format ‘%d’ expects argument of type ‘int’, but argument 5 has type ‘__suseconds_t’ {aka ‘long int’}
+src/thread/critical_section.c	871	real	-Werror=format=		format ‘%d’ expects argument of type ‘int’, but argument 9 has type ‘__time_t’ {aka ‘long int’}
+src/thread/critical_section.c	871	real	-Werror=format-extra-args		too many arguments for format
+src/thread/critical_section.c	872	real	-Werror=format=		format ‘%d’ expects argument of type ‘int’, but argument 11 has type ‘__time_t’ {aka ‘long int’}
+src/thread/critical_section.c	1131	real	-Werror=format=		format ‘%d’ expects argument of type ‘int’, but argument 10 has type ‘__suseconds_t’ {aka ‘long int’}
+src/thread/critical_section.c	1131	real	-Werror=format=		format ‘%d’ expects argument of type ‘int’, but argument 4 has type ‘__time_t’ {aka ‘long int’}
+src/thread/critical_section.c	1131	real	-Werror=format=		format ‘%d’ expects argument of type ‘int’, but argument 5 has type ‘__suseconds_t’ {aka ‘long int’}
+src/thread/critical_section.c	1131	real	-Werror=format=		format ‘%d’ expects argument of type ‘int’, but argument 9 has type ‘__time_t’ {aka ‘long int’}
+src/thread/critical_section.c	1131	real	-Werror=format-extra-args		too many arguments for format
+src/thread/critical_section.c	1132	real	-Werror=format=		format ‘%d’ expects argument of type ‘int’, but argument 11 has type ‘__time_t’ {aka ‘long int’}
+src/thread/critical_section.c	1339	real	-Werror=format=		format ‘%d’ expects argument of type ‘int’, but argument 10 has type ‘__suseconds_t’ {aka ‘long int’}
+src/thread/critical_section.c	1339	real	-Werror=format=		format ‘%d’ expects argument of type ‘int’, but argument 4 has type ‘__time_t’ {aka ‘long int’}
+src/thread/critical_section.c	1339	real	-Werror=format=		format ‘%d’ expects argument of type ‘int’, but argument 5 has type ‘__suseconds_t’ {aka ‘long int’}
+src/thread/critical_section.c	1339	real	-Werror=format=		format ‘%d’ expects argument of type ‘int’, but argument 9 has type ‘__time_t’ {aka ‘long int’}
+src/thread/critical_section.c	1339	real	-Werror=format-extra-args		too many arguments for format
+src/thread/critical_section.c	1340	real	-Werror=format=		format ‘%d’ expects argument of type ‘int’, but argument 11 has type ‘__time_t’ {aka ‘long int’}
+src/transaction/log_applier.c	4692	real	-Werror=format=		format ‘%d’ expects argument of type ‘int’, but argument 4 has type ‘long int’
+src/transaction/log_applier.c	5902	real	-Werror=format-extra-args		too many arguments for format
+src/transaction/log_applier.c	6661	real	-Werror=format=		format ‘%d’ expects argument of type ‘int’, but argument 4 has type ‘long int’
+src/transaction/log_applier.c	8506	real	-Werror=format-extra-args		too many arguments for format
+src/transaction/log_impl.h	980	real	-Werror=format=	vacuum_er_log	format ‘%d’ expects argument of type ‘int’, but argument 5 has type ‘LOG_TDES*’ {aka ‘log_tdes*’}
+src/transaction/log_manager.c	8073	nonliteral	-Werror=format-security		format not a string literal and no format arguments
+src/transaction/log_manager.c	13879	real	-Werror=format-extra-args	cdc_log	too many arguments for format
+src/transaction/log_manager.c	15738	width	-Werror=format=	cdc_log	format ‘%lld’ expects argument of type ‘long long int’, but argument 6 has type ‘time_t’ {aka ‘long int’}
+src/transaction/log_manager.c	15742	width	-Werror=format=	cdc_log	format ‘%lld’ expects argument of type ‘long long int’, but argument 4 has type ‘time_t’ {aka ‘long int’}
+src/transaction/log_manager.c	16428	real	-Werror=format=	cdc_log	format ‘%lld’ expects argument of type ‘long long int’, but argument 4 has type ‘int’
+src/transaction/log_manager.c	16428	real	-Werror=format=	cdc_log	format ‘%lld’ expects argument of type ‘long long int’, but argument 5 has type ‘int’
+src/transaction/log_page_buffer.c	916	width	-Werror=format=		format ‘%lld’ expects argument of type ‘long long int’, but argument 4 has type ‘LOG_PAGEID’ {aka ‘long int’}
+src/transaction/log_page_buffer.c	2079	width	-Werror=format=		format ‘%lld’ expects argument of type ‘long long int’, but argument 6 has type ‘LOG_PAGEID’ {aka ‘long int’}
+src/transaction/log_page_buffer.c	2118	width	-Werror=format=		format ‘%lld’ expects argument of type ‘long long int’, but argument 6 has type ‘LOG_PAGEID’ {aka ‘long int’}
+src/transaction/log_page_buffer.c	3029	real	-Werror=format=		format ‘%d’ expects argument of type ‘int’, but argument 5 has type ‘long unsigned int’
+src/transaction/log_page_buffer.c	3632	width	-Werror=format=		format ‘%lld’ expects argument of type ‘long long int’, but argument 4 has type ‘long int’
+src/transaction/log_page_buffer.c	6015	width	-Werror=format=		format ‘%lld’ expects argument of type ‘long long int’, but argument 4 has type ‘LOG_PAGEID’ {aka ‘long int’}
+src/transaction/log_page_buffer.c	6213	width	-Werror=format=		format ‘%lld’ expects argument of type ‘long long int’, but argument 4 has type ‘LOG_PAGEID’ {aka ‘long int’}
+src/transaction/log_page_buffer.c	6352	width	-Werror=format=		format ‘%lld’ expects argument of type ‘long long int’, but argument 5 has type ‘LOG_PAGEID’ {aka ‘long int’}
+src/transaction/log_page_buffer.c	6352	width	-Werror=format=		format ‘%lld’ expects argument of type ‘long long int’, but argument 6 has type ‘LOG_PAGEID’ {aka ‘long int’}
+src/transaction/log_page_buffer.c	6373	width	-Werror=format=		format ‘%lld’ expects argument of type ‘long long int’, but argument 4 has type ‘LOG_PAGEID’ {aka ‘long int’}
+src/transaction/log_page_buffer.c	6418	width	-Werror=format=		format ‘%lld’ expects argument of type ‘long long int’, but argument 4 has type ‘LOG_PAGEID’ {aka ‘long int’}
+src/transaction/log_page_buffer.c	6483	real	-Werror=format=		format ‘%d’ expects argument of type ‘int’, but argument 6 has type ‘LOG_PAGEID’ {aka ‘long int’}
+src/transaction/log_page_buffer.c	6653	real	-Werror=format=		format ‘%d’ expects argument of type ‘int’, but argument 4 has type ‘LOG_PAGEID’ {aka ‘long int’}
+src/transaction/log_page_buffer.c	8729	width	-Werror=format=		format ‘%lld’ expects argument of type ‘long long int’, but argument 6 has type ‘LOG_PAGEID’ {aka ‘long int’}
+src/transaction/log_page_buffer.c	11762	real	-Werror=format=		format ‘%d’ expects argument of type ‘int’, but argument 4 has type ‘LOG_PAGEID’ {aka ‘long int’}
+src/transaction/log_page_buffer.c	11762	real	-Werror=format=		format ‘%d’ expects argument of type ‘int’, but argument 5 has type ‘LOG_PAGEID’ {aka ‘long int’}
+src/transaction/log_page_buffer.c	11766	real	-Werror=format=		format ‘%d’ expects argument of type ‘int’, but argument 4 has type ‘LOG_PAGEID’ {aka ‘long int’}
+src/transaction/log_page_buffer.c	11766	real	-Werror=format=		format ‘%d’ expects argument of type ‘int’, but argument 5 has type ‘LOG_PAGEID’ {aka ‘long int’}
+src/transaction/log_recovery.c	791	width	-Werror=format=		format ‘%lld’ expects argument of type ‘long long int’, but argument 6 has type ‘long int’
+src/transaction/log_recovery.c	2709	width	-Werror=format=		format ‘%lld’ expects argument of type ‘long long int’, but argument 6 has type ‘long int’
+src/transaction/log_recovery.c	2732	width	-Werror=format=		format ‘%lld’ expects argument of type ‘long long int’, but argument 6 has type ‘LOG_PAGEID’ {aka ‘long int’}
+src/transaction/log_recovery.c	2826	width	-Werror=format=		format ‘%lld’ expects argument of type ‘long long int’, but argument 5 has type ‘long int’
+src/transaction/log_recovery.c	2845	width	-Werror=format=		format ‘%lld’ expects argument of type ‘long long int’, but argument 4 has type ‘long int’
+src/transaction/log_recovery.c	2845	width	-Werror=format=		format ‘%lld’ expects argument of type ‘long long int’, but argument 6 has type ‘long int’
+src/transaction/log_recovery.c	2875	width	-Werror=format=		format ‘%lld’ expects argument of type ‘long long int’, but argument 4 has type ‘long int’
+src/transaction/log_recovery.c	2875	width	-Werror=format=		format ‘%lld’ expects argument of type ‘long long int’, but argument 6 has type ‘long int’
+src/transaction/log_recovery.c	4055	real	-Werror=format=		format ‘%d’ expects argument of type ‘int’, but argument 5 has type ‘long unsigned int’
+src/transaction/log_recovery.c	4055	real	-Werror=format=		format ‘%d’ expects argument of type ‘int’, but argument 6 has type ‘long unsigned int’
+src/transaction/log_recovery_redo_perf.hpp	218	nonliteral	-Werror=format-security		format not a string literal and no format arguments
+src/transaction/log_tran_table.c	3091	width	-Werror=format=		format ‘%lld’ expects argument of type ‘long long int’, but argument 4 has type ‘INT64’ {aka ‘long int’}
+src/transaction/log_tran_table.c	3091	width	-Werror=format=		format ‘%lld’ expects argument of type ‘long long int’, but argument 5 has type ‘INT64’ {aka ‘long int’}
+src/transaction/log_tran_table.c	3091	width	-Werror=format=		format ‘%lld’ expects argument of type ‘long long int’, but argument 6 has type ‘INT64’ {aka ‘long int’}
+src/transaction/log_tran_table.c	5326	real	-Werror=format=		format ‘%d’ expects argument of type ‘int’, but argument 7 has type ‘long long int’
+src/transaction/log_tran_table.c	5326	real	-Werror=format=		format ‘%d’ expects argument of type ‘int’, but argument 8 has type ‘long long int’
+src/transaction/log_tran_table.c	5326	real	-Werror=format=		format ‘%d’ expects argument of type ‘int’, but argument 9 has type ‘long long int’
+src/transaction/log_writer.c	943	width	-Werror=format=		format ‘%lld’ expects argument of type ‘long long int’, but argument 4 has type ‘LOG_PAGEID’ {aka ‘long int’}
+src/transaction/log_writer.c	943	width	-Werror=format=		format ‘%lld’ expects argument of type ‘long long int’, but argument 5 has type ‘LOG_PAGEID’ {aka ‘long int’}
+src/transaction/log_writer.c	1483	width	-Werror=format=		format ‘%lld’ expects argument of type ‘long long int’, but argument 5 has type ‘LOG_PAGEID’ {aka ‘long int’}
+src/transaction/log_writer.c	1483	width	-Werror=format=		format ‘%lld’ expects argument of type ‘long long int’, but argument 6 has type ‘LOG_PAGEID’ {aka ‘long int’}
+src/transaction/log_writer.c	1815	real	-Wformat-overflow=		‘%s’ directive writing up to 16543 bytes into a region of size 8192
+src/transaction/log_writer.c	2479	width	-Werror=format=		format ‘%lld’ expects argument of type ‘long long int’, but argument 4 has type ‘LOG_PAGEID’ {aka ‘long int’}
+src/transaction/log_writer.c	2479	width	-Werror=format=		format ‘%lld’ expects argument of type ‘long long int’, but argument 5 has type ‘LOG_PAGEID’ {aka ‘long int’}
+src/transaction/log_writer.c	2479	width	-Werror=format=		format ‘%lld’ expects argument of type ‘long long int’, but argument 6 has type ‘UINT64’ {aka ‘long unsigned int’}
+src/transaction/log_writer.c	2626	width	-Werror=format=		format ‘%lld’ expects argument of type ‘long long int’, but argument 5 has type ‘LOG_PAGEID’ {aka ‘long int’}
+src/xasl/xasl_iteration.cpp	84	nonliteral	-Werror=format-security		format not a string literal and no format arguments

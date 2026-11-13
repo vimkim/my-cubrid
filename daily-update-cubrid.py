@@ -22,6 +22,7 @@ PROJECTS = {
     "cubrid-qahome": "gh/cubrid-qahome-fetcher",
     "csql-future": "gh/csql-future",
     "my-cubrid-hermes": "gh/my-cubrid-hermes",
+    "my-cubrid-pr-review": "gh/my-cubrid-pr-review",
 }
 
 # Reuse each accepted project's existing installation interface.

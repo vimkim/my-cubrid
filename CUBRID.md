@@ -33,8 +33,8 @@ The dotfiles step still runs with positional directories. `--list` and
 
 Defaults are `~/gh/cubrid-conf-tui`, `~/gh/cubrid-build-coordinator`,
 `~/gh/cubrid-workenv`, `~/gh/cubrid-jira`, `~/gh/cubrid-ci`,
-`~/gh/cubrid-qahome-fetcher`, `~/gh/csql-future`, and
-`~/gh/my-cubrid-hermes`.
+`~/gh/cubrid-qahome-fetcher`, `~/gh/csql-future`,
+`~/gh/my-cubrid-hermes`, and `~/gh/my-cubrid-pr-review`.
 `cubrid-qahome-fetcher` preserves its existing checkout name and location.
 Existing tools use `just sync`; `cubrid-ci` uses `just install`,
 and `cubrid-qahome` uses `uv tool install --reinstall .`. Custom directories
@@ -43,6 +43,7 @@ outside the defaults use their local `just sync` recipe.
 `uv tool install --reinstall .` and installs `csql-future` on the user PATH.
 `my-cubrid-hermes` is an independent Python uv tool; its `just sync` installs
 its commands on the user PATH, and its runtime state lives outside the checkout.
+`my-cubrid-pr-review` uses `just sync` to install its Python uv tool.
 The Nushell `cs` alias calls `csql.sh`, which keeps database selection and SA/CS
 verification before launching this wrapper with the active environment's `csql`.
 Checkouts must be clean primary repositories on `main` tracking `origin/main`;

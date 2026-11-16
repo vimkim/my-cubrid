@@ -223,8 +223,14 @@ locks-json:
 # Run configured ctest tests while holding the runtime lock.
 [working-directory(justfile_directory())]
 ctest:
-    bash "${MY_CUBRID:-$HOME/my-cubrid}/bin/cubrid-test-socket-preflight.sh"
-    "${MY_CUBRID:-$HOME/my-cubrid}/bin/cubrid-build-coordinator.sh" installation-use 300 -- ctest --test-dir "$CUBRID_BUILD_DIR" --output-on-failure --verbose
+    #!/usr/bin/env bash
+    set -euo pipefail
+    socket_tmp="$(bash "${MY_CUBRID:-$HOME/my-cubrid}/bin/cubrid-test-socket-preflight.sh" "$CUBRID_BUILD_DIR")"
+    if [[ -n "$socket_tmp" ]]; then
+      mkdir -p -m 700 "$socket_tmp"
+      export CUBRID_TMP="$socket_tmp"
+    fi
+    exec "${MY_CUBRID:-$HOME/my-cubrid}/bin/cubrid-build-coordinator.sh" installation-use 300 -- ctest --test-dir "$CUBRID_BUILD_DIR" --output-on-failure --verbose
 
 # Run the currently configured test suite. This is intentionally ctest-only.
 [working-directory(justfile_directory())]

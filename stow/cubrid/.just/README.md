@@ -30,6 +30,14 @@ Running `just` lists these commands and the available namespaces. `test` is
 currently an honest alias for the configured ctest suite; it does not claim to
 run CTP SQL regression tests.
 
+Before ctest starts, `ctest` checks that each test database's PL socket path
+(`sp_<db>.sock`) fits the 107-byte Unix socket limit. It reads the database names
+from the build directory's fixtures and checks the longest one. An explicit
+`CUBRID_TMP` that is too long stops the run. When `CUBRID_TMP` is unset and the
+installation path is too long, the run uses a short directory that stays the
+same for the installation, `/tmp/cubrid-sock-<hash>`, as `CUBRID_TMP`. A direct
+`ctest` call skips this check.
+
 Shared recipes live in these namespaces:
 
 - `core`: preset-aware build, install, ctest, cache, target, and stow workflows

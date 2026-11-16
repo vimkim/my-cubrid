@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Refresh and apply dotfiles, then update clean CUBRID tool checkouts."""
+"""Refresh and apply dotfiles, then update clean CUBRID project checkouts."""
 
 import argparse
 import shlex
@@ -9,11 +9,13 @@ import sys
 from pathlib import Path
 
 # Paths are relative to the user's home and preserve the existing checkouts.
-# Add tools only when their installation command installs local tools, not content.
+# Each project owns its tool installation or skill collection synchronization.
 # Owner's workflow decision (2026-10-22): exclude grill-tui,
 # gh-pr-comments-fetch, cubrid-dev2-pr, and volmap from both daily updaters.
 # See CUBRID.md and vimkim/dotfiles docs/daily-update.md for the decision.
 PROJECTS = {
+    "my-cubrid-skills": "gh/my-cubrid-skills",
+    "cubrid-tc-chronicle": "gh/cubrid-tc-chronicle",
     "cubrid-conf-tui": "gh/cubrid-conf-tui",
     "cubrid-build-coordinator": "gh/cubrid-build-coordinator",
     "cubrid-workenv": "gh/cubrid-workenv",
@@ -131,6 +133,11 @@ def main() -> int:
     )
     action = parser.add_mutually_exclusive_group()
     action.add_argument("--list", action="store_true", help="list selected checkouts")
+    parser.add_argument(
+        "--skip-dotfiles",
+        action="store_true",
+        help="update CUBRID projects after the caller has handled dotfiles",
+    )
     action.add_argument(
         "-n",
         "--dry-run",
@@ -164,14 +171,15 @@ def main() -> int:
 
     failed = []
     skipped = []
-    try:
-        update_dotfiles(dry_run=args.dry_run)
-    except Skipped as error:
-        print(f"SKIPPED: {error}", flush=True)
-        skipped.append("dotfiles")
-    except (Failed, OSError) as error:
-        print(f"FAILED: {error}", flush=True)
-        failed.append("dotfiles")
+    if not args.skip_dotfiles:
+        try:
+            update_dotfiles(dry_run=args.dry_run)
+        except Skipped as error:
+            print(f"SKIPPED: {error}", flush=True)
+            skipped.append("dotfiles")
+        except (Failed, OSError) as error:
+            print(f"FAILED: {error}", flush=True)
+            failed.append("dotfiles")
     for project in projects:
         print(f"\n── {project.name} ──", flush=True)
         # Pin the recipe file so just never discovers an unrelated parent recipe.

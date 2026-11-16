@@ -123,6 +123,8 @@ class DailyUpdateTest(unittest.TestCase):
         result = self.run_cli("--list")
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertEqual(result.stdout.splitlines(), [
+            str(self.home / "gh/my-cubrid-skills"),
+            str(self.home / "gh/cubrid-tc-chronicle"),
             str(self.home / "gh/cubrid-conf-tui"),
             str(self.home / "gh/cubrid-build-coordinator"),
             str(self.home / "gh/cubrid-workenv"),
@@ -139,6 +141,8 @@ class DailyUpdateTest(unittest.TestCase):
 
     def test_default_run_syncs_all_registered_tools(self):
         tools = {
+            "my-cubrid-skills": "gh/my-cubrid-skills",
+            "cubrid-tc-chronicle": "gh/cubrid-tc-chronicle",
             "cubrid-conf-tui": "gh/cubrid-conf-tui",
             "cubrid-build-coordinator": "gh/cubrid-build-coordinator",
             "cubrid-workenv": "gh/cubrid-workenv",
@@ -176,6 +180,46 @@ class DailyUpdateTest(unittest.TestCase):
                 self.assertIn("daily-update --dotfiles-only", result.stdout)
                 self.assertIn("dotfiles", result.stdout + result.stderr)
                 self.assertEqual(self.log.read_text(), "tool\n")
+
+    def test_skip_dotfiles_updates_projects_without_general_updater(self):
+        project = self.project("delegated")
+        (self.root / "bin/daily-update").unlink()
+        result = self.run_cli("--skip-dotfiles", project)
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertEqual(self.log.read_text(), "delegated\n")
+        self.assertFalse(self.dotfiles_log.exists())
+        self.assertNotIn("daily-update --dotfiles-only", result.stdout)
+
+    def test_daily_update_recipe_installs_before_running_and_preserves_results(self):
+        source = self.root / "my-cubrid"
+        static = source / "static-analysis/static-check/cubrid-static-check"
+        static.parent.mkdir(parents=True)
+        static.write_text('#!/bin/sh\nexit 0\n')
+        shutil.copyfile(ROOT / "justfile", source / "justfile")
+        updater = source / "daily-update-cubrid.py"
+        updater.write_text(
+            '#!/bin/sh\n[ "$*" = --help ] && exit 0\n'
+            'printf "%s\\n" "$*" >> "$DAILY_UPDATE_TEST_LOG"\n'
+            'exit "${DAILY_UPDATE_TEST_RESULT:-0}"\n'
+        )
+        install_dir = self.home / "custom bin"
+        install_dir.mkdir()
+        installed = install_dir / "daily-update-cubrid"
+        installed.write_text('#!/bin/sh\nexit 91\n')
+        installed.chmod(0o755)
+        for code in (0, 2, 1):
+            with self.subTest(code=code):
+                result = subprocess.run(
+                    [shutil.which("just"), "--justfile", "./justfile", "daily-update"],
+                    cwd=source,
+                    env=dict(self.env, DAILY_UPDATE_CUBRID_BIN_DIR=str(install_dir),
+                             DAILY_UPDATE_TEST_RESULT=str(code)),
+                    text=True, capture_output=True, timeout=20,
+                )
+                self.assertEqual(result.returncode, code, result.stdout + result.stderr)
+                self.assertEqual(installed.read_bytes(), updater.read_bytes())
+        self.assertEqual(self.log.read_text(), "--skip-dotfiles\n" * 3)
+        self.assertFalse(self.dotfiles_log.exists())
 
     def test_missing_daily_update_is_reported_and_tools_still_update(self):
         project = self.project("tool")

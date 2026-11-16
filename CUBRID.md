@@ -26,12 +26,20 @@ preserved; failed refreshes prevent applying stale sources. Locally edited
 deployed targets are preserved by the helper. This mode does not mark the
 general daily upkeep complete or load its project inventory.
 Run `just sync` in this repository to install the updater itself.
+The general `daily-update` refreshes the clean primary `~/my-cubrid` checkout
+and runs `just daily-update` here. That recipe installs the freshly fetched
+updater through `just sync`, then runs `daily-update-cubrid --skip-dotfiles`.
+This avoids a second dotfiles application. Skips and failures propagate to
+the general daily summary. Set `update = false` on its `my-cubrid` inventory
+entry to stop this automatic integration after leaving CUBRID.
 `--list` lists checkout paths without updating; `--dry-run` previews commands
 without fetching, merging, or installing. Positional directories replace the defaults.
-The dotfiles step still runs with positional directories. `--list` and
+Unless `--skip-dotfiles` is passed, the dotfiles step also runs with positional
+directories. `--list` and
 `--dry-run` never run it; dry-run prints the delegation command and its purpose.
 
-Defaults are `~/gh/cubrid-conf-tui`, `~/gh/cubrid-build-coordinator`,
+Defaults are `~/gh/my-cubrid-skills`, `~/gh/cubrid-tc-chronicle`,
+`~/gh/cubrid-conf-tui`, `~/gh/cubrid-build-coordinator`,
 `~/gh/cubrid-workenv`, `~/gh/cubrid-jira`, `~/gh/cubrid-ci`,
 `~/gh/cubrid-qahome-fetcher`, `~/gh/csql-future`,
 `~/gh/my-cubrid-hermes`, `~/gh/my-cubrid-pr-review`, and
@@ -45,6 +53,9 @@ outside the defaults use their local `just sync` recipe.
 `my-cubrid-hermes` is an independent Python uv tool; its `just sync` installs
 its commands on the user PATH, and its runtime state lives outside the checkout.
 `my-cubrid-pr-review` uses `just sync` to install its Python uv tool.
+`my-cubrid-skills` uses `just sync` to reconcile its skill collection.
+`cubrid-tc-chronicle` uses `just sync` to reinstall the CLI. Its CI evidence
+collection still requires an explicit `cubrid-tcc sync-data` invocation.
 The Nushell `cs` alias calls `csql.sh`, which keeps database selection and SA/CS
 verification before launching this wrapper with the active environment's `csql`.
 Checkouts must be clean primary repositories on `main` tracking `origin/main`;
@@ -58,8 +69,11 @@ Personal workflow decision, 2026-10-22: the owner excludes `grill-tui`,
 `gh-pr-comments-fetch`, `cubrid-dev2-pr`, and `volmap` from both daily updaters.
 This decision reflects personal workflow, not project quality, maturity,
 maintenance, or deprecation. Change these defaults only after an explicit owner
-decision. `work-tracker`, `my-skills`, `my-cubrid-skills`, and
-`cubrid-tc-chronicle` remain managed by the general `daily-update` command.
+decision. `work-tracker` and `my-skills` remain managed by the general
+`daily-update` command. As of 2026-11-16, `my-cubrid-skills` and
+`cubrid-tc-chronicle` are managed here. The general inventory retains
+`my-cubrid-skills` with `update = false` to protect its identities and skill
+names from third-party maintenance and pruning.
 
 Deprecation decision, 2026-10-22: use `cubrid-conf-tui` for interactive
 configuration editing. `cubrid-ini-fzf` is deprecated and removed from

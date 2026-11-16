@@ -14,3 +14,10 @@ sync:
     install -m 755 -- static-analysis/static-check/cubrid-static-check "$install_dir/cubrid-static-check"
     "$install_dir/cubrid-static-check" --help >/dev/null
     printf 'Installed %s/cubrid-static-check\n' "$install_dir"
+
+# Refresh the installed updater, then run the CUBRID part of general daily upkeep.
+daily-update: sync
+    #!/usr/bin/env bash
+    set -euo pipefail
+    install_dir="${DAILY_UPDATE_CUBRID_BIN_DIR:-$HOME/.local/bin}"
+    exec "$install_dir/daily-update-cubrid" --skip-dotfiles

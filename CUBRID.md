@@ -34,7 +34,8 @@ The dotfiles step still runs with positional directories. `--list` and
 Defaults are `~/gh/cubrid-conf-tui`, `~/gh/cubrid-build-coordinator`,
 `~/gh/cubrid-workenv`, `~/gh/cubrid-jira`, `~/gh/cubrid-ci`,
 `~/gh/cubrid-qahome-fetcher`, `~/gh/csql-future`,
-`~/gh/my-cubrid-hermes`, and `~/gh/my-cubrid-pr-review`.
+`~/gh/my-cubrid-hermes`, `~/gh/my-cubrid-pr-review`, and
+`~/gh/cubrid-teams-dev2-vimkim-bot`.
 `cubrid-qahome-fetcher` preserves its existing checkout name and location.
 Existing tools use `just sync`; `cubrid-ci` uses `just install`,
 and `cubrid-qahome` uses `uv tool install --reinstall .`. Custom directories

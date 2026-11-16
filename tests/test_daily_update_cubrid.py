@@ -132,6 +132,7 @@ class DailyUpdateTest(unittest.TestCase):
             str(self.home / "gh/csql-future"),
             str(self.home / "gh/my-cubrid-hermes"),
             str(self.home / "gh/my-cubrid-pr-review"),
+            str(self.home / "gh/cubrid-teams-dev2-vimkim-bot"),
         ])
         self.assertFalse(self.log.exists())
         self.assertFalse(self.dotfiles_log.exists())
@@ -147,6 +148,7 @@ class DailyUpdateTest(unittest.TestCase):
             "csql-future": "gh/csql-future",
             "my-cubrid-hermes": "gh/my-cubrid-hermes",
             "my-cubrid-pr-review": "gh/my-cubrid-pr-review",
+            "cubrid-teams-dev2-vimkim-bot": "gh/cubrid-teams-dev2-vimkim-bot",
         }
         for tool, relative in tools.items():
             project = self.project(tool, relative=relative)
@@ -298,8 +300,8 @@ class DailyUpdateTest(unittest.TestCase):
                 self.assertFalse(self.log.exists())
 
     def test_default_checkout_with_wrong_origin_is_skipped(self):
-        self.project("cubrid-ci", relative="gh/cubrid-ci")
-        project = self.home / "gh/cubrid-ci"
+        name = "cubrid-teams-dev2-vimkim-bot"
+        project = self.project(name, relative=f"gh/{name}")
         self.git(project, "config", "remote.origin.url", "https://github.com/someone/other.git")
         result = self.run_cli(project)
         self.assertEqual(result.returncode, 2, result.stdout + result.stderr)

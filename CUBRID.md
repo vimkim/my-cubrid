@@ -86,6 +86,7 @@ follow-up tracked in its [README TODO](https://github.com/vimkim/cubrid-conf-tui
 
 For benchmark and unit-test preset selection and cache migration, see [CMake release presets](docs/cmake-presets.md).
 
+- Before adding a function definition under `src/`, follow the [CUBRID function reuse procedure](/home/vimkim/gh/my-cubrid-skills/cubrid-common/references/function-reuse.md).
 - Use the personal `just` recipes for local development: `just configure` generates build rules, `just build` produces artifacts, and `just install` installs existing artifacts.
   - Use `just build-and-install` for both stages, or `just configure-build-and-install` to include configuration. `just configure-build` omits installation.
   - `just build-test` builds and runs configured ctest tests. Use `just build-and-install-test` when tests need refreshed installed artifacts.

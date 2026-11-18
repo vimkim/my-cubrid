@@ -34,6 +34,12 @@ CUBRID PR into `baseRefName` until both TC PRs are merged or closed.
   on the TC PR head branches. Never merge or close TC PRs or delete their
   branches.
 
+Before recommending a merge, asking for merge permission, or merging a
+CUBRID engine or testcase PR, apply the
+[PR approval gate](/home/vimkim/gh/my-cubrid-skills/cubrid-common/SKILL.md#pr-approval-gate).
+Show the current per-reviewer result before asking for permission and again
+immediately before each merge.
+
 Trigger CUBRID CI once after the source and any required TC pushes. Wait for
 that run to finish, report its result and run URL, including any TC Merge
 Gate blocker, then stop and wait for the human's direction. Do not make

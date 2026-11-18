@@ -131,6 +131,8 @@ The private testcase repository is available locally and may be used when the ta
 
 Keep TC PRs open to preserve isolation until the final engine merge handoff. Before recommending or performing TC closure, TC merging, or engine merging, follow [Testcase lifecycle](/home/vimkim/gh/my-cubrid-skills/cubrid-common/references/testcase-lifecycle.md). That reference owns the shared timing and close-versus-merge rules.
 
+Before recommending a merge, asking for merge permission, or merging a CUBRID engine or testcase PR, apply the [PR approval gate](/home/vimkim/gh/my-cubrid-skills/cubrid-common/SKILL.md#pr-approval-gate). Show the current per-reviewer result before asking for permission and again immediately before each merge.
+
 ## CI and regression testing
 
 - Pull requests targeting `develop` must pass CUBRID CI. The principal regression suites are `test_medium`, `test_sql`, and `test_shell`; inspect the live CI configuration for current jobs and timing. Keep the TC merge gate separate from regression results and finalize it only through the testcase lifecycle above.

@@ -2,7 +2,7 @@
 default:
     @just --list
 
-# Install the daily CUBRID updater and cubrid-static-check into the user command directory.
+# Install the daily CUBRID updater, cubrid-static-check, and cubrid-dev2-members.
 sync:
     #!/usr/bin/env bash
     set -euo pipefail
@@ -14,6 +14,9 @@ sync:
     install -m 755 -- static-analysis/static-check/cubrid-static-check "$install_dir/cubrid-static-check"
     "$install_dir/cubrid-static-check" --help >/dev/null
     printf 'Installed %s/cubrid-static-check\n' "$install_dir"
+    install -m 755 -- bin/cubrid-dev2-members "$install_dir/cubrid-dev2-members"
+    "$install_dir/cubrid-dev2-members" --help >/dev/null
+    printf 'Installed %s/cubrid-dev2-members\n' "$install_dir"
 
 # Refresh the installed updater, then run the CUBRID part of general daily upkeep.
 daily-update: sync

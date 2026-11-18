@@ -120,6 +120,12 @@ This prepares the worktree for build-ready, and stows the personal justfile.
 
 Remote selection is routing policy, not permission to push. Inspect the current branch and remotes before any publication action.
 
+## Dev2 team membership
+
+[GitHub CUBRID/dev2](https://github.com/orgs/CUBRID/teams/dev2/members) defines the current Dev2 roster. Run `cubrid-dev2-members` for one GitHub login per line or add `--json` for a JSON array. Install the command with `just sync` from this repository.
+
+The command keeps the roster in `${XDG_CACHE_HOME:-$HOME/.cache}/my-cubrid/dev2-members.json` for 30 days. Use `--refresh` for current membership. On a failed refresh, the command exits with an error and preserves the previous cache. Use the live [PR approval gate](/home/vimkim/gh/my-cubrid-skills/cubrid-common/SKILL.md#pr-approval-gate) for merge decisions.
+
 ## Testcase repositories
 
 | Suite | Repository root | Develop worktree |

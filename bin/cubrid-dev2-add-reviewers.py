@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Deprecated. Request reviews from the whole CUBRID dev2 team for a PR."""
+"""Deprecated. Request reviews from an explicit reviewer list for a PR."""
 
 from __future__ import annotations
 
@@ -13,18 +13,6 @@ import tomllib
 from urllib.parse import urlsplit
 
 
-# DS - Distributed Systems
-# SM - Storage Manager
-FALLBACK_TEAMMATES = (
-    "hgryoo", # DS
-    "hornetmj", # Team Leader
-    "vimkim",
-    # "H2SU", # DS
-    "YeunjunLee", # SM
-    "youngjun9072", # DS
-    "InChiJun", # SM
-    "lht1199", # SM
-)
 DEFAULT_CONFIG = Path(__file__).resolve().parent.parent / "cubrid-dev2-team.toml"
 GITHUB_LOGIN_RE = re.compile(r"^[A-Za-z0-9](?:[A-Za-z0-9-]{0,37}[A-Za-z0-9])?$")
 
@@ -35,7 +23,7 @@ class UserError(RuntimeError):
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
-        description="Deprecated: requests the whole dev2 team. Use cubrid-dev2-pr-reviewers to recommend reviewers instead."
+        description="Deprecated: requests configured reviewers. Use cubrid-dev2-pr-reviewers to recommend reviewers."
     )
     parser.add_argument(
         "pr",
@@ -49,7 +37,7 @@ def parse_args() -> argparse.Namespace:
         "--config",
         type=Path,
         default=DEFAULT_CONFIG,
-        help=f"team TOML file (default: {DEFAULT_CONFIG})",
+        help=f"reviewer selection TOML file (default: {DEFAULT_CONFIG})",
     )
     parser.add_argument(
         "--dry-run",
@@ -91,9 +79,6 @@ def validate_teammates(value: object, source: Path) -> list[str]:
 
 
 def load_teammates(config_path: Path) -> tuple[list[str], str]:
-    if not config_path.is_file():
-        return list(FALLBACK_TEAMMATES), "built-in fallback"
-
     try:
         with config_path.open("rb") as config_file:
             config = tomllib.load(config_file)
@@ -174,7 +159,7 @@ def ensure_pr_is_reviewable(state: str, is_draft: bool) -> None:
 
 
 def main() -> int:
-    print("Warning: cubrid-dev2-add-reviewers.py is deprecated and requests the whole team; use cubrid-dev2-pr-reviewers instead.", file=sys.stderr)
+    print("Warning: cubrid-dev2-add-reviewers.py is deprecated and requests configured reviewers. Use cubrid-dev2-pr-reviewers for recommendations.", file=sys.stderr)
     args = parse_args()
     try:
         pr_url = resolve_pr_url(args.pr)

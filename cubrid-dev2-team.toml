@@ -1,13 +1,10 @@
-# cubrid-dev2-pr configuration
-# DS - Distributed Systems
+# Reviewer selection for cubrid-dev2-add-reviewers.py.
+# Use cubrid-dev2-members to look up GitHub team membership.
 # SM - Storage Manager
 teammates = [
-  # "hgryoo", # DS
   "hornetmj", # Team Leader
   "vimkim", # SM
-  # "H2SU", # DS
   "YeunjunLee", # SM
-  # "youngjun9072", # DS
   "InChiJun", # SM
   "lht1199", # SM
 ]

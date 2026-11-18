@@ -200,6 +200,19 @@ def api_json(endpoint: str):
         raise UserError('GitHub returned invalid JSON') from exc
 
 
+def dev2_members() -> dict[str, str]:
+    try:
+        result = subprocess.run(
+            [str(ROOT / 'bin/cubrid-dev2-members')],
+            capture_output=True, text=True, timeout=50, check=False,
+        )
+    except (OSError, UnicodeError, subprocess.TimeoutExpired) as exc:
+        raise UserError(f'could not read Dev2 membership: {exc}') from exc
+    if result.returncode:
+        raise UserError(result.stderr.strip() or f'cubrid-dev2-members exited with {result.returncode}')
+    return {login.casefold(): login for login in result.stdout.splitlines()}
+
+
 def metadata(number: int) -> tuple:
     try:
         item = api_json(f'repos/CUBRID/cubrid/pulls/{number}')
@@ -413,14 +426,15 @@ def classify(snapshot: Snapshot, ownership: Ownership) -> tuple[tuple[Evidence, 
     return tuple(dict.fromkeys(evidence)), tuple(dict.fromkeys(gaps))
 
 
-def analyze(snapshot: Snapshot, ownership: Ownership, evidence: tuple[Evidence, ...], gaps: tuple[Gap, ...], limit: int) -> Report:
-    people = {p.login.casefold(): p for p in ownership.people}
+def analyze(snapshot: Snapshot, ownership: Ownership, members: dict[str, str], evidence: tuple[Evidence, ...], gaps: tuple[Gap, ...], limit: int) -> Report:
+    people = {key: Person(login, login) for key, login in members.items()}
+    people.update((p.login.casefold(), p) for p in ownership.people)
     modules = {m.id: m for m in ownership.modules}
     required = {e.module for e in evidence}
     author = snapshot.author.casefold()
     existing = {x.casefold() for x in snapshot.requested if x.casefold() in people and x.casefold() != author}
     unmapped = tuple(x for x in snapshot.requested if x.casefold() not in people)
-    visible = set(people) - ownership.exclusions
+    visible = set(members) - ownership.exclusions
     eligible = sorted(visible - existing - {author})
 
     def roles(person: str):
@@ -720,6 +734,7 @@ def main(argv=None) -> int:
             raise UserError('--alternatives must be positive')
         number = pr_number(args.url)
         ownership = load_config(args.config)
+        members = dev2_members()
         snapshot = fetch_snapshot(number)
         evidence, gaps = classify(snapshot, ownership)
         try:
@@ -729,7 +744,7 @@ def main(argv=None) -> int:
                 gaps += (Gap('', 'pull request metadata changed while reading source'),)
         except UserError as exc:
             gaps += (Gap('', f'could not verify final pull request metadata: {exc}'),)
-        report = analyze(snapshot, ownership, evidence, gaps, args.alternatives)
+        report = analyze(snapshot, ownership, members, evidence, gaps, args.alternatives)
         if args.json:
             print(json.dumps(asdict(report), ensure_ascii=False, indent=2))
         elif args.plain or not (sys.stdin.isatty() and sys.stdout.isatty()):

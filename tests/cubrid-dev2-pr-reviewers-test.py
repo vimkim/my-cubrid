@@ -15,6 +15,7 @@ import unittest
 
 ROOT = Path(__file__).resolve().parent.parent
 CLI = ROOT / 'bin/cubrid-dev2-pr-reviewers'
+MEMBERS_CLI = ROOT / 'bin/cubrid-dev2-members'
 OLD = ROOT / 'bin/cubrid-dev2-add-reviewers.py'
 BASE = 'a' * 40
 HEAD = 'b' * 40
@@ -31,7 +32,10 @@ with log.open('a') as f:
 if not args or args[0] != 'api':
     sys.exit('forbidden command')
 args = args[1:]
-if args[:2] == ['-H', 'Accept: application/vnd.github.raw+json']:
+if args == ['--hostname', 'github.com', '--method', 'GET', 'orgs/CUBRID/teams/dev2/members', '--paginate', '--slurp']:
+    members = ('hgryoo', 'hornetmj', 'vimkim', 'H2SU', 'YeunjunLee', 'youngjun9072', 'InChiJun', 'lht1199')
+    print(json.dumps(state.get('member_pages', [[{'login': login} for login in members]])))
+elif args[:2] == ['-H', 'Accept: application/vnd.github.raw+json']:
     args = args[2:]
     if len(args) != 1 or args[0] not in state.get('sources', {}):
         sys.exit('unexpected source request')
@@ -71,9 +75,9 @@ class CliTest(unittest.TestCase):
         fake.chmod(0o755)
         self.data = self.dir / 'data.json'
         self.log = self.dir / 'log'
-        self.env = dict(os.environ, PATH=str(self.dir) + os.pathsep + os.environ['PATH'], FAKE_GH_DATA=str(self.data), FAKE_GH_LOG=str(self.log))
+        self.env = dict(os.environ, PATH=str(self.dir) + os.pathsep + os.environ['PATH'], FAKE_GH_DATA=str(self.data), FAKE_GH_LOG=str(self.log), XDG_CACHE_HOME=str(self.dir / 'cache'))
 
-    def run_cli(self, files, *, author='other', reviewers=(), teams=(), sources=None, after=None, late=None, reported_count=None, args=()):
+    def run_cli(self, files, *, author='other', reviewers=(), teams=(), sources=None, after=None, late=None, reported_count=None, member_pages=None, args=()):
         state = {'metadata': meta(files, author, reviewers, teams), 'files': files, 'sources': sources or {}}
         if reported_count is not None:
             state['metadata']['changed_files'] = reported_count
@@ -81,11 +85,60 @@ class CliTest(unittest.TestCase):
             state['metadata_after'] = after
         if late is not None:
             state['metadata_late'] = late
+        if member_pages is not None:
+            state['member_pages'] = member_pages
         self.data.write_text(json.dumps(state))
         if self.log.exists():
             self.log.unlink()
         run = subprocess.run([str(CLI), URL, '--json', *args], text=True, capture_output=True, env=self.env)
         return run, json.loads(run.stdout)
+
+    def test_members_cache_refresh_and_failure(self):
+        cache = self.dir / 'cache/my-cubrid/dev2-members.json'
+
+        def run_members(*args):
+            return subprocess.run([str(MEMBERS_CLI), *args], text=True, capture_output=True, env=self.env)
+
+        self.data.write_text(json.dumps({'member_pages': [[{'login': 'Zed'}], [{'login': 'Alice'}]]}))
+        first = run_members('--json')
+        self.assertEqual((first.returncode, json.loads(first.stdout)), (0, ['Alice', 'Zed']))
+        first_cache = cache.read_bytes()
+
+        self.data.write_text(json.dumps({'member_pages': [[{'login': 'Bob'}]]}))
+        warm = run_members()
+        self.assertEqual((warm.returncode, warm.stdout.splitlines()), (0, ['Alice', 'Zed']))
+        self.assertEqual(len(self.log.read_text().splitlines()), 1)
+        self.assertEqual(cache.read_bytes(), first_cache)
+
+        refreshed = run_members('--refresh', '--json')
+        self.assertEqual((refreshed.returncode, json.loads(refreshed.stdout)), (0, ['Bob']))
+        refreshed_cache = cache.read_bytes()
+
+        self.data.write_text(json.dumps({'member_pages': [[{'login': 'Bob'}], [{'login': None}]]}))
+        failed = run_members('--refresh')
+        self.assertEqual((failed.returncode, failed.stdout), (1, ''))
+        self.assertEqual(cache.read_bytes(), refreshed_cache)
+
+        saved = json.loads(refreshed_cache)
+        now = int(time.time())
+        seconds_per_day = 24 * 60 * 60
+        self.data.write_text(json.dumps({'member_pages': [[{'login': 'Alice'}]]}))
+        cache.write_text(json.dumps({**saved, 'fetched_at': now - 29 * seconds_per_day}))
+        within_month = run_members('--json')
+        self.assertEqual((within_month.returncode, json.loads(within_month.stdout)), (0, ['Bob']))
+
+        cache.write_text(json.dumps({**saved, 'fetched_at': now - 30 * seconds_per_day}))
+        expired = run_members('--json')
+        self.assertEqual((expired.returncode, json.loads(expired.stdout)), (0, ['Alice']))
+
+        self.data.write_text(json.dumps({'member_pages': [[]]}))
+        empty = run_members('--refresh', '--json')
+        self.assertEqual((empty.returncode, json.loads(empty.stdout)), (0, []))
+
+    def test_ranking_uses_current_team_members_and_retains_exclusions(self):
+        run, report = self.run_cli([], member_pages=[[{'login': 'new-member'}, {'login': 'vimkim'}]])
+        self.assertEqual(run.returncode, 0, report)
+        self.assertEqual([row['login'] for row in report['ranking']], ['new-member'])
 
     def test_exact_cover_and_primary_preference(self):
         heap = changed('src/storage/heap_file.c', 'btree_insert();')
@@ -368,7 +421,7 @@ class CliTest(unittest.TestCase):
             self.assertEqual(run.returncode, 0)
             if cli == OLD:
                 self.assertIn('Deprecated', run.stdout)
-                self.assertIn('whole team', run.stderr)
+                self.assertIn('configured reviewers', run.stderr)
                 self.assertIn('cubrid-dev2-pr-reviewers', run.stderr)
 
 

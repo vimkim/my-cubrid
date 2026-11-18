@@ -1,0 +1,103 @@
+#!/usr/bin/env python3
+
+import argparse
+import json
+import os
+from pathlib import Path
+import re
+import subprocess
+import sys
+import tempfile
+import time
+
+
+ENDPOINT = "orgs/CUBRID/teams/dev2/members"
+CACHE_SECONDS = 30 * 24 * 60 * 60
+LOGIN = re.compile(r"[A-Za-z0-9](?:[A-Za-z0-9-]{0,37}[A-Za-z0-9])?")
+
+
+def cache_path() -> Path:
+    root = Path(os.environ.get("XDG_CACHE_HOME", ""))
+    if not root.is_absolute():
+        root = Path.home() / ".cache"
+    return root / "my-cubrid" / "dev2-members.json"
+
+
+def validate_members(members) -> list[str]:
+    if not isinstance(members, list):
+        raise ValueError("expected a list of Dev2 members")
+    if not all(isinstance(login, str) and LOGIN.fullmatch(login) for login in members):
+        raise ValueError("invalid GitHub login in Dev2 membership")
+    unique = {login.lower(): login for login in members}
+    return sorted(unique.values(), key=str.lower)
+
+
+def cached_members(path: Path) -> list[str] | None:
+    try:
+        saved = json.loads(path.read_text(encoding="utf-8"))
+        fetched_at = saved["fetched_at"]
+        if saved["source"] == ENDPOINT and type(fetched_at) is int:
+            if 0 <= int(time.time()) - fetched_at < CACHE_SECONDS:
+                return validate_members(saved["members"])
+    except (OSError, KeyError, TypeError, ValueError):
+        pass
+    return None
+
+
+def fetch_members() -> list[str]:
+    result = subprocess.run(
+        ["gh", "api", "--hostname", "github.com", "--method", "GET", ENDPOINT,
+         "--paginate", "--slurp"],
+        capture_output=True,
+        text=True,
+        timeout=45,
+        check=False,
+    )
+    if result.returncode:
+        raise ValueError(result.stderr.strip() or f"gh api exited with {result.returncode}")
+    pages = json.loads(result.stdout)
+    if not isinstance(pages, list) or not pages or not all(isinstance(page, list) for page in pages):
+        raise ValueError("expected paginated GitHub team membership")
+    return validate_members([member["login"] for page in pages for member in page])
+
+
+def write_cache(path: Path, members: list[str]) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True, mode=0o700)
+    saved = {"source": ENDPOINT, "fetched_at": int(time.time()), "members": members}
+    stream = tempfile.NamedTemporaryFile(
+        mode="w", encoding="utf-8", dir=path.parent, prefix=f".{path.name}.", delete=False
+    )
+    temporary = Path(stream.name)
+    try:
+        with stream:
+            json.dump(saved, stream)
+            stream.write("\n")
+        temporary.replace(path)
+    finally:
+        temporary.unlink(missing_ok=True)
+
+
+def main() -> int:
+    parser = argparse.ArgumentParser(description="List GitHub CUBRID/dev2 team members.")
+    parser.add_argument("--refresh", action="store_true", help="fetch GitHub even if the cache is fresh")
+    parser.add_argument("--json", action="store_true", help="print a JSON array of logins")
+    args = parser.parse_args()
+    try:
+        path = cache_path()
+        members = None if args.refresh else cached_members(path)
+        if members is None:
+            members = fetch_members()
+            write_cache(path, members)
+    except (OSError, KeyError, TypeError, ValueError, subprocess.TimeoutExpired) as error:
+        print(f"cubrid-dev2-members: {error}", file=sys.stderr)
+        return 1
+    if args.json:
+        print(json.dumps(members))
+    else:
+        for login in members:
+            print(login)
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

@@ -151,6 +151,7 @@ Before recommending a merge, asking for merge permission, or merging a CUBRID en
 ## CI and regression testing
 
 - Pull requests targeting `develop` must pass CUBRID CI. The principal regression suites are `test_medium`, `test_sql`, and `test_shell`; inspect the live CI configuration for current jobs and timing. Keep the TC merge gate separate from regression results and finalize it only through the testcase lifecycle above.
+- To trigger, rerun, or wait on PR `gha-ci`, follow `cubrid-ci-trigger` instead of posting `/run` ad hoc or polling with timers. It enforces testcase baseline checks, concurrency guards, `cubrid-ci-watch` registration, and event-driven waiting (`cubrid-ci-watch wait` in-session, or the host `cubrid-hermes` / `cubrid-briefing` delivery bridge when returning the session).
 - The QA team's separate regression runs may also cover replication, isolation, and other suites. Their testcases can span the public and private testcase repositories.
 
 ## Reproducing TC failure locally

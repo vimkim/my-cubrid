@@ -45,7 +45,7 @@ else: print(json.dumps(data.get('runs', {}).get(sys.argv[-1].split('/')[-1], dat
         checks = []
         for name, state in states.items():
             checks.append({'name': 'gha-ci: ' + name, 'current': {'state': state, 'reported_for_sha': HEAD, 'detail_url': BASE + '/actions/runs/123', 'reported_at': current}})
-        jobs = [{'name': name, 'started_at': (self.when - dt.timedelta(minutes=6)).isoformat(), 'completed_at': (self.when - dt.timedelta(minutes=4)).isoformat(), 'status': 'completed', 'conclusion': 'success'} for name in ('build status', 'status sql', 'status shell', 'status medium')]
+        jobs = [{'name': name, 'started_at': (self.when - dt.timedelta(minutes=6)).isoformat(), 'completed_at': (self.when - dt.timedelta(minutes=4)).isoformat(), 'status': 'completed', 'conclusion': 'success'} for name in ('build status', 'sql / status sql', 'shell / status shell', 'medium / status medium', 'sql_by_cci / status sql_by_cci')]
         self.fixture.write_text(json.dumps({'bad': bad, 'sleep': sleep, 'snapshot': {'schema_version': 1, 'repository': 'CUBRID/cubrid', 'complete': True, 'errors': [], 'pr': {'number': 12, 'url': BASE + '/pull/12', 'head_sha': head}, 'checks': checks}, 'run': {'id': 123, 'run_attempt': run_attempt, 'path': '.github/workflows/gha-ci.yml', 'created_at': (self.when - dt.timedelta(minutes=9)).isoformat()}, 'jobs': [{'jobs': jobs}]}))
 
     def run_cli(self, *args, expected=0):
@@ -192,7 +192,7 @@ else: print(json.dumps(data.get('runs', {}).get(sys.argv[-1].split('/')[-1], dat
         self.assertEqual(self.status()[0]['phase'], 'active')
         fixture = json.loads(self.fixture.read_text())
         fixture['snapshot']['checks'][-1]['current']['state'] = 'SUCCESS'
-        fixture['jobs'][0]['jobs'] = [j for j in fixture['jobs'][0]['jobs'] if j['name'] != 'status sql']
+        fixture['jobs'][0]['jobs'] = [j for j in fixture['jobs'][0]['jobs'] if j['name'] not in ('sql / status sql', 'status sql')]
         self.fixture.write_text(json.dumps(fixture))
         self.run_cli('poll', '--once', '--force')
         result = self.status()[0]['observation']['contexts']['test_sql']
@@ -311,6 +311,116 @@ else: print(json.dumps(data.get('runs', {}).get(sys.argv[-1].split('/')[-1], dat
         self.register(receipt='while-polling')
         first.communicate(timeout=15)
         self.assertEqual(first.returncode, 0)
+
+    def test_reusable_workflow_publishers_and_sql_by_cci(self):
+        args = ['register', '12', '--head', HEAD, '--suite', 'shell', '--suite', 'sql', '--suite', 'medium', '--suite', 'test_sql_by_cci',
+                '--triggered-at', (self.when - dt.timedelta(minutes=10)).isoformat(), '--receipt', 'all-suites', '--run-id', '123', '--attempt', '1']
+        rid = json.loads(self.run_cli(*args))['request_id']
+        states = {name: 'SUCCESS' for name in ('build (debug)', 'build (release)', 'test_shell', 'test_sql', 'test_medium', 'test_sql_by_cci')}
+        self.write_fixture(states)
+        self.run_cli('poll', '--once')
+        row = self.status()[0]
+        self.assertEqual(row['id'], rid)
+        self.assertEqual(row['suites'], ['medium', 'shell', 'sql', 'sql_by_cci'])
+        self.assertEqual(row['outcome'], 'success')
+        self.assertTrue(all(v['attributed'] for v in row['observation']['contexts'].values()))
+
+        # Legacy publisher names remain supported, while duplicate publishers remain ambiguous.
+        rid2 = json.loads(self.run_cli('register', '12', '--head', HEAD, '--suite', 'medium',
+                                       '--triggered-at', (self.when - dt.timedelta(minutes=10)).isoformat(),
+                                       '--receipt', 'ambiguous', '--run-id', '123', '--attempt', '1'))['request_id']
+        fixture = json.loads(self.fixture.read_text())
+        fixture['jobs'][0]['jobs'].append({'name': 'status medium', 'started_at': (self.when - dt.timedelta(minutes=6)).isoformat(),
+                                           'completed_at': (self.when - dt.timedelta(minutes=4)).isoformat(), 'status': 'completed', 'conclusion': 'success'})
+        self.fixture.write_text(json.dumps(fixture))
+        self.run_cli('poll', '--once', '--force')
+        row2 = next(r for r in self.status() if r['id'] == rid2)
+        self.assertEqual(row2['phase'], 'active')
+        self.assertFalse(row2['observation']['contexts']['test_medium']['attributed'])
+
+    def test_cancelled_publisher_attributes_error_only(self):
+        self.register(receipt='cancel-err')
+        self.write_fixture({'build (debug)': 'SUCCESS', 'build (release)': 'SUCCESS', 'test_sql': 'ERROR'})
+        fixture = json.loads(self.fixture.read_text())
+        fixture['jobs'][0]['jobs'] = [j for j in fixture['jobs'][0]['jobs'] if j['name'] != 'sql / status sql'] + [
+            {'name': 'status (cancelled)', 'started_at': (self.when - dt.timedelta(minutes=6)).isoformat(),
+             'completed_at': (self.when - dt.timedelta(minutes=4)).isoformat(), 'status': 'completed', 'conclusion': 'success'}]
+        self.fixture.write_text(json.dumps(fixture))
+        self.run_cli('poll', '--once')
+        self.assertEqual(self.status()[0]['outcome'], 'no_verdict')
+
+        self.register(receipt='cancel-ignore-success')
+        self.write_fixture({'build (debug)': 'SUCCESS', 'build (release)': 'SUCCESS', 'test_sql': 'SUCCESS'})
+        fixture = json.loads(self.fixture.read_text())
+        fixture['jobs'][0]['jobs'] = [j for j in fixture['jobs'][0]['jobs'] if j['name'] != 'sql / status sql'] + [
+            {'name': 'status (cancelled)', 'started_at': (self.when - dt.timedelta(minutes=6)).isoformat(),
+             'completed_at': (self.when - dt.timedelta(minutes=4)).isoformat(), 'status': 'completed', 'conclusion': 'success'}]
+        self.fixture.write_text(json.dumps(fixture))
+        self.run_cli('poll', '--once', '--force')
+        row2 = self.status()[1]
+        self.assertEqual(row2['phase'], 'active')
+        self.assertFalse(row2['observation']['contexts']['test_sql']['attributed'])
+
+    def test_wait_returns_existing_meaningful_event_and_skips_registry_events(self):
+        rid = self.register()
+        self.write_fixture({'build (debug)': 'FAILURE', 'build (release)': 'SUCCESS'})
+        self.run_cli('poll', '--once', '--interval', '1')
+        out = self.run_cli('wait', str(rid), '--after', '0', '--interval', '1')
+        emitted = [json.loads(line) for line in out.splitlines()]
+        self.assertEqual([e['kind'] for e in emitted], ['failure'])
+        cursor = emitted[-1]['id']
+
+        self.write_fixture({'build (debug)': 'FAILURE', 'build (release)': 'SUCCESS', 'test_sql': 'SUCCESS'})
+        proc = subprocess.Popen([str(WATCH), '--state-dir', str(self.state), 'wait', str(rid), '--after', str(cursor), '--until', 'terminal', '--interval', '1', '--timeout', '15'],
+                                env=self.env, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+        stdout, stderr = proc.communicate(timeout=20)
+        self.assertEqual(proc.returncode, 0, stderr)
+        terminal = [json.loads(line) for line in stdout.splitlines()]
+        self.assertEqual([e['kind'] for e in terminal], ['complete'])
+        self.assertEqual(terminal[0]['payload']['outcome'], 'failure')
+
+    def test_wait_cooperates_with_running_poller(self):
+        import time
+        self.write_fixture({'build (debug)': 'SUCCESS'})
+        rid = self.register()
+        poller = subprocess.Popen([str(WATCH), '--state-dir', str(self.state), 'poll', '--interval', '1'],
+                                  env=self.env, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+        try:
+            time.sleep(.3)
+            waiter = subprocess.Popen([str(WATCH), '--state-dir', str(self.state), 'wait', str(rid), '--after', '0', '--interval', '1', '--timeout', '15'],
+                                      env=self.env, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+            time.sleep(1.2)
+            self.assertIsNone(waiter.poll())
+            self.write_fixture({'build (debug)': 'SUCCESS', 'build (release)': 'SUCCESS', 'test_sql': 'SUCCESS'})
+            stdout, stderr = waiter.communicate(timeout=15)
+            self.assertEqual(waiter.returncode, 0, stderr)
+            emitted = [json.loads(line) for line in stdout.splitlines()]
+            self.assertEqual([e['kind'] for e in emitted], ['complete'])
+            self.assertIsNone(poller.poll())
+        finally:
+            poller.terminate()
+            poller.communicate(timeout=10)
+
+    def test_wait_already_closed_timeout_and_unknown_request(self):
+        rid = self.register()
+        self.write_fixture({'build (debug)': 'SUCCESS', 'build (release)': 'SUCCESS', 'test_sql': 'SUCCESS'})
+        self.run_cli('poll', '--once')
+        last_id = self.events()[-1]['id']
+
+        closed_proc = subprocess.run([str(WATCH), '--state-dir', str(self.state), 'wait', str(rid), '--after', str(last_id)],
+                                     env=self.env, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, timeout=10)
+        self.assertEqual(closed_proc.returncode, 0, closed_proc.stderr)
+        self.assertEqual(closed_proc.stdout, '')
+        self.assertIn('already closed', closed_proc.stderr)
+
+        rid2 = self.register(receipt='active-timeout')
+        self.write_fixture({'build (debug)': 'SUCCESS'})
+        timeout_proc = subprocess.run([str(WATCH), '--state-dir', str(self.state), 'wait', str(rid2), '--after', '0', '--interval', '10', '--timeout', '1'],
+                                      env=self.env, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, timeout=10)
+        self.assertEqual(timeout_proc.returncode, 3, timeout_proc.stderr)
+        self.assertEqual(timeout_proc.stdout, '')
+
+        self.run_cli('wait', '99999', expected=2)
 
 
 if __name__ == '__main__':

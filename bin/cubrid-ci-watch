@@ -14,11 +14,20 @@ import time
 
 REPO = 'CUBRID/cubrid'
 BASE = 'https://github.com/' + REPO
-CONTEXTS = {'build (debug)': 'build status', 'build (release)': 'build status',
-            'test_shell': 'status shell', 'test_sql': 'status sql', 'test_medium': 'status medium'}
+CONTEXTS = {
+    'build (debug)': ('build status',),
+    'build (release)': ('build status',),
+    'test_shell': ('shell / status shell', 'status shell'),
+    'test_sql': ('sql / status sql', 'status sql'),
+    'test_medium': ('medium / status medium', 'status medium'),
+    'test_sql_by_cci': ('sql_by_cci / status sql_by_cci', 'status sql_by_cci'),
+}
+SUITES = ('shell', 'sql', 'medium', 'sql_by_cci')
 FAILURES = {'FAILURE'}
 NO_VERDICT = {'ERROR', 'TIMED_OUT', 'CANCELLED', 'ACTION_REQUIRED', 'STARTUP_FAILURE'}
 TERMINAL = FAILURES | NO_VERDICT | {'SUCCESS'}
+MEANINGFUL_EVENTS = {'pickup_candidate', 'failure', 'no_verdict', 'complete', 'head_changed', 'superseded', 'delay', 'deadline'}
+TERMINAL_EVENTS = {'complete', 'head_changed', 'superseded', 'deadline'}
 
 
 def now():
@@ -82,8 +91,8 @@ def register(db, args):
     if not args.receipt.strip():
         raise ValueError('receipt must not be empty')
     suites = sorted(set(s.removeprefix('test_') for s in args.suite))
-    if not suites or any(s not in ('shell', 'sql', 'medium') for s in suites):
-        raise ValueError('select shell, sql, or medium with --suite')
+    if not suites or any(s not in SUITES for s in suites):
+        raise ValueError('select shell, sql, medium, or sql_by_cci with --suite')
     if (args.run_id is None) != (args.attempt is None) or (args.run_id is not None and (args.run_id <= 0 or args.attempt <= 0)):
         raise ValueError('--run-id and --attempt must be positive and supplied together')
     if args.kind == 'rerun-failed' and args.run_id is None:
@@ -140,6 +149,16 @@ def get_run(run_id):
     if created > now():
         raise ValueError('run creation time is in the future')
     return data
+
+
+def published_by(job, current, created, triggered, run_id, current_now):
+    try:
+        report, start, end = (timestamp(current['reported_at']), timestamp(job['started_at']), timestamp(job['completed_at']))
+    except (KeyError, ValueError, TypeError):
+        return False
+    return (job.get('status') == 'completed' and job.get('conclusion') == 'success'
+            and created <= start <= report <= end <= current_now and report >= triggered
+            and current.get('detail_url') == f'{BASE}/actions/runs/{run_id}')
 
 
 def collect(row):
@@ -206,19 +225,22 @@ def collect(row):
         raise ValueError('run attempt changed during collection')
     for name in selected:
         current = found.get(name)
-        matches = [j for j in jobs if j['name'] == CONTEXTS[name]]
-        if not current or len(matches) != 1:
+        if not current:
             continue
-        job = matches[0]
-        try:
-            report, start, end = (timestamp(current['reported_at']), timestamp(job['started_at']), timestamp(job['completed_at']))
-        except (KeyError, ValueError, TypeError):
+        current_now = now()
+        matches = [j for j in jobs if j['name'] in CONTEXTS[name]]
+        if len(matches) > 1:
             continue
-        if (job.get('status') == 'completed' and job.get('conclusion') == 'success'
-                and created <= start <= report <= end <= now() and report >= row['triggered']
-                and current.get('detail_url') == f'{BASE}/actions/runs/{row["run_id"]}'):
-            observations[name]['attributed'] = True
-            observations[name]['reason'] = None
+        if len(matches) == 1:
+            if published_by(matches[0], current, created, row['triggered'], row['run_id'], current_now):
+                observations[name]['attributed'] = True
+                observations[name]['reason'] = None
+            continue
+        if name.startswith('test_') and current.get('state') == 'ERROR':
+            cancel_matches = [j for j in jobs if j['name'] == 'status (cancelled)']
+            if len(cancel_matches) == 1 and published_by(cancel_matches[0], current, created, row['triggered'], row['run_id'], current_now):
+                observations[name]['attributed'] = True
+                observations[name]['reason'] = None
     return {'contexts': observations}
 
 
@@ -303,12 +325,55 @@ def status(db, as_json):
                     print(f"  {name}: {result['state'] or 'not observed'} ({'attributed' if result['attributed'] else result['reason']})")
 
 
+def format_event(row):
+    return encode({'schema_version': 1, 'id': row['id'], 'request_id': row['request_id'],
+                   'key': row['key'], 'kind': row['kind'], 'occurred_at': iso(row['occurred']),
+                   'payload': json.loads(row['payload'])})
+
+
 def events(db, after):
     cursor = after
     for row in db.execute('SELECT * FROM events WHERE id>? ORDER BY id', (after,)):
-        print(encode({'schema_version': 1, 'id': row['id'], 'request_id': row['request_id'], 'key': row['key'], 'kind': row['kind'], 'occurred_at': iso(row['occurred']), 'payload': json.loads(row['payload'])}), flush=True)
+        print(format_event(row), flush=True)
         cursor = row['id']
     return cursor
+
+
+def wait(db, path, args):
+    if not db.execute('SELECT 1 FROM requests WHERE id=?', (args.request_id,)).fetchone():
+        raise ValueError(f'unknown request {args.request_id}')
+    wanted = MEANINGFUL_EVENTS if args.until == 'meaningful' else TERMINAL_EVENTS
+    deadline = time.monotonic() + args.timeout if args.timeout > 0 else None
+    while True:
+        rows = db.execute('SELECT * FROM events WHERE request_id=? AND id>? ORDER BY id', (args.request_id, args.after)).fetchall()
+        matched = [r for r in rows if r['kind'] in wanted]
+        if matched:
+            for r in matched:
+                print(format_event(r), flush=True)
+            return 0
+        req = db.execute('SELECT * FROM requests WHERE id=?', (args.request_id,)).fetchone()
+        if req['phase'] != 'active':
+            print(f"cubrid-ci-watch: request #{args.request_id} is already closed (outcome={req['outcome']})", file=sys.stderr)
+            return 0
+        if deadline is not None and time.monotonic() >= deadline:
+            print(f'cubrid-ci-watch: timed out waiting for request #{args.request_id}', file=sys.stderr)
+            return 3
+        if req['next_poll'] <= now():
+            with open(path / 'poll.lock', 'a') as lock:
+                try:
+                    fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
+                except BlockingIOError:
+                    pass
+                else:
+                    fresh = db.execute('SELECT * FROM requests WHERE id=?', (args.request_id,)).fetchone()
+                    if fresh and fresh['phase'] == 'active' and fresh['next_poll'] <= now():
+                        poll_one(db, fresh, args.interval)
+                        continue
+        sleep_for = min(args.interval, 5)
+        if deadline is not None:
+            sleep_for = min(sleep_for, max(0.0, deadline - time.monotonic()))
+        if sleep_for > 0:
+            time.sleep(sleep_for)
 
 
 def main():
@@ -332,12 +397,21 @@ def main():
     s.add_argument('--json', action='store_true')
     e = sub.add_parser('events')
     e.add_argument('--after', type=int, default=0)
+    w = sub.add_parser('wait', help='block until a meaningful or terminal event commits for one request')
+    w.add_argument('request_id', type=int, help='registered request ID')
+    w.add_argument('--after', type=int, default=0, help='only emit events with ID greater than this cursor (default: 0)')
+    w.add_argument('--until', choices=['meaningful', 'terminal'], default='meaningful', help='event class that wakes the wait (default: meaningful)')
+    w.add_argument('--interval', type=int, default=900, help='fallback poll interval in seconds when no poller holds poll.lock (default: 900)')
+    w.add_argument('--timeout', type=int, default=0, help='seconds before exiting 3; 0 waits until event or closure (default: 0)')
     args = parser.parse_args()
     try:
         if args.command == 'poll' and (args.interval <= 0 or (args.force and not args.once)):
             raise ValueError('--interval must be positive; --force requires --once')
         if args.command == 'events' and args.after < 0:
             raise ValueError('--after must be nonnegative')
+        if args.command == 'wait':
+            if args.request_id <= 0 or args.after < 0 or args.interval <= 0 or args.timeout < 0:
+                raise ValueError('wait requires positive request_id and --interval, and nonnegative --after and --timeout')
         db = connect(args.state_dir)
         if args.command == 'register':
             register(db, args)
@@ -345,6 +419,8 @@ def main():
             return poll(db, args.state_dir, args)
         elif args.command == 'status':
             status(db, args.json)
+        elif args.command == 'wait':
+            return wait(db, args.state_dir, args)
         else:
             events(db, args.after)
         return 0

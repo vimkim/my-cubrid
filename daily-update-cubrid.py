@@ -19,6 +19,7 @@ PROJECTS = {
     "cubrid-conf-tui": "gh/cubrid-conf-tui",
     "cubrid-build-coordinator": "gh/cubrid-build-coordinator",
     "cubrid-workenv": "gh/cubrid-workenv",
+    "cubrid-worktree": "gh/cubrid-worktree",
     "cubrid-jira": "gh/cubrid-jira",
     "cubrid-ci": "gh/cubrid-ci",
     "cubrid-qahome": "gh/cubrid-qahome-fetcher",

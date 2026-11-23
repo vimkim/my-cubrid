@@ -14,6 +14,18 @@ In short:
 - `cubrid-justfiles`: globally accessible cross-work-context launchers
 - `stow/cubrid`: worktree-local server development and maintenance recipes
 
+## Source and review worktrees
+
+`worktree`, `worktree-open`, `worktree-list`, `pr-review`, and `pr-review-all`
+use `[no-cd]` and delegate to `cubrid-worktree`, so they work from any starting
+directory against `~/gh/cb/develop`:
+
+```bash
+just --justfile ~/my-cubrid/cubrid-justfiles/justfile worktree CBRD-28099
+just --justfile ~/my-cubrid/cubrid-justfiles/justfile worktree CBRD-28099-bench
+just --justfile ~/my-cubrid/cubrid-justfiles/justfile pr-review
+```
+
 Keep this distinction when adding or moving recipes. A recipe's subject being
 CUBRID-related is not sufficient reason to place it here; its invocation scope
 and environment coupling determine its owner.

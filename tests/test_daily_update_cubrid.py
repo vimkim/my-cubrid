@@ -128,6 +128,7 @@ class DailyUpdateTest(unittest.TestCase):
             str(self.home / "gh/cubrid-conf-tui"),
             str(self.home / "gh/cubrid-build-coordinator"),
             str(self.home / "gh/cubrid-workenv"),
+            str(self.home / "gh/cubrid-worktree"),
             str(self.home / "gh/cubrid-jira"),
             str(self.home / "gh/cubrid-ci"),
             str(self.home / "gh/cubrid-qahome-fetcher"),
@@ -146,6 +147,7 @@ class DailyUpdateTest(unittest.TestCase):
             "cubrid-conf-tui": "gh/cubrid-conf-tui",
             "cubrid-build-coordinator": "gh/cubrid-build-coordinator",
             "cubrid-workenv": "gh/cubrid-workenv",
+            "cubrid-worktree": "gh/cubrid-worktree",
             "cubrid-jira": "gh/cubrid-jira",
             "cubrid-ci": "gh/cubrid-ci",
             "cubrid-qahome": "gh/cubrid-qahome-fetcher",
@@ -195,6 +197,9 @@ class DailyUpdateTest(unittest.TestCase):
         static = source / "static-analysis/static-check/cubrid-static-check"
         static.parent.mkdir(parents=True)
         static.write_text('#!/bin/sh\nexit 0\n')
+        members = source / "bin/cubrid-dev2-members"
+        members.parent.mkdir(parents=True)
+        members.write_text('#!/bin/sh\nexit 0\n')
         shutil.copyfile(ROOT / "justfile", source / "justfile")
         updater = source / "daily-update-cubrid.py"
         updater.write_text(

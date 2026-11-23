@@ -40,8 +40,8 @@ directories. `--list` and
 
 Defaults are `~/gh/my-cubrid-skills`, `~/gh/cubrid-tc-chronicle`,
 `~/gh/cubrid-conf-tui`, `~/gh/cubrid-build-coordinator`,
-`~/gh/cubrid-workenv`, `~/gh/cubrid-jira`, `~/gh/cubrid-ci`,
-`~/gh/cubrid-qahome-fetcher`, `~/gh/csql-future`,
+`~/gh/cubrid-workenv`, `~/gh/cubrid-worktree`, `~/gh/cubrid-jira`,
+`~/gh/cubrid-ci`, `~/gh/cubrid-qahome-fetcher`, `~/gh/csql-future`,
 `~/gh/my-cubrid-hermes`, `~/gh/my-cubrid-pr-review`, and
 `~/gh/cubrid-teams-dev2-vimkim-bot`.
 `cubrid-qahome-fetcher` preserves its existing checkout name and location.
@@ -53,6 +53,7 @@ outside the defaults use their local `just sync` recipe.
 `my-cubrid-hermes` is an independent Python uv tool; its `just sync` installs
 its commands on the user PATH, and its runtime state lives outside the checkout.
 `my-cubrid-pr-review` uses `just sync` to install its Python uv tool.
+`cubrid-worktree` uses `just sync` (aliased as `just install`) to install its Python uv tool on the user PATH.
 `my-cubrid-skills` uses `just sync` to reconcile its skill collection.
 `cubrid-tc-chronicle` uses `just sync` to reinstall the CLI. Its CI evidence
 collection still requires an explicit `cubrid-tcc sync-data` invocation.
@@ -106,11 +107,19 @@ C++ syntax code
 
 ## Source worktrees and remotes
 
-- Prefer `CBRD-NNNNN-description` for ticket worktree and branch names.
-- `just worktree <name>` creates a same-named sibling worktree and branch from the current HEAD. Its duplicate-ticket check rejects another sibling or registered worktree containing the same `CBRD-NNNNN`; it does not validate the complete naming form.
+- Apply this naming and creation workflow to newly created worktrees; keep existing legacy worktrees and branches unchanged.
+- Ticket-first naming (directory basename and matching local branch under `~/gh/cb/`):
+  - `CBRD-NNNNN`: single original PR preparation, or first PR code review when `CBRD-NNNNN` is unoccupied.
+  - `CBRD-NNNNN-<summary>`: derived worktrees (backports, follow-ups, experiments) and non-PR worktrees (tests, benchmarks, diagnostics, reproductions). Allowed whether or not `CBRD-NNNNN` already exists.
+  - `CBRD-NNNNN-pr-<N>`: PR code review fallback when `CBRD-NNNNN` is already occupied.
+  - `PR-<N>`: PR code review when the PR title contains no ticket key.
+  - Keep `<summary>` in short kebab-case (`[A-Za-z0-9][A-Za-z0-9._-]*`), without `/` (which collides with `refs/heads/CBRD-NNNNN`), and without a second distinct ticket key.
+- Entry is `pwd`-independent: use `cubrid-worktree` (distributed from `~/gh/cubrid-worktree` via `just sync` / `just install`) or the global recipes in `~/my-cubrid/cubrid-justfiles/justfile` (`worktree`, `worktree-open`, `worktree-list`, `pr-review`, `pr-review-all`). They resolve `~/gh/cb/develop` automatically from any starting directory, create `~/gh/cb/<name>`, run `prepare-build`, and open the target in Herdr when `HERDR_ENV=1`.
+- Herdr topology follows one Space per ticket (`CBRD-NNNNN`, or `PR-<N>`): create the Space if missing (`herdr-next-to-current`, falling back to `herdr workspace create`), or open a new Tab inside that existing ticket Space for derived or additional ticket worktrees.
+- `cubrid-worktree review` records both `branch.<name>.pr-url` and `branch.<name>.cubrid-role = review`. Keep review checkouts excluded from standing PR push/CI authorization.
 - `origin` is the CUBRID organization remote and `vk` is the personal fork. Use `vk` for ordinary personal branches and `origin` for `feature/*` branches.
 
-If justfile does not exist in cubrid source worktree, run this inside worktree:
+If `justfile` or environment links do not exist in a CUBRID source worktree, run this inside the worktree:
 
 ```sh
 just -f ~/my-cubrid/cubrid-justfiles/justfile -d . prepare-build

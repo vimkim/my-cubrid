@@ -35,8 +35,10 @@ other registered database names.
 The sample dataset explicitly selected for loading into a newly created database.
 
 **Review worktree**:
-A disposable local checkout dedicated to inspecting one pull request. Multiple
-review worktrees may coexist for the same ticket when their PRs differ.
+A disposable local checkout dedicated to inspecting one pull request, using
+`CBRD-NNNNN` when unoccupied, `CBRD-NNNNN-pr-<N>` when occupied, or `PR-<N>`
+when unticketed, with `branch.<name>.cubrid-role = review`. Multiple review
+worktrees may coexist for the same ticket when their PRs differ.
 
 **Review-request picker**:
 An interactive choice among pull requests directly requesting the configured

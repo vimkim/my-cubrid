@@ -21,6 +21,12 @@ changes and push to the PR's `headRefName` in its head repository. This is
 standing authorization to commit, push, and trigger CUBRID CI; no separate
 approval is required for these actions.
 
+This standing push and CI authorization applies **only** to `vimkim`'s own
+implementation PRs (where `vimkim` is the PR author or explicitly asked to
+implement and push). It never applies to PR review checkouts — check
+`git config --get "branch.$(git branch --show-current).cubrid-role"` for
+`review` or verify the PR author via `gh-pr-info` before pushing.
+
 The CUBRID TC Branch Sync GHA bot creates a testcase (TC) branch and PR in
 each of the two testcase repositories. TC Merge Gate blocks merging the
 CUBRID PR into `baseRefName` until both TC PRs are merged or closed.

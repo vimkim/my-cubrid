@@ -22,6 +22,7 @@ PROJECTS = {
     "cubrid-worktree": "gh/cubrid-worktree",
     "cubrid-jira": "gh/cubrid-jira",
     "cubrid-ci": "gh/cubrid-ci",
+    "cubrid-ci-watch": "gh/cubrid-ci-watch",
     "cubrid-qahome": "gh/cubrid-qahome-fetcher",
     "csql-future": "gh/csql-future",
     "my-cubrid-hermes": "gh/my-cubrid-hermes",

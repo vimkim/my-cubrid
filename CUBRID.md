@@ -167,3 +167,7 @@ Use a separate launcher session when the tool cleans up its process group.
 [CBRD-27443](https://jira.cubrid.org/browse/CBRD-27443) can leave output pipes open
 after the startup command exits. This also affects wrappers and subprocess capture.
 Use a pipe only when the task explicitly requires reproducing this defect.
+
+## Teams integration
+
+Before working on Microsoft Teams bots, channels, PR calendar sync, or Graph API permissions, read [/home/vimkim/gh/my-cubrid-docs/cubrid-teams/README.md](/home/vimkim/gh/my-cubrid-docs/cubrid-teams/README.md) and [access-and-permissions.md](/home/vimkim/gh/my-cubrid-docs/cubrid-teams/access-and-permissions.md) for verified CUBRID tenant permissions, repository boundaries, and Playwright/RSC architecture rules.

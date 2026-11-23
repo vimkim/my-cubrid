@@ -33,6 +33,11 @@ all-json:
 doctor:
     @"${CUB_WORKENV_CLI:-cub-workenv}" doctor --worktree "$PWD"
 
+# Emit schema-1 JSON diagnosis for this worktree without changing state.
+[working-directory(justfile_directory())]
+doctor-json:
+    @"${CUB_WORKENV_CLI:-cub-workenv}" doctor --worktree "$PWD" --json
+
 # Diagnose every Git worktree; continue after failures and return nonzero if any fail.
 [working-directory(justfile_directory())]
 doctor-all:
@@ -83,3 +88,54 @@ prune:
 [working-directory(justfile_directory())]
 prune-apply:
     @"${CUB_WORKENV_CLI:-cub-workenv}" prune --worktree "$PWD" --apply
+
+# Preview reclamation of deleted or orphaned allocations across the allocation registry.
+[working-directory(justfile_directory())]
+gc:
+    @"${CUB_WORKENV_CLI:-cub-workenv}" gc
+
+# Reclaim eligible deleted or orphaned allocations and clean unbound TMP sockets/dirs.
+[working-directory(justfile_directory())]
+gc-apply:
+    @"${CUB_WORKENV_CLI:-cub-workenv}" gc --apply --clean-tmp
+
+# Preview removal of unbound stale Unix sockets in this worktree's TMP directory.
+[working-directory(justfile_directory())]
+clean-sockets:
+    @"${CUB_WORKENV_CLI:-cub-workenv}" clean-sockets --worktree "$PWD"
+
+# Remove verified unbound stale Unix sockets in this worktree's TMP directory.
+[working-directory(justfile_directory())]
+clean-sockets-apply:
+    @"${CUB_WORKENV_CLI:-cub-workenv}" clean-sockets --worktree "$PWD" --apply
+
+# Switch an idle ready worktree to another dedicated installation and preset.
+[working-directory(justfile_directory())]
+switch-preset preset="" install="":
+    #!/usr/bin/env sh
+    set -eu
+    p="{{preset}}"
+    i="{{install}}"
+    if [ -z "$p" ]; then p="${PRESET_MODE:-}"; fi
+    if [ -z "$i" ]; then i="${CUBRID:-}"; fi
+    if [ -z "$p" ] || [ -z "$i" ]; then
+        printf 'Usage: just workenv::switch-preset <preset> <install> (or load PRESET_MODE and CUBRID via direnv)\n' >&2
+        exit 2
+    fi
+    exec "${CUB_WORKENV_CLI:-cub-workenv}" switch-preset --worktree "$PWD" --preset "$p" --install "$i"
+
+# Preview safe teardown of this worktree's allocation before removal or re-init.
+[working-directory(justfile_directory())]
+deinit:
+    @"${CUB_WORKENV_CLI:-cub-workenv}" deinit --worktree "$PWD"
+
+# Preview unregistration of a DB (or --prune-missing when name="--prune-missing").
+[working-directory(justfile_directory())]
+unregister-db target="":
+    #!/usr/bin/env sh
+    set -eu
+    if [ -z "{{target}}" ]; then
+        printf 'Usage: just workenv::unregister-db <db-name|--prune-missing>\n' >&2
+        exit 2
+    fi
+    exec "${CUB_WORKENV_CLI:-cub-workenv}" unregister-db --worktree "$PWD" "{{target}}"

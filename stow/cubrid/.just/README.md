@@ -90,8 +90,14 @@ Run these from a prepared CUBRID worktree (or any directory below it):
 | `just workenv::all-json` | Full JSON reports for all Git worktrees, suitable for saving or processing with `jq` |
 | `just workenv::config` | Actual workenv `cubrid.conf` and `cubrid_broker.conf` contents |
 | `just workenv::doctor` | Public CLI's read-only diagnostics for this worktree |
+| `just workenv::doctor-json` | Structured schema-1 JSON diagnostics for this worktree |
 | `just workenv::doctor-all` | Read-only diagnostics for every Git worktree, continuing after failures |
 | `just workenv::env` | Public CLI's environment-loading shell code, printed without executing it |
+| `just workenv::clean-sockets` | Preview removal of unbound stale Unix sockets in this worktree's TMP |
+| `just workenv::clean-sockets-apply` | Remove verified unbound stale Unix sockets in this worktree's TMP |
+| `just workenv::switch-preset` | Switch an idle ready worktree to another dedicated installation and preset |
+| `just workenv::deinit` | Preview safe allocation teardown for this worktree |
+| `just workenv::unregister-db` | Preview DB registration/receipt removal (`<name>` or `--prune-missing`) |
 
 `status` and `all` read schema-1 `.cub-workenv/state.json` snapshots. Saved
 `ready` means initialization completed, not that servers are running or settings
@@ -147,8 +153,10 @@ See the CLI repository's `docs/reset.md` for the lifecycle and failure contract.
 ## Prune missing worktrees
 
 ```sh
-just workenv::prune        # Preview
-just workenv::prune-apply  # Apply eligible entries
+just workenv::prune        # Preview missing linked Git worktrees
+just workenv::prune-apply  # Apply eligible Git worktree entries
+just workenv::gc           # Preview deleted/orphaned allocations across the registry
+just workenv::gc-apply     # Reclaim idle allocations and clean unbound TMP sockets/dirs
 just workenv::all          # Check remaining worktrees
 ```
 

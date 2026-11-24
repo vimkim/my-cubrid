@@ -23,6 +23,7 @@ PROJECTS = {
     "cubrid-jira": "gh/cubrid-jira",
     "cubrid-ci": "gh/cubrid-ci",
     "cubrid-ci-watch": "gh/cubrid-ci-watch",
+    "cubrid-pr-flow": "gh/cubrid-pr-flow",
     "cubrid-qahome": "gh/cubrid-qahome-fetcher",
     "csql-future": "gh/csql-future",
     "my-cubrid-pr-review": "gh/my-cubrid-pr-review",

@@ -25,7 +25,6 @@ PROJECTS = {
     "cubrid-ci-watch": "gh/cubrid-ci-watch",
     "cubrid-qahome": "gh/cubrid-qahome-fetcher",
     "csql-future": "gh/csql-future",
-    "my-cubrid-hermes": "gh/my-cubrid-hermes",
     "my-cubrid-pr-review": "gh/my-cubrid-pr-review",
     "cubrid-teams-dev2-vimkim-bot": "gh/cubrid-teams-dev2-vimkim-bot",
 }

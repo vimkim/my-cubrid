@@ -134,7 +134,6 @@ class DailyUpdateTest(unittest.TestCase):
             str(self.home / "gh/cubrid-ci-watch"),
             str(self.home / "gh/cubrid-qahome-fetcher"),
             str(self.home / "gh/csql-future"),
-            str(self.home / "gh/my-cubrid-hermes"),
             str(self.home / "gh/my-cubrid-pr-review"),
             str(self.home / "gh/cubrid-teams-dev2-vimkim-bot"),
         ])
@@ -154,7 +153,6 @@ class DailyUpdateTest(unittest.TestCase):
             "cubrid-ci-watch": "gh/cubrid-ci-watch",
             "cubrid-qahome": "gh/cubrid-qahome-fetcher",
             "csql-future": "gh/csql-future",
-            "my-cubrid-hermes": "gh/my-cubrid-hermes",
             "my-cubrid-pr-review": "gh/my-cubrid-pr-review",
             "cubrid-teams-dev2-vimkim-bot": "gh/cubrid-teams-dev2-vimkim-bot",
         }

@@ -41,8 +41,8 @@ directories. `--list` and
 Defaults are `~/gh/my-cubrid-skills`, `~/gh/cubrid-tc-chronicle`,
 `~/gh/cubrid-conf-tui`, `~/gh/cubrid-build-coordinator`,
 `~/gh/cubrid-workenv`, `~/gh/cubrid-worktree`, `~/gh/cubrid-jira`,
-`~/gh/cubrid-ci`, `~/gh/cubrid-qahome-fetcher`, `~/gh/csql-future`,
-`~/gh/my-cubrid-hermes`, `~/gh/my-cubrid-pr-review`, and
+`~/gh/cubrid-ci`, `~/gh/cubrid-ci-watch`, `~/gh/cubrid-qahome-fetcher`,
+`~/gh/csql-future`, `~/gh/my-cubrid-pr-review`, and
 `~/gh/cubrid-teams-dev2-vimkim-bot`.
 `cubrid-qahome-fetcher` preserves its existing checkout name and location.
 Existing tools use `just sync`; `cubrid-ci` uses `just install`,
@@ -50,8 +50,9 @@ and `cubrid-qahome` uses `uv tool install --reinstall .`. Custom directories
 outside the defaults use their local `just sync` recipe.
 `csql-future` is a standalone Python uv tool; its `just sync` runs
 `uv tool install --reinstall .` and installs `csql-future` on the user PATH.
-`my-cubrid-hermes` is an independent Python uv tool; its `just sync` installs
-its commands on the user PATH, and its runtime state lives outside the checkout.
+`cubrid-ci-watch` is a standalone Python uv tool; its `just sync` installs
+`cubrid-ci-watch` on the user PATH, and its background poller runs as user
+systemd unit `cubrid-ci-watch.service`.
 `my-cubrid-pr-review` uses `just sync` to install its Python uv tool.
 `cubrid-worktree` uses `just sync` (aliased as `just install`) to install its Python uv tool on the user PATH.
 `my-cubrid-skills` uses `just sync` to reconcile its skill collection.
@@ -151,7 +152,7 @@ Before recommending a merge, asking for merge permission, or merging a CUBRID en
 ## CI and regression testing
 
 - Pull requests targeting `develop` must pass CUBRID CI. The principal regression suites are `test_medium`, `test_sql`, and `test_shell`; inspect the live CI configuration for current jobs and timing. Keep the TC merge gate separate from regression results and finalize it only through the testcase lifecycle above.
-- To trigger, rerun, or wait on PR `gha-ci`, follow `cubrid-ci-trigger` instead of posting `/run` ad hoc or polling with timers. It enforces testcase baseline checks, concurrency guards, `cubrid-ci-watch` registration, and event-driven waiting (`cubrid-ci-watch wait` in-session, or the host `cubrid-hermes` / `cubrid-briefing` delivery bridge when returning the session).
+- To trigger, rerun, or wait on PR `gha-ci`, follow `cubrid-ci-trigger` instead of posting `/run` ad hoc or polling with timers. It enforces testcase baseline checks, concurrency guards, `cubrid-ci-watch` registration, and event-driven waiting (`cubrid-ci-watch wait` in-session, or the host `cubrid-ci-watch.service` background poller when returning the session).
 - The QA team's separate regression runs may also cover replication, isolation, and other suites. Their testcases can span the public and private testcase repositories.
 
 ## Reproducing TC failure locally

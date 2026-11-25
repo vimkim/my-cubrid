@@ -89,8 +89,8 @@ configure-build: core::configure core::build
 
 # Configure, build and install the selected preset.
 [positional-arguments]
-configure-build-and-install *args: core::configure
-    just core::build-and-install "$@"
+configure-build-and-install *args:
+    just core::configure-build-and-install "$@"
 
 # Run configured ctest tests while holding the runtime lock.
 ctest: core::ctest

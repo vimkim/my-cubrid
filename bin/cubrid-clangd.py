@@ -243,7 +243,16 @@ def main():
         if args.action == 'preset':
             set_preset(root, preset)
             return
-        check_preset(root, preset)
+        try:
+            check_preset(root, preset)
+        except ValueError:
+            # A pinned build run (see stow/cubrid/.envrc) keeps its preset when
+            # .env changes. Its refresh must not select the old preset.
+            if args.action == 'auto-refresh' and os.environ.get('PRESET_MODE_PIN') == preset:
+                print(f'cubrid-clangd: skipped refresh for {preset}; .env now selects another preset',
+                      file=sys.stderr)
+                return
+            raise
         current = alias(root)
         mode = args.value if args.action == 'select' else (current['mode'] if current else 'server')
         database = source_db(root, preset)

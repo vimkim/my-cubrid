@@ -2,6 +2,13 @@ set minimum-version := "1.55.0"
 set no-cd
 set shell := ["sh", "-cu"]
 
+# Read the preset from .env once per run. Nested `just` processes inherit
+# both values, and .envrc keeps PRESET_MODE_PIN for this worktree, so a .env
+# change during a configure, build or install run cannot switch its preset or
+# build directory between steps.
+export PRESET_MODE_PIN_ROOT := justfile_directory()
+export PRESET_MODE_PIN := if env('PRESET_MODE_PIN_ROOT', '') == justfile_directory() { env('PRESET_MODE_PIN', '') } else { shell('''sed -nE "s/^[[:space:]]*(export[[:space:]]+)?PRESET_MODE[[:space:]]*=[[:space:]]*[\"']?([A-Za-z0-9_][A-Za-z0-9_.-]*)[\"']?[[:space:]]*(#.*)?$/\2/p" "$1/.env" 2>/dev/null | tail -n 1''', justfile_directory()) }
+
 # Running the module name alone lists its recipes instead of running the first one.
 [private]
 [working-directory(justfile_directory())]
@@ -135,6 +142,9 @@ preset-set $preset:
         exit 2
     fi
 
+    # A running configure, build, install or runtime command reads .env again
+    # in later steps. Refuse while any of this worktree's locks is held.
+    "${MY_CUBRID:-$HOME/my-cubrid}/bin/cubrid-preset-guard.py" "$PWD"
     "${MY_CUBRID:-$HOME/my-cubrid}/bin/cubrid-clangd.py" preset "$preset"
 
 # Select the native command mode for clangd.
@@ -194,6 +204,12 @@ build-and-install *args: ensure-build-jdk
     {
       direnv exec . "${MY_CUBRID:-$HOME/my-cubrid}/bin/cubrid-build-coordinator.sh" build-and-install "$@"
     } 2>&1 | tee "$log_file"
+
+# Configure, then build and install with log capture under one preset.
+[working-directory(justfile_directory())]
+[positional-arguments]
+configure-build-and-install *args: configure
+    just core::build-and-install "$@"
 
 # Build first, then wait up to `timeout` seconds for an idle installation and install.
 [working-directory(justfile_directory())]

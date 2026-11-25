@@ -34,8 +34,10 @@ CUBRID PR into `baseRefName` until both TC PRs are merged or closed.
 - If TC changes are required, update, check, commit, and push them to the
   corresponding TC PR head branches before triggering CUBRID CI. The human
   reviews and merges those TC PRs into their base branches.
-- If no TC changes are required, report this to the human, who closes the
-  TC PRs. Their branches are then deleted automatically.
+- If no TC changes are required, report this to the human. Keep those TC PRs
+  open for isolation until the final merge handoff (`/cubrid-pr-merge`), which
+  closes them atomically with the engine merge. Never recommend closing them
+  earlier, even after CI passes.
 - Agent publication in TC repositories is limited to commits and pushes
   on the TC PR head branches. Never merge or close TC PRs or delete their
   branches.

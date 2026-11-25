@@ -21,6 +21,7 @@ PROJECTS = {
     "cubrid-workenv": "gh/cubrid-workenv",
     "cubrid-worktree": "gh/cubrid-worktree",
     "cubrid-jira": "gh/cubrid-jira",
+    "cubrid-xref": "gh/cubrid-xref",
     "cubrid-ci": "gh/cubrid-ci",
     "cubrid-ci-watch": "gh/cubrid-ci-watch",
     "cubrid-pr-flow": "gh/cubrid-pr-flow",

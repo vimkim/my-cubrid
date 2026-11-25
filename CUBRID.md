@@ -152,7 +152,9 @@ The private testcase repository is available locally and may be used when the ta
 
 Keep TC PRs open to preserve isolation until the final engine merge handoff. Before recommending or performing TC closure, TC merging, or engine merging, follow [Testcase lifecycle](/home/vimkim/gh/my-cubrid-skills/cubrid-common/references/testcase-lifecycle.md). That reference owns the shared timing and close-versus-merge rules.
 
-Before recommending a merge, asking for merge permission, or merging a CUBRID engine or testcase PR, apply the [PR approval gate](/home/vimkim/gh/my-cubrid-skills/cubrid-common/SKILL.md#pr-approval-gate). Show the current per-reviewer result before asking for permission and again immediately before each merge.
+Final engine PR merges (and their linked `tc/pr-<N>` PRs) run **only** through the user-invoked `/cubrid-pr-merge <PR>` skill (`pr-final-merge-handoff`), and only for engine PRs that `vimkim` both opened and is assigned to. In ordinary sessions, status reports, or decision briefs (including `/musk` and `/decide`), direct the user to run `/cubrid-pr-merge <PR>` once reviews and CI are ready; never propose a manual close/merge sequence, ask for ad-hoc merge permission, or run `gh pr merge` directly on a `CUBRID/cubrid` engine PR.
+
+For TC-only CI-carrier PRs and any direct testcase merge outside `/cubrid-pr-merge`, apply the [PR approval gate](/home/vimkim/gh/my-cubrid-skills/cubrid-common/SKILL.md#pr-approval-gate) — show the current per-reviewer result before asking for permission and again immediately before each merge.
 
 ## CI and regression testing
 

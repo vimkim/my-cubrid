@@ -28,7 +28,7 @@ shell-debug-interactive:
 # Start an isolated CUBRID server container, run one shell TC, and hold the runtime lock until it is stopped.
 [working-directory(justfile_directory())]
 podman-test-new container db_name test_script:
-    "${MY_CUBRID:-$HOME/my-cubrid}/bin/cubrid-build-coordinator.sh" installation-use 300 -- "$MY_CUBRID/bin/cubrid-podman-test.sh" run \
+    "${MY_CUBRID:-$HOME/my-cubrid}/bin/cubrid-build-coordinator.sh" installation-use 300 -- "${MY_CUBRID:-$HOME/my-cubrid}/bin/cubrid-podman-test.sh" run \
         --name "{{container}}" \
         --cubrid-root "$CUBRID" \
         --wait-for-stop \

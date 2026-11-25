@@ -282,8 +282,8 @@ delete-install: confirm-no
 # Restow shared CUBRID and GDB files into the current worktree.
 [working-directory(justfile_directory())]
 stow-shared:
-    stow --dir="$MY_CUBRID/stow" --target=. cubrid
-    stow --dir="$MY_CUBRID/stow" --target=. gdb
+    stow --dir="${MY_CUBRID:-$HOME/my-cubrid}/stow" --target=. cubrid
+    stow --dir="${MY_CUBRID:-$HOME/my-cubrid}/stow" --target=. gdb
 
 # Restow shared files and create the worktree-local just module.
 [working-directory(justfile_directory())]
@@ -293,8 +293,8 @@ stow-create: stow-shared
 # Remove shared stowed CUBRID and GDB files from the current worktree.
 [working-directory(justfile_directory())]
 stow-delete:
-    stow -D --dir="$MY_CUBRID/stow" --target=. cubrid
-    stow -D --dir="$MY_CUBRID/stow" --target=. gdb
+    stow -D --dir="${MY_CUBRID:-$HOME/my-cubrid}/stow" --target=. cubrid
+    stow -D --dir="${MY_CUBRID:-$HOME/my-cubrid}/stow" --target=. gdb
 
 # Stow the shared cb directory layout.
 [working-directory(justfile_directory())]

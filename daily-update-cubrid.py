@@ -26,7 +26,9 @@ PROJECTS = {
     "cubrid-pr-flow": "gh/cubrid-pr-flow",
     "cubrid-qahome": "gh/cubrid-qahome-fetcher",
     "csql-future": "gh/csql-future",
-    "my-cubrid-pr-review": "gh/my-cubrid-pr-review",
+    "cubrid-dev2-pr-calendar": "gh/cubrid-dev2-pr-calendar",
+    "my-cubrid-workflow": "gh/my-cubrid-workflow",
+    "herdr-commander": "gh/herdr-spaces-status",
     "cubrid-teams-dev2-vimkim-bot": "gh/cubrid-teams-dev2-vimkim-bot",
 }
 

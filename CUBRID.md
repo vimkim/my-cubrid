@@ -42,8 +42,8 @@ Defaults are `~/gh/my-cubrid-skills`, `~/gh/cubrid-tc-chronicle`,
 `~/gh/cubrid-conf-tui`, `~/gh/cubrid-build-coordinator`,
 `~/gh/cubrid-workenv`, `~/gh/cubrid-worktree`, `~/gh/cubrid-jira`,
 `~/gh/cubrid-ci`, `~/gh/cubrid-ci-watch`, `~/gh/cubrid-pr-flow`, `~/gh/cubrid-qahome-fetcher`,
-`~/gh/csql-future`, `~/gh/my-cubrid-pr-review`, and
-`~/gh/cubrid-teams-dev2-vimkim-bot`.
+`~/gh/csql-future`, `~/gh/cubrid-dev2-pr-calendar`, `~/gh/my-cubrid-workflow`,
+`~/gh/herdr-spaces-status`, and `~/gh/cubrid-teams-dev2-vimkim-bot`.
 `cubrid-qahome-fetcher` preserves its existing checkout name and location.
 Existing tools use `just sync`; `cubrid-ci` uses `just install`,
 and `cubrid-qahome` uses `uv tool install --reinstall .`. Custom directories
@@ -56,7 +56,9 @@ systemd unit `cubrid-ci-watch.service`.
 `cubrid-pr-flow` is a standalone Python uv tool; its `just sync` installs
 `cubrid-pr-flow` on the user PATH, and its orchestrator runs as user
 systemd unit `cubrid-pr-flow.service`.
-`my-cubrid-pr-review` uses `just sync` to install its Python uv tool.
+`cubrid-dev2-pr-calendar`, `my-cubrid-workflow`, and `herdr-spaces-status`
+use their `just sync` recipes. The `herdr-spaces-status` checkout tracks
+`vimkim/herdr-commander`.
 `cubrid-worktree` uses `just sync` (aliased as `just install`) to install its Python uv tool on the user PATH.
 `my-cubrid-skills` uses `just sync` to reconcile its skill collection.
 `cubrid-tc-chronicle` uses `just sync` to reinstall the CLI. Its CI evidence

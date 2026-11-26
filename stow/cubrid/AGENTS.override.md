@@ -53,6 +53,16 @@ that run to finish, report its result and run URL, including any TC Merge
 Gate blocker, then stop and wait for the human's direction. Do not make
 follow-up fixes, push again, or rerun CI until directed.
 
+## Shared `.envrc` re-approval
+
+Each worktree's `.envrc` is a symlink to `my-cubrid/stow/cubrid/.envrc`. An
+edit to that file revokes direnv approval in every worktree. After you
+commit such an edit to `my-cubrid`, you may run `direnv allow <worktree>`
+without asking, but only for worktrees whose `.envrc` resolves
+(`readlink -f`) to that stow file. Never allow a worktree whose `.envrc` is
+a regular file or points elsewhere; report those. Report the number of
+worktrees you re-allowed and the `my-cubrid` commit they now trust.
+
 ## Instruction sources
 
 This file replaces the root `AGENTS.md`, whose instructions are stale. Use

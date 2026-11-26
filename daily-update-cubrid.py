@@ -29,7 +29,7 @@ PROJECTS = {
     "csql-future": "gh/csql-future",
     "cubrid-dev2-pr-calendar": "gh/cubrid-dev2-pr-calendar",
     "my-cubrid-workflow": "gh/my-cubrid-workflow",
-    "herdr-commander": "gh/herdr-spaces-status",
+    "herdr-commander": "gh/herdr-commander",
     "cubrid-teams-dev2-vimkim-bot": "gh/cubrid-teams-dev2-vimkim-bot",
 }
 

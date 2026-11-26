@@ -138,7 +138,7 @@ class DailyUpdateTest(unittest.TestCase):
             str(self.home / "gh/csql-future"),
             str(self.home / "gh/cubrid-dev2-pr-calendar"),
             str(self.home / "gh/my-cubrid-workflow"),
-            str(self.home / "gh/herdr-spaces-status"),
+            str(self.home / "gh/herdr-commander"),
             str(self.home / "gh/cubrid-teams-dev2-vimkim-bot"),
         ])
         self.assertFalse(self.log.exists())
@@ -161,7 +161,7 @@ class DailyUpdateTest(unittest.TestCase):
             "csql-future": "gh/csql-future",
             "cubrid-dev2-pr-calendar": "gh/cubrid-dev2-pr-calendar",
             "my-cubrid-workflow": "gh/my-cubrid-workflow",
-            "herdr-commander": "gh/herdr-spaces-status",
+            "herdr-commander": "gh/herdr-commander",
             "cubrid-teams-dev2-vimkim-bot": "gh/cubrid-teams-dev2-vimkim-bot",
         }
         for tool, relative in tools.items():

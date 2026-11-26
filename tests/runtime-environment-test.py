@@ -82,6 +82,9 @@ exit "$status"
         self.assertTrue(loaded["CUBRID"].endswith("/install"))
         self.assertIn("/tools/bin", loaded["PATH"])
         self.assertIn("/CTP/bin", loaded["PATH"])
+        self.assertTrue(loaded["CTP_HOME"].endswith("/gh/ctp/develop/CTP"))
+        self.assertEqual(loaded["init_path"], f"{loaded['CTP_HOME']}/shell/init_path")
+        self.assertNotIn("/run-sql/CTP", loaded["CTP_HOME"])
         self.assertIn("/tools/lib", loaded["LD_LIBRARY_PATH"])
         for name in ("CUBRID_TMP", "CUBRID_DATABASES", "CUBRID_CONF_FILE", "CUBRID_CUBRID_PORT_ID"):
             self.assertNotIn(name, loaded)

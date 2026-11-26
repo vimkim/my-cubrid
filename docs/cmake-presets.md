@@ -10,6 +10,8 @@
 The `unit` suffix identifies the test-enabled build while retaining the compiler and build family in its name. Debug and sanitizer presets keep their existing unit-test settings.
 Available unit-test modules depend on the CUBRID source revision. These options do not add missing test directories.
 
+Every personal preset except `debug_clang_bare` sets `SUPPORT_XA=true` through `user_default`, as `build.sh` and CI do; CMake then defines `CCI_XA`. Without it, `log_2pc_attach_global_tran` returns `ER_LOG_2PC_UNKNOWN_GTID` for a prepared branch whose CAS connection is still open, so XA/2PC shell testcases fail locally but pass in CI. Existing build directories pick the value up at their next `just configure`.
+
 ## Reconfigure an existing build
 
 Each prepared CUBRID worktree links `CMakeUserPresets.json` to the shared file in `my-cubrid`. A change to that file on `main` therefore affects every linked worktree when it configures again.

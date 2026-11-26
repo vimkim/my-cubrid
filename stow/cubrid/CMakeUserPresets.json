@@ -24,6 +24,7 @@
         "UNIT_TEST_SPAGE": "ON",
         "UNIT_TEST_PAGE_BUFFER": "ON",
         "WITH_CCI": "true",
+        "SUPPORT_XA": "true",
         "CMAKE_CXX_STANDARD": "17",
         "CMAKE_CXX_STANDARD_REQUIRED": "ON"
       }

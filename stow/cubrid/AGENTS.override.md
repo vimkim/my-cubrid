@@ -65,20 +65,21 @@ worktrees you re-allowed and the `my-cubrid` commit they now trust.
 
 ## Instruction sources
 
-This file replaces the root `AGENTS.md`, whose instructions are stale. Use
-the following maintained sources instead of loading that root file:
+Codex loads this file instead of the worktree's root `AGENTS.md`. Load the
+following sources in this order:
 
-1. Before any CUBRID work, read `/home/vimkim/my-cubrid/CUBRID.md` for personal
+1. Read the root `AGENTS.md` of this worktree. It holds the repository's
+   maintained guidance, rewritten against live code in CBRD-27539.
+2. Before any CUBRID work, read `/home/vimkim/my-cubrid/CUBRID.md` for personal
    CUBRID policies and pointers to task-specific guidance.
-2. Read `AGENTS.user.md`, if present in this worktree, for task-specific
+3. Read `AGENTS.user.md`, if present in this worktree, for task-specific
    instructions.
 
-Resolve `AGENTS.user.md` relative to this symlink's location in the worktree,
-not its target in `my-cubrid/stow/cubrid`. The CUBRID policy file is required;
-report it if missing or unreadable. Skip an absent `AGENTS.user.md`, but report
-an unreadable one.
+Resolve `AGENTS.md` and `AGENTS.user.md` relative to this symlink's location in
+the worktree, not its target in `my-cubrid/stow/cubrid`. The root `AGENTS.md`
+and the CUBRID policy file are required; report either if missing or
+unreadable. Skip an absent `AGENTS.user.md`, but report an unreadable one.
 
 Apply the personal CUBRID policies over conflicting repository guidance,
 then apply worktree-specific instructions. Continue to load applicable
-instructions in subdirectories when working there; this override replaces
-only the root `AGENTS.md`.
+instructions in subdirectories when working there.

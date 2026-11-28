@@ -21,11 +21,13 @@ PROJECTS = {
     "cubrid-workenv": "gh/cubrid-workenv",
     "cubrid-worktree": "gh/cubrid-worktree",
     "cubrid-jira": "gh/cubrid-jira",
+    "cubrid-jira-duplicate": "gh/cubrid-jira-duplicate",
     "cubrid-xref": "gh/cubrid-xref",
     "cubrid-ci": "gh/cubrid-ci",
     "cubrid-ci-watch": "gh/cubrid-ci-watch",
     "cubrid-pr-flow": "gh/cubrid-pr-flow",
     "cubrid-qahome": "gh/cubrid-qahome-fetcher",
+    "cubrid-oos-context": "gh/cubrid-oos-context",
     "csql-future": "gh/csql-future",
     "cubrid-dev2-pr-calendar": "gh/cubrid-dev2-pr-calendar",
     "my-cubrid-workflow": "gh/my-cubrid-workflow",
@@ -34,10 +36,7 @@ PROJECTS = {
 }
 
 # Reuse each accepted project's existing installation interface.
-INSTALL_COMMANDS = {
-    "cubrid-ci": ("just", "--justfile", "./justfile", "install"),
-    "cubrid-qahome": ("uv", "tool", "install", "--reinstall", "."),
-}
+INSTALL_COMMANDS = {}
 
 
 class Skipped(Exception):

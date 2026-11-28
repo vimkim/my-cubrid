@@ -130,11 +130,13 @@ class DailyUpdateTest(unittest.TestCase):
             str(self.home / "gh/cubrid-workenv"),
             str(self.home / "gh/cubrid-worktree"),
             str(self.home / "gh/cubrid-jira"),
+            str(self.home / "gh/cubrid-jira-duplicate"),
             str(self.home / "gh/cubrid-xref"),
             str(self.home / "gh/cubrid-ci"),
             str(self.home / "gh/cubrid-ci-watch"),
             str(self.home / "gh/cubrid-pr-flow"),
             str(self.home / "gh/cubrid-qahome-fetcher"),
+            str(self.home / "gh/cubrid-oos-context"),
             str(self.home / "gh/csql-future"),
             str(self.home / "gh/cubrid-dev2-pr-calendar"),
             str(self.home / "gh/my-cubrid-workflow"),
@@ -153,11 +155,13 @@ class DailyUpdateTest(unittest.TestCase):
             "cubrid-workenv": "gh/cubrid-workenv",
             "cubrid-worktree": "gh/cubrid-worktree",
             "cubrid-jira": "gh/cubrid-jira",
+            "cubrid-jira-duplicate": "gh/cubrid-jira-duplicate",
             "cubrid-xref": "gh/cubrid-xref",
             "cubrid-ci": "gh/cubrid-ci",
             "cubrid-ci-watch": "gh/cubrid-ci-watch",
             "cubrid-pr-flow": "gh/cubrid-pr-flow",
             "cubrid-qahome": "gh/cubrid-qahome-fetcher",
+            "cubrid-oos-context": "gh/cubrid-oos-context",
             "csql-future": "gh/csql-future",
             "cubrid-dev2-pr-calendar": "gh/cubrid-dev2-pr-calendar",
             "my-cubrid-workflow": "gh/my-cubrid-workflow",
@@ -243,14 +247,12 @@ class DailyUpdateTest(unittest.TestCase):
         self.assertEqual(self.log.read_text(), "tool\n")
         self.assertFalse(self.dotfiles_log.exists())
 
-    def test_uv_installation_error_is_a_failure_and_other_tools_continue(self):
-        project = self.project("cubrid-qahome", relative="gh/cubrid-qahome-fetcher")
+    def test_qahome_sync_error_is_a_failure_and_other_tools_continue(self):
+        project = self.project("cubrid-qahome", exit_code=3, relative="gh/cubrid-qahome-fetcher")
         other = self.project("other")
-        result = self.run_cli(
-            project, other, env=dict(self.env, DAILY_UPDATE_TEST_UV_RESULT="2")
-        )
+        result = self.run_cli(project, other)
         self.assertEqual(result.returncode, 1, result.stdout + result.stderr)
-        self.assertIn("installation exited 2", result.stdout)
+        self.assertIn("installation exited 3", result.stdout)
         self.assertEqual(self.log.read_text(), "cubrid-qahome\nother\n")
 
     def test_runs_in_each_checkout_and_deduplicates_directories(self):
